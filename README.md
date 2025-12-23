@@ -110,27 +110,37 @@ The system encourages **collaborative learning**, **knowledge sharing**, and **a
 ## 📁 Project Structure
 
 ```
-P2P_TUTORING_APP/
-├── frontend/
-│   ├── lib/
-│   │   ├── screens/            # UI screens
-│   │   ├── widgets/            # Reusable widgets
-│   │   ├── models/             # Data models
-│   │   ├── services/           # API & auth services
-│   │   ├── providers/          # State management
-│   │   └── utils/              # Helper utilities
-│   └── main.dart
-│
-├── backend/
-│   ├── auth/                   # Cognito setup
-│   ├── lambdas/                # Lambda functions
-│   ├── api/                    # API Gateway configs
-│   └── database/               # RDS schemas
-│
-├── docs/                       # Diagrams & documentation
-├── README.md
-
+p2p_tutoring_app/
+├── android/                  # Android platform project
+├── ios/                      # iOS platform project
+├── web/                      # Web build targets
+├── macos/                    # macOS platform project
+├── windows/                  # Windows platform project
+├── linux/                    # Linux platform project
+├── lib/                      # Flutter app source
+│   ├── screens/              # UI screens (pages/views)
+│   ├── widgets/              # Reusable widgets/components
+│   ├── models/               # Data models and DTOs
+│   ├── services/             # API clients & auth services
+│   ├── providers/            # State management (Provider/Bloc/etc.)
+│   ├── utils/                # Helper utilities and helpers
+│   └── main.dart             # App entrypoint
+├── backend/                  # (Optional) backend helpers and configs
+│   ├── auth/                 # Cognito or auth configs
+│   ├── lambdas/              # Lambda functions source/configs
+│   ├── api/                  # API Gateway definitions or docs
+│   └── database/             # RDS / schema migration scripts
+├── docs/                     # Diagrams & documentation
+├── pubspec.yaml              # Dart/Flutter dependencies
+├── analysis_options.yaml     # Linting and analyzer rules
+├── README.md                 # Project documentation
 ```
+
+Features by area:
+
+- Frontend (`lib/`): UI screens, reusable widgets, data models, API/auth services, state providers, and utility helpers to implement tutoring search, profiles, scheduling, messaging and feedback flows.
+- Backend (`backend/`): auth configuration, serverless Lambdas, API specs, and database schema artifacts used when integrating AWS services (Cognito, API Gateway, RDS).
+- Docs (`docs/`): design diagrams, API contract notes, deployment runbooks, and architecture diagrams.
 
 ---
 
@@ -352,5 +362,3 @@ This project is licensed under the **MIT License** - see the [LICENSE](https:
 - AWS Documentation
 - Academic Supervisors
 - Peer reviewers and testers
-
----
