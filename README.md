@@ -134,6 +134,7 @@ p2p_tutoring_app/
 ├── pubspec.yaml              # Dart/Flutter dependencies
 ├── analysis_options.yaml     # Linting and analyzer rules
 ├── README.md                 # Project documentation
+
 ```
 
 Features by area:
@@ -188,6 +189,8 @@ DB_ENDPOINT=xxxx
 ```
 
 ---
+
+Note: a sample environment file is included at the repository root as `.env.example`. Copy it to `.env` and replace placeholder values with your real credentials. Do not commit your `.env` file.
 
 ## 🎯 Application Features
 
