@@ -1,5 +1,5 @@
 import 'package:p2p_tutoring_app/screens/on_boarding/on_boarding_screen.dart';
-import 'package:p2p_tutoring_app/personalization/screens/profile/profile_screen.dart';
+// ProfileScreen removed; route now points to UserProfilesScreen
 import 'package:p2p_tutoring_app/routes/routes.dart';
 import 'package:get/get_navigation/src/routes/get_route.dart';
 import 'package:get/get_navigation/src/routes/transitions_type.dart';
@@ -29,7 +29,10 @@ class AppRoutes {
     // Login route
     GetPage(name: TRoutes.logIn, page: () => const LoginScreen()),
     // Phone sign-in routes removed to disable phone-based login in this build.
-    GetPage(name: TRoutes.profileScreen, page: () => const ProfileScreen()),
+    GetPage(
+      name: TRoutes.profileScreen,
+      page: () => const UserProfilesScreen(),
+    ),
 
     GetPage(
       name: TRoutes.notification,
