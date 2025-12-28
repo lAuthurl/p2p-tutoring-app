@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:p2p_tutoring_app/utils/animations/fade_in_animation/fade_in_animation_model.dart';
-
-import '../../../../../utils/animations/fade_in_animation/animation_design.dart';
 import '../../../../../utils/animations/fade_in_animation/fade_in_animation_controller.dart';
 import '../../../../../utils/constants/colors.dart';
 
