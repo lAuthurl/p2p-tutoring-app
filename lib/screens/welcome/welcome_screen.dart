@@ -8,24 +8,28 @@ import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/constants/image_strings.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/constants/text_strings.dart';
+import '../login/login_screen.dart';
+import '../signup/signup_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.put(FadeInAnimationController());
-    controller.animationIn();
+    final controller = Get.find<FadeInAnimationController>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.animationIn();
+    });
 
     var mediaQuery = MediaQuery.of(context);
     var width = mediaQuery.size.width;
-    var height = mediaQuery.size.height;
     var brightness = mediaQuery.platformBrightness;
     final isDarkMode = brightness == Brightness.dark;
 
+    // choose background via TColors so we have predictable dark/light colors
     return SafeArea(
       child: Scaffold(
-        backgroundColor: isDarkMode ? TColors.secondary : TColors.primary,
+        backgroundColor: isDarkMode ? TColors.darkBackground : TColors.primary,
         body: Stack(
           children: [
             TFadeInAnimation(
@@ -49,10 +53,17 @@ class WelcomeScreen extends StatelessWidget {
                     children: [
                       Hero(
                         tag: 'welcome-image-tag',
-                        child: Image(
-                          image: const AssetImage(TImages.darkAppLogo),
-                          width: width * 0.7,
-                          height: height * 0.6,
+                        child: SizedBox(
+                          width: width * 0.85,
+                          child: AspectRatio(
+                            aspectRatio: 1.2,
+                            child: Image.asset(
+                              TImages.tWelcomeScreenImage,
+                              fit: BoxFit.contain,
+                              cacheWidth: 450,
+                              cacheHeight: 375,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: TSizes.spaceBtwSections),
@@ -60,17 +71,61 @@ class WelcomeScreen extends StatelessWidget {
                         children: [
                           Text(
                             TTexts.tWelcomeTitle,
-                            style: Theme.of(context).textTheme.displayMedium,
+                            style:
+                                Theme.of(
+                                  context,
+                                ).textTheme.displayMedium?.copyWith(
+                                  color:
+                                      isDarkMode
+                                          ? TColors.textDarkPrimary
+                                          : TColors.textPrimary,
+                                ) ??
+                                TextStyle(
+                                  color:
+                                      isDarkMode
+                                          ? TColors.textDarkPrimary
+                                          : TColors.textPrimary,
+                                ),
                           ),
                           const SizedBox(height: TSizes.sm),
                           Text(
                             TTexts.tWelcomeSubTitle,
-                            style: Theme.of(context).textTheme.bodyLarge,
+                            style:
+                                Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color:
+                                      isDarkMode
+                                          ? TColors.textDarkSecondary
+                                          : TColors.textSecondary,
+                                ) ??
+                                TextStyle(
+                                  color:
+                                      isDarkMode
+                                          ? TColors.textDarkSecondary
+                                          : TColors.textSecondary,
+                                ),
                             textAlign: TextAlign.center,
                           ),
                         ],
                       ),
                       const SizedBox(height: TSizes.spaceBtwSections),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Get.to(() => LoginScreen()),
+                              child: Text(TTexts.tLogin.toUpperCase()),
+                            ),
+                          ),
+                          const SizedBox(width: 10.0),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed:
+                                  () => Get.to(() => const SignupScreen()),
+                              child: Text(TTexts.tSignup.toUpperCase()),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),

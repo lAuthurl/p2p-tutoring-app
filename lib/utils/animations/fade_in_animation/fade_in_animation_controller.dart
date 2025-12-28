@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 
-import 'package:p2p_tutoring_app/screens/welcome/welcome_screen.dart';
+import 'package:p2p_tutoring_app/screens/on_boarding/on_boarding_screen.dart';
 
 class FadeInAnimationController extends GetxController {
   static FadeInAnimationController get find => Get.find();
@@ -15,8 +15,8 @@ class FadeInAnimationController extends GetxController {
     animateTwoWay.value = false;
     await Future.delayed(const Duration(milliseconds: 2000));
     Get.off(
-      // Get.off Instead of Get.offAll()
-      () => const WelcomeScreen(),
+      // Navigate to onboarding screen after splash
+      () => const OnBoardingScreen(),
       duration: const Duration(milliseconds: 1000), //Transition Time
       transition: Transition.fadeIn, //Screen Switch Transition
     );
