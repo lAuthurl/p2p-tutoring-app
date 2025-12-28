@@ -16,14 +16,51 @@ dependencies:
   google_fonts: ^6.3.3
   liquid_swipe: ^3.1.0
   get_storage: ^2.1.1
+  iconsax: ^0.0.8
+  logger: ^2.6.2
+  amplify_flutter: ^2.8.0
+  amplify_auth_cognito: ^2.8.0
+  amplify_storage_s3: ^2.8.0
+  amplify_api: ^2.8.0
+  connectivity_plus: ^7.0.0
+  http: ^1.6.0
+  url_launcher: ^6.3.2
+  badges: ^3.1.2
+  crypto: ^3.0.2
+  lottie: ^3.3.2
+  shimmer: ^3.0.0
+  google_sign_in: ^7.2.0
+  image_picker: ^1.2.1
+  flutter_local_notifications: ^19.5.0
+  flutter_otp_text_field: ^1.5.1+1
+  line_awesome_flutter: ^3.0.1
+  country_code_picker: ^3.4.1
+  # Removed google_fonts to use bundled Poppins fonts via assets
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
+
   assets:
-  - assets/logos/
+  - assets/logo/
+  - assets/images/
   - assets/images/on_boarding_images/
+  - assets/images/welcome_images/
+  - assets/images/animations/
+  # fonts:
+  # - family: Poppins
+  #   fonts:
+  #   - asset: assets/fonts/Poppins-Regular.ttf
+  #   - asset: assets/fonts/Poppins-SemiBold.ttf
+  #     weight: 600
+  #   - asset: assets/fonts/Poppins-Bold.ttf
+  #     weight: 700
+
+  # NOTE: The Poppins font entries are commented out temporarily because
+  # the .ttf files are not present in assets/fonts/. Add the three Poppins
+  # .ttf files (Poppins-Regular.ttf, Poppins-SemiBold.ttf, Poppins-Bold.ttf)
+  # to assets/fonts/ and then uncomment this block and run `flutter pub get`.

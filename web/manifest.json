@@ -1,6 +1,6 @@
 {
-    "name": "p2p_tutoring_app",
-    "short_name": "p2p_tutoring_app",
+    "name": "p2p_tutoring_application",
+    "short_name": "p2p_tutoring_application",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

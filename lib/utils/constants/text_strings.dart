@@ -100,7 +100,7 @@ class TTexts {
   // -- Forget Password Text
   static const String tForgetPasswordTitle = "Password Recovery";
   static const String tForgetPasswordSubTitle =
-      "Select a method to reset your password.";
+      'Input your email in the text field';
   static const String tResetViaEMail = "Reset via Email";
   static const String tResetViaPhone = "Reset via Phone";
 
