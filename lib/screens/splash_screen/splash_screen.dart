@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../../utils/animations/fade_in_animation/fade_in_animation_controller.dart';
-import '../../../../../utils/constants/colors.dart';
 
 class SplashScreen extends StatelessWidget {
-  const SplashScreen({super.key});
+  final int screenNumber; // 1, 2, or 3
+
+  const SplashScreen({super.key, required this.screenNumber});
 
   @override
   Widget build(BuildContext context) {
@@ -12,26 +13,43 @@ class SplashScreen extends StatelessWidget {
       FadeInAnimationController(),
     );
 
+    // Start splash animation
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => controller.startSplashAnimation(),
     );
+
+    // Determine background
+    BoxDecoration background;
+    if (screenNumber == 3) {
+      background = const BoxDecoration(color: Colors.white);
+    } else {
+      background = const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment(1, -1),
+          end: Alignment(1, 1),
+          colors: [Color(0xFFA480F0), Color(0xFF35A8E7)],
+        ),
+      );
+    }
 
     return Scaffold(
       body: AnimatedContainer(
         duration: const Duration(milliseconds: 800),
         curve: Curves.easeInOut,
-        color:
-            Get.isDarkMode ? TColors.darkBackground : TColors.lightBackground,
+        width: double.infinity,
+        height: double.infinity,
+        decoration: background,
         child: Center(
-          child: Image.asset(
-            Get.isDarkMode
-                ? 'assets/logo/t-store-splash-logo-white.png'
-                : 'assets/logo/t-store-splash-logo-black.png',
-            width: 180,
-            height: 180,
-            fit: BoxFit.contain,
-            cacheHeight: 180,
-            cacheWidth: 180,
+          child: Obx(
+            () => Opacity(
+              opacity: controller.opacity.value,
+              child: Image.asset(
+                'assets/logo/t-store-splash-logo-black.png', // replace with white logo if needed
+                width: 180,
+                height: 180,
+                fit: BoxFit.contain,
+              ),
+            ),
           ),
         ),
       ),

@@ -36,6 +36,8 @@ class ForgetPasswordMailScreen extends StatelessWidget {
                   heightBetween: 30.0,
                   textAlign: TextAlign.center,
                   imageHeight: 0.25,
+                  titleFontSize: 20,
+                  subTitleFontSize: 14,
                 ),
                 const SizedBox(height: TSizes.xl),
                 _ForgetPasswordForm(),
