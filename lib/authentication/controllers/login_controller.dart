@@ -28,6 +28,8 @@ class LoginController extends GetxController {
   final isGoogleLoading = false.obs;
   final isFacebookLoading = false.obs;
 
+  final RxBool rememberMe = false.obs;
+
   @override
   void onInit() {
     email.text = localStorage.read('REMEMBER_ME_EMAIL') ?? '';

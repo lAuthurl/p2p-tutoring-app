@@ -16,6 +16,7 @@ class OnBoardingScreen extends StatelessWidget {
       body: Stack(
         alignment: Alignment.center,
         children: [
+          // LiquidSwipe pages
           LiquidSwipe(
             pages: obController.pages,
             enableSideReveal: true,
@@ -24,8 +25,10 @@ class OnBoardingScreen extends StatelessWidget {
             slideIconWidget: const Icon(Icons.arrow_back_ios),
             waveType: WaveType.circularReveal,
           ),
+
+          // Circular Next Button (slightly higher)
           Positioned(
-            bottom: 60.0,
+            bottom: 50.0, // raised slightly
             child: OutlinedButton(
               onPressed:
                   () => obController.animateToNextSlideWithLocalStorage(),
@@ -45,6 +48,8 @@ class OnBoardingScreen extends StatelessWidget {
               ),
             ),
           ),
+
+          // Skip Button
           Positioned(
             top: 50,
             right: 20,
@@ -53,9 +58,11 @@ class OnBoardingScreen extends StatelessWidget {
               child: const Text("Skip", style: TextStyle(color: Colors.grey)),
             ),
           ),
+
+          // Smooth Page Indicator
           Obx(
             () => Positioned(
-              bottom: 10,
+              bottom: 10, // slightly above bottom
               child: AnimatedSmoothIndicator(
                 count: 3,
                 activeIndex: obController.currentPage.value,

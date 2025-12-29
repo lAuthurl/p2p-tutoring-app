@@ -14,6 +14,8 @@ class FormHeaderWidget extends StatelessWidget {
     this.textAlign,
     this.crossAxisAlignment = CrossAxisAlignment.start,
     this.imageAlignment = Alignment.topLeft,
+    this.titleFontSize,
+    this.subTitleFontSize,
   });
 
   //Variables -- Declared in Constructor
@@ -26,6 +28,8 @@ class FormHeaderWidget extends StatelessWidget {
   final CrossAxisAlignment crossAxisAlignment;
   final TextAlign? textAlign;
   final AlignmentGeometry imageAlignment;
+  final double? titleFontSize;
+  final double? subTitleFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -57,19 +61,21 @@ class FormHeaderWidget extends StatelessWidget {
         Text(
           title,
           style:
-              Theme.of(
-                context,
-              ).textTheme.displayLarge?.copyWith(color: titleColor) ??
-              TextStyle(color: titleColor),
+              Theme.of(context).textTheme.displayLarge?.copyWith(
+                color: titleColor,
+                fontSize: titleFontSize,
+              ) ??
+              TextStyle(color: titleColor, fontSize: titleFontSize),
         ),
         Text(
           subTitle,
           textAlign: textAlign,
           style:
-              Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: subTitleColor) ??
-              TextStyle(color: subTitleColor),
+              Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: subTitleColor,
+                fontSize: subTitleFontSize,
+              ) ??
+              TextStyle(color: subTitleColor, fontSize: subTitleFontSize),
         ),
       ],
     );

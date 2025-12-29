@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 
 class TPrimaryButton extends StatelessWidget {
+  final String text;
+  final VoidCallback? onPressed;
+  final Color? backgroundColor;
+  final Color? textColor;
+  final bool isLoading;
+
+  // added fields
+  final double? fontSize;
+  final double? height;
+
   const TPrimaryButton({
     super.key,
     required this.text,
@@ -8,24 +18,15 @@ class TPrimaryButton extends StatelessWidget {
     this.backgroundColor,
     this.textColor,
     this.isLoading = false,
-    this.fontSize,
-    this.height,
-    required int verticalPadding,
+    this.fontSize, // new
+    this.height, // new
   });
-
-  final String text;
-  final VoidCallback? onPressed;
-  final bool isLoading;
-  final Color? backgroundColor;
-  final Color? textColor;
-  final double? fontSize;
-  final double? height;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: height ?? 50,
+      height: height ?? 50, // use provided height or fallback
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
@@ -36,19 +37,15 @@ class TPrimaryButton extends StatelessWidget {
         ),
         child:
             isLoading
-                ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    strokeWidth: 2,
-                  ),
+                ? const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 )
                 : Text(
                   text,
                   style: TextStyle(
                     color: textColor ?? Colors.white,
-                    fontSize: fontSize ?? 16,
+                    fontSize:
+                        fontSize ?? 16, // use provided fontSize or fallback
                   ),
                 ),
       ),
