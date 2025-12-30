@@ -9,7 +9,7 @@ class UserProfilesScreen extends StatelessWidget {
       backgroundColor: Colors.white,
       body: Center(
         child: Text(
-          'User Profiles',
+          'Home Page',
           style: TextStyle(color: Colors.black, fontSize: 20),
         ),
       ),

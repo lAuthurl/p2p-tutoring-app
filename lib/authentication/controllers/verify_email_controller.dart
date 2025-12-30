@@ -16,10 +16,27 @@ class VerifyEmailController extends GetxController {
   @override
   void onInit() {
     /// Send Email Whenever Verify Screen appears & Set Timer for auto redirect.
-    sendEmailVerification();
-    setTimerForAutoRedirect();
+    // Capture the initial verified state so we only redirect when verification
+    // transitions from false -> true (prevents immediate redirect on load).
+    _captureInitialVerificationStateAndStart();
 
     super.onInit();
+  }
+
+  bool _initiallyVerified = false;
+  Timer? _autoRedirectTimer;
+
+  Future<void> _captureInitialVerificationStateAndStart() async {
+    try {
+      final current =
+          await AuthenticationRepository.instance
+              .refreshCurrentUserNoRedirect();
+      _initiallyVerified = current?.emailVerified ?? false;
+    } catch (_) {
+      _initiallyVerified = false;
+    }
+    await sendEmailVerification();
+    setTimerForAutoRedirect();
   }
 
   /// Send Email Verification link
@@ -37,19 +54,34 @@ class VerifyEmailController extends GetxController {
 
   /// Timer to automatically redirect on Email Verification
   void setTimerForAutoRedirect() {
-    Timer.periodic(const Duration(seconds: 1), (timer) async {
-      await AuthenticationRepository.instance.refreshCurrentUserNoRedirect();
-      final user = AuthenticationRepository.instance.firebaseUser;
-      if (user?.emailVerified ?? false) {
+    // Check every 2 seconds for up to 2 minutes.
+    const checkInterval = Duration(seconds: 2);
+    const maxChecks = 60; // ~2 minutes
+    int checks = 0;
+
+    _autoRedirectTimer = Timer.periodic(checkInterval, (timer) async {
+      checks++;
+      try {
+        final user =
+            await AuthenticationRepository.instance
+                .refreshCurrentUserNoRedirect();
+        final nowVerified = user?.emailVerified ?? false;
+        // Only redirect when verification transitioned from false -> true.
+        if (nowVerified && !_initiallyVerified) {
+          timer.cancel();
+          Get.off(
+            () => SuccessScreen(
+              image: TImages.successfullyRegisterAnimation,
+              title: TTexts.yourAccountCreatedTitle,
+              subTitle: TTexts.yourAccountCreatedSubTitle,
+              onPressed: () => Get.offAllNamed(TRoutes.profileScreen),
+            ),
+          );
+        }
+      } catch (_) {}
+
+      if (checks >= maxChecks) {
         timer.cancel();
-        Get.off(
-          () => SuccessScreen(
-            image: TImages.successfullyRegisterAnimation,
-            title: TTexts.yourAccountCreatedTitle,
-            subTitle: TTexts.yourAccountCreatedSubTitle,
-            onPressed: () => Get.offAllNamed(TRoutes.profileScreen),
-          ),
-        );
       }
     });
   }
@@ -94,14 +126,14 @@ class VerifyEmailController extends GetxController {
         uname,
         confirmationCode,
       );
-      // Show confirmation dialog with an action to go to Login
-      Get.defaultDialog(
-        title: 'Verified',
-        middleText: 'Email successfully verified.',
-        textConfirm: 'Go to Login',
-        onConfirm: () {
-          Get.offAll(() => LoginScreen());
-        },
+      // Navigate to the success screen only after confirmation succeeds.
+      Get.off(
+        () => SuccessScreen(
+          image: TImages.successfullyRegisterAnimation,
+          title: TTexts.yourAccountCreatedTitle,
+          subTitle: TTexts.yourAccountCreatedSubTitle,
+          onPressed: () => Get.offAllNamed(TRoutes.profileScreen),
+        ),
       );
       // also refresh verification status in background
       await checkEmailVerificationStatus();
