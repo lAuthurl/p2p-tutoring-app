@@ -22,6 +22,7 @@ class TTexts {
   static const String tOhSnap = "Oh Snap";
 
   // -- Splash Screen Text
+  // (intentionally minimal – handled via design)
 
   // -- On Boarding Text (Figma Exact)
   static const String tOnBoardingTitle1 = "Find Your Learning Match";
@@ -32,7 +33,8 @@ class TTexts {
       "Connect with peers who match your subject needs, academic level, and schedule.";
   static const String tOnBoardingSubTitle2 =
       "Learn your way, join peer tutoring sessions online or meet offline.";
-  static const String tOnBoardingSubTitle3 = "";
+  static const String tOnBoardingSubTitle3 =
+      "Monitor your learning journey, earn badges, and celebrate progress.";
 
   static const String tOnBoardingCounter1 = "1/3";
   static const String tOnBoardingCounter2 = "2/3";
@@ -40,7 +42,8 @@ class TTexts {
 
   // -- Welcome Screen Text
   static const String tWelcomeTitle = "Welcome to Peer Tutoring";
-  static const String tWelcomeSubTitle = "";
+  static const String tWelcomeSubTitle =
+      "Collaborate, learn, and succeed together.";
 
   // -- Login Screen Text
   static const String tDontHaveAnAccount = "Don’t have an account?";
@@ -48,6 +51,7 @@ class TTexts {
   static const String tOR = "OR";
 
   // -- Sign Up Screen Text
+  // (intentionally minimal – design-driven)
 
   // -- Verify Email Screen Text
   static const String yourAccountCreatedTitle = "Account successfully created!";
@@ -56,15 +60,15 @@ class TTexts {
   // -- Forget Password Text
   static const String tForgetPasswordTitle = "Password Recovery";
   static const String tForgetPasswordSubTitle =
-      'Input your email in the text field';
+      "Input your email in the text field";
   static const String tResetViaEMail = "Reset via Email";
 
-  // -- OTP Screen - Text
+  // -- OTP Screen Text
   static const String tOtpTitle = "OTP";
   static const String tOtpSubTitle = "Verification";
   static const String tOtpMessage = "";
 
-  // -- Phone Number Authentication - Text
+  // -- Phone Number Authentication Text
   static const String otpVerification = "OTP Verification";
   static const String selectCountryCode = "Select Country Code";
   static const String phoneVerifiedTitle = "Phone Verified";
@@ -85,6 +89,4 @@ class TTexts {
       "Please check your email and click the verification link to continue.";
   static const String tResendEmailLink = "Resend Verification Link";
   static const String tBackToLogin = "Back to Login";
-
-  // -- Dashboard Screen - Text
 }

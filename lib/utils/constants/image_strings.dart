@@ -7,7 +7,8 @@ class TImages {
       "assets/images/on_boarding_images/pick_tutee.gif";
   static const String tOnBoardingImage2 =
       "assets/images/on_boarding_images/select_platform.gif";
-  static const String tOnBoardingImage3 = "";
+  static const String tOnBoardingImage3 =
+      "assets/images/on_boarding_images/explore_badges.gif";
 
   // -- Welcome Screen Image [Used in Login & SignUp]
   static const String tWelcomeScreenImage =

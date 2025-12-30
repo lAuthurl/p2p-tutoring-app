@@ -7,6 +7,7 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import 'package:amplify_storage_s3/amplify_storage_s3.dart';
 import 'package:p2p_tutoring_app/data/repository/user_repository/user_repository.dart';
+import 'package:p2p_tutoring_app/personalization/controllers/user_controller.dart';
 
 import 'app.dart';
 import 'data/repository/authentication_repository/authentication_repository.dart';
@@ -39,8 +40,11 @@ Future<void> main() async {
   }
 
   // AuthenticationRepository is registered lazily in GeneralBindings
-  // Register UserRepository but defer UserController until after splash screen appears
+  // Register UserRepository and ensure UserController is available early
   Get.put(UserRepository());
+  // Some code calls Get.find<UserController>() before bindings run —
+  // register UserController eagerly so it's available immediately.
+  Get.put(UserController());
 
   /// Run the app
   runApp(const App());
