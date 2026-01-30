@@ -12,62 +12,89 @@ class OnBoardingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final obController = Get.find<OnBoardingController>();
+
     return Scaffold(
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // LiquidSwipe pages
-          LiquidSwipe(
-            pages: obController.pages,
-            enableSideReveal: true,
-            liquidController: obController.controller,
-            onPageChangeCallback: obController.onPageChangedCallback,
-            slideIconWidget: const Icon(Icons.arrow_back_ios),
-            waveType: WaveType.circularReveal,
+          /// Liquid Swipe (default icon removed)
+          GestureDetector(
+            onPanStart: (_) => obController.isUserInteracting.value = true,
+            onPanEnd: (_) => obController.isUserInteracting.value = false,
+            onPanCancel: () => obController.isUserInteracting.value = false,
+            child: LiquidSwipe(
+              pages: obController.pages,
+              enableSideReveal: true,
+              liquidController: obController.controller,
+              onPageChangeCallback: obController.onPageChangedCallback,
+              waveType: WaveType.circularReveal,
+            ),
           ),
 
-          // Circular Next Button (slightly higher)
+          /// Swipe hint icon (visible only during interaction)
+          Obx(
+            () => Positioned(
+              bottom: 120,
+              right: 20,
+              child: AnimatedOpacity(
+                opacity: obController.isUserInteracting.value ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                child: const Icon(
+                  Icons.arrow_back_ios,
+                  size: 32,
+                  color: TColors.iconPrimaryDark,
+                ),
+              ),
+            ),
+          ),
+
+          /// Next Button
           Positioned(
-            bottom: 50.0, // raised slightly
+            bottom: 50,
             child: OutlinedButton(
-              onPressed:
-                  () => obController.animateToNextSlideWithLocalStorage(),
-              style: ElevatedButton.styleFrom(
-                side: const BorderSide(color: Colors.black26),
+              onPressed: obController.animateToNextSlideWithLocalStorage,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: TColors.borderLight),
                 shape: const CircleBorder(),
                 padding: const EdgeInsets.all(20),
-                foregroundColor: Colors.white,
               ),
               child: Container(
-                padding: const EdgeInsets.all(20.0),
+                padding: const EdgeInsets.all(20),
                 decoration: const BoxDecoration(
                   color: TColors.black,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.arrow_forward_ios),
+                child: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: TColors.textWhite,
+                ),
               ),
             ),
           ),
 
-          // Skip Button
+          /// Skip Button
           Positioned(
             top: 50,
             right: 20,
             child: TextButton(
-              onPressed: () => obController.skip(),
-              child: const Text("Skip", style: TextStyle(color: Colors.grey)),
+              onPressed: obController.skip,
+              child: const Text(
+                'Skip',
+                style: TextStyle(color: TColors.textSecondary),
+              ),
             ),
           ),
 
-          // Smooth Page Indicator
+          /// Page Indicator
           Obx(
             () => Positioned(
-              bottom: 10, // slightly above bottom
+              bottom: 10,
               child: AnimatedSmoothIndicator(
-                count: 3,
+                count: obController.pages.length,
                 activeIndex: obController.currentPage.value,
                 effect: const ExpandingDotsEffect(
-                  activeDotColor: Color(0xff272727),
+                  activeDotColor: TColors.dark,
+                  dotColor: TColors.grey,
                 ),
               ),
             ),

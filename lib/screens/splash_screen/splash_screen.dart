@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
+import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/animations/fade_in_animation/fade_in_animation_controller.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -18,19 +20,19 @@ class SplashScreen extends StatelessWidget {
       (_) => controller.startSplashAnimation(),
     );
 
-    // Determine background
-    BoxDecoration background;
-    if (screenNumber == 3) {
-      background = const BoxDecoration(color: Colors.white);
-    } else {
-      background = const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment(1, -1),
-          end: Alignment(1, 1),
-          colors: [Color(0xFFA480F0), Color(0xFF35A8E7)],
-        ),
-      );
-    }
+    final BoxDecoration background =
+        screenNumber == 3
+            ? const BoxDecoration(color: TColors.lightBackground)
+            : const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment(1, -1),
+                end: Alignment(1, 1),
+                colors: [
+                  TColors.splashGradientStart,
+                  TColors.splashGradientEnd,
+                ],
+              ),
+            );
 
     return Scaffold(
       body: AnimatedContainer(
@@ -44,7 +46,7 @@ class SplashScreen extends StatelessWidget {
             () => Opacity(
               opacity: controller.opacity.value,
               child: Image.asset(
-                'assets/logo/t-store-splash-logo-black.png', // replace with white logo if needed
+                'assets/logo/t-store-splash-logo-black.png',
                 width: 180,
                 height: 180,
                 fit: BoxFit.contain,

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import 'package:p2p_tutoring_app/utils/constants/colors.dart';
 import 'package:p2p_tutoring_app/utils/constants/sizes.dart';
+import 'package:p2p_tutoring_app/utils/constants/image_strings.dart';
+
 import 'widgets/login_form_widget.dart';
 import '../signup/signup_screen.dart';
-import 'package:p2p_tutoring_app/utils/constants/image_strings.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -28,7 +30,7 @@ class LoginScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Top Image - full width
+                // Top Image
                 SizedBox(
                   width: double.infinity,
                   height: 200,
@@ -37,35 +39,49 @@ class LoginScreen extends StatelessWidget {
                     fit: BoxFit.cover,
                   ),
                 ),
+
                 const SizedBox(height: TSizes.lg),
+
                 Text(
                   'Welcome Back!',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: TColors.textDarkPrimary,
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+
                 const SizedBox(height: TSizes.sm),
+
                 Text(
                   'Login to continue',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                  style: TextStyle(
+                    color: TColors.textDarkSecondary,
+                    fontSize: 16,
+                  ),
                 ),
+
                 const SizedBox(height: TSizes.lg),
+
                 const LoginFormWidget(),
+
                 const SizedBox(height: TSizes.md),
+
                 Center(
                   child: GestureDetector(
                     onTap: () => Get.off(() => const SignupScreen()),
                     child: Text.rich(
                       TextSpan(
                         text: "Don't have an account? ",
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                        style: TextStyle(
+                          color: TColors.textDarkSecondary,
+                          fontSize: 12,
+                        ),
                         children: [
                           TextSpan(
                             text: "Sign Up",
                             style: TextStyle(
-                              color: const Color(0xFFEF8460),
+                              color: TColors.primary,
                               fontWeight: FontWeight.bold,
                               decoration: TextDecoration.underline,
                             ),

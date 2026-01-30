@@ -15,6 +15,9 @@ class OnBoardingController extends GetxController {
   final controller = LiquidController();
   RxInt currentPage = 0.obs;
 
+  // track whether the user is currently interacting with the swiper
+  final RxBool isUserInteracting = false.obs;
+
   //Functions to trigger Skip, Next and onPageChange Events
   dynamic skip() => controller.jumpToPage(page: 2);
 

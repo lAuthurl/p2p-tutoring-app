@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:line_awesome_flutter/line_awesome_flutter.dart';
 import 'package:iconsax/iconsax.dart';
+
+import 'package:p2p_tutoring_app/utils/constants/colors.dart';
 import 'package:p2p_tutoring_app/utils/constants/sizes.dart';
 import 'package:p2p_tutoring_app/utils/constants/text_strings.dart';
 import 'package:p2p_tutoring_app/utils/validators/validation.dart';
+
 import '../../../../authentication/controllers/signup_controller.dart';
 import '../../../../../../common/widgets/buttons/primary_button.dart';
 
@@ -26,27 +29,35 @@ class SignUpFormWidget extends StatelessWidget {
             LineAwesomeIcons.user,
             validator: (v) => v!.isEmpty ? 'Name cannot be empty' : null,
           ),
+
           const SizedBox(height: TSizes.sm),
+
           _buildField(
             controller.email,
             'Email',
             LineAwesomeIcons.envelope,
             validator: TValidator.validateEmail,
           ),
+
           const SizedBox(height: TSizes.sm),
-          _buildField(
-            controller.password,
-            'Password',
-            Icons.fingerprint,
-            validator: TValidator.validatePassword,
-            isPassword: true,
-            obscureText: controller.hidePassword.value,
-            toggle:
-                () =>
-                    controller.hidePassword.value =
-                        !controller.hidePassword.value,
+
+          Obx(
+            () => _buildField(
+              controller.password,
+              'Password',
+              Icons.fingerprint,
+              validator: TValidator.validatePassword,
+              isPassword: true,
+              obscureText: controller.hidePassword.value,
+              toggle:
+                  () =>
+                      controller.hidePassword.value =
+                          !controller.hidePassword.value,
+            ),
           ),
+
           const SizedBox(height: TSizes.sm),
+
           _buildField(
             controller.phoneNumber,
             'Phone No',
@@ -54,17 +65,19 @@ class SignUpFormWidget extends StatelessWidget {
             validator:
                 (v) => v!.isEmpty ? 'Phone number cannot be empty' : null,
           ),
+
           const SizedBox(height: TSizes.md),
+
           Obx(
             () => TPrimaryButton(
               text: TTexts.tSignup,
               isLoading: controller.isLoading.value,
-              onPressed: () => controller.signup(),
-              backgroundColor: const Color(0xFFEF8460),
-              textColor: Colors.white,
+              onPressed: controller.signup,
+              backgroundColor: TColors.primary,
+              textColor: TColors.textWhite,
               fontSize: 16,
-              height: 52, // increased height
-              verticalPadding: 12, // prevent text cut off
+              height: 52,
+              verticalPadding: 12,
             ),
           ),
         ],
@@ -85,22 +98,25 @@ class SignUpFormWidget extends StatelessWidget {
       controller: controller,
       validator: validator,
       obscureText: isPassword ? obscureText : false,
-      style: const TextStyle(color: Colors.black),
+      style: const TextStyle(color: TColors.textPrimary),
       decoration: InputDecoration(
         filled: true,
-        fillColor: const Color(0xFFFFE4DB),
+        fillColor: TColors.secondaryBackground,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.black87),
-        prefixIcon: Icon(icon, color: Colors.black54),
+        labelStyle: const TextStyle(color: TColors.textSecondary),
+        prefixIcon: Icon(icon, color: TColors.iconSecondaryLight),
         suffixIcon:
             isPassword
                 ? IconButton(
                   onPressed: toggle,
-                  icon: const Icon(Iconsax.eye_slash, color: Colors.black54),
+                  icon: const Icon(
+                    Iconsax.eye_slash,
+                    color: TColors.iconSecondaryLight,
+                  ),
                 )
                 : null,
       ),
