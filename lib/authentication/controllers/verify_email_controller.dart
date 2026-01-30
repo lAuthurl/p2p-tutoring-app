@@ -8,10 +8,15 @@ import '../../../utils/constants/image_strings.dart';
 import '../../../utils/constants/text_strings.dart';
 import '../../../routes/routes.dart';
 import '../../../utils/popups/loaders.dart';
-import '../../../screens/login/login_screen.dart';
 
 class VerifyEmailController extends GetxController {
   static VerifyEmailController get instance => Get.find();
+
+  @override
+  void onClose() {
+    _autoRedirectTimer?.cancel();
+    super.onClose();
+  }
 
   @override
   void onInit() {

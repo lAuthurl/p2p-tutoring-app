@@ -100,19 +100,19 @@ class WelcomeScreen extends StatelessWidget {
                     right: 33,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEF8460),
+                        backgroundColor: TColors.primary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(27),
                         ),
                         elevation: 0,
                         minimumSize: const Size.fromHeight(50),
                       ),
-                      onPressed: () => Get.to(() => LoginScreen()),
+                      onPressed: () => Get.to(() => const LoginScreen()),
                       child: const Center(
                         child: Text(
                           TTexts.tLogin,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: TColors.textWhite,
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
                           ),
@@ -128,7 +128,7 @@ class WelcomeScreen extends StatelessWidget {
                     right: 33,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEF8460),
+                        backgroundColor: TColors.primary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(27),
                         ),
@@ -140,7 +140,7 @@ class WelcomeScreen extends StatelessWidget {
                         child: Text(
                           TTexts.tSignup,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: TColors.textWhite,
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
                           ),

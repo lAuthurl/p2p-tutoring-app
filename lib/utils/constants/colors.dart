@@ -25,6 +25,10 @@ class TColors {
   static const Color disabledTextDark = textSecondary;
   static const Color disabledBackgroundDark = Color(0xFF222A3D);
 
+  // Splash / Gradient Colors
+  static const Color splashGradientStart = Color(0xFFA480F0);
+  static const Color splashGradientEnd = Color(0xFF35A8E7);
+
   // Background colors
   static const Color lightBackground = Color(0xFFFFFFFF);
 
