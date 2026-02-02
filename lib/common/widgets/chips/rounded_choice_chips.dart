@@ -33,6 +33,7 @@ class TChoiceChip extends StatelessWidget {
                   width: 50,
                   height: 50,
                   backgroundColor: THelperFunctions.getColor(text)!,
+                  y: 0.0,
                 )
                 : null,
         label:
@@ -53,7 +54,9 @@ class TChoiceChip extends StatelessWidget {
             THelperFunctions.getColor(text) != null
                 ? const CircleBorder()
                 : null,
+        selectedColor: THelperFunctions.getColor(text) ?? TColors.primary,
         backgroundColor: THelperFunctions.getColor(text),
+        pressElevation: 0,
         labelStyle: TextStyle(color: selected ? TColors.white : null),
       ),
     );

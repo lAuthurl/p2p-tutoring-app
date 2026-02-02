@@ -8,6 +8,7 @@ import '../../../../utils/constants/text_strings.dart';
 import '../../models/model_on_boarding.dart';
 import '../../screens/on_boarding/on_boarding_page_widget.dart';
 import '../../screens/welcome/welcome_screen.dart';
+import '../../../Feautures/dashboard/Home/screens/home/home.dart';
 
 class OnBoardingController extends GetxController {
   //Variables
@@ -27,6 +28,16 @@ class OnBoardingController extends GetxController {
   void animateToNextSlideWithLocalStorage() {
     if (controller.currentPage == 2) {
       userStorage.write('isFirstTime', false);
+
+      // If user chose "Remember me" during login, skip Welcome and go to Home
+      try {
+        final remember = userStorage.read('REMEMBER_ME') as bool? ?? false;
+        if (remember) {
+          Get.offAll(() => const HomeScreen());
+          return;
+        }
+      } catch (_) {}
+
       Get.offAll(() => const WelcomeScreen());
     } else {
       controller.animateToPage(page: controller.currentPage + 1);

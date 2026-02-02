@@ -1,10 +1,10 @@
 class TSizes {
   // Padding and margin sizes
   static const double xs = 4.0;
-  static const double sm = 10.0;
-  static const double md = 16.0;
-  static const double lg = 20.0;
-  static const double xl = 30.0;
+  static const double sm = 8.0; // reduced for closer spacing
+  static const double md = 12.0; // reduced
+  static const double lg = 16.0; // reduced
+  static const double xl = 24.0;
 
   // Icon sizes
   static const double iconXs = 12.0;
@@ -30,9 +30,9 @@ class TSizes {
   static const double imageThumbSize = 80.0;
 
   // Default spacing between sections
-  static const double defaultSpace = 20.0;
-  static const double spaceBtwItems = 12.0;
-  static const double spaceBtwSections = 32.0;
+  static const double defaultSpace = 12.0; // tightened spacing
+  static const double spaceBtwItems = 8.0; // tightened
+  static const double spaceBtwSections = 16.0; // tightened
 
   // Border radius
   static const double borderRadiusSm = 4.0;

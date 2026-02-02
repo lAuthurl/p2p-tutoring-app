@@ -121,10 +121,7 @@ class THelperFunctions {
   static List<Widget> wrapWidgets(List<Widget> widgets, int rowSize) {
     final wrappedList = <Widget>[];
     for (var i = 0; i < widgets.length; i += rowSize) {
-      final rowChildren = widgets.sublist(
-        i,
-        i + rowSize > widgets.length ? widgets.length : i + rowSize,
-      );
+      final rowChildren = _safeSublist(widgets, i, i + rowSize);
       wrappedList.add(Row(children: rowChildren));
     }
     return wrappedList;
@@ -196,5 +193,23 @@ class THelperFunctions {
     }
 
     return age;
+  }
+
+  static List<T> _safeSublist<T>(List<T> list, int start, [int? end]) {
+    final s = start < 0 ? 0 : (start > list.length ? list.length : start);
+    final e =
+        end == null
+            ? list.length
+            : (end < s ? s : (end > list.length ? list.length : end));
+    return list.sublist(s, e);
+  }
+
+  // Example: phone number visible parts
+  static String visiblePhoneStart(String number) {
+    return number.length >= 2 ? number.substring(0, 2) : number;
+  }
+
+  static String visiblePhoneEnd(String number) {
+    return number.length >= 3 ? number.substring(number.length - 3) : number;
   }
 }

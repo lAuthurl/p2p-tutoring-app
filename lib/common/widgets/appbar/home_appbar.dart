@@ -14,29 +14,59 @@ class TEComAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// - [leadingIcon] for a custom leading icon.
   /// - [leadingOnPressed] callback for the leading icon press event.
   /// - [actions] for adding a list of action widgets.
-  /// - Horizontal padding of the appbar can be customized inside this widget.
-  const TEComAppBar({super.key, this.title, this.actions, this.leadingIcon, this.leadingOnPressed, this.showBackArrow = false});
+  /// - [horizontalPadding] to customize horizontal padding around the AppBar.
+  const TEComAppBar({
+    super.key,
+    this.title,
+    this.actions,
+    this.leadingIcon,
+    this.leadingOnPressed,
+    this.showBackArrow = false,
+    this.centerTitle = false,
+    this.horizontalPadding,
+  });
 
   final Widget? title;
   final bool showBackArrow;
+  final bool centerTitle;
   final IconData? leadingIcon;
   final List<Widget>? actions;
   final VoidCallback? leadingOnPressed;
+  final EdgeInsetsGeometry? horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
     final dark = THelperFunctions.isDarkMode(context);
+    final padding =
+        horizontalPadding ?? const EdgeInsets.symmetric(horizontal: TSizes.md);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: TSizes.md),
+      padding: padding,
       child: AppBar(
         automaticallyImplyLeading: false,
+        titleSpacing: 0.0,
+        // Allocate a normal leading width so the back button is tappable
+        leadingWidth: kToolbarHeight,
+        // Respect the centerTitle parameter passed to the widget
+        centerTitle: centerTitle,
         leading:
             showBackArrow
-                ? IconButton(onPressed: () => Get.back(), icon: Icon(Iconsax.arrow_left, color: dark ? TColors.white : TColors.dark))
+                ? IconButton(
+                  onPressed: () => Get.back(),
+                  icon: Icon(
+                    Iconsax.arrow_left,
+                    color: dark ? TColors.white : TColors.dark,
+                  ),
+                )
                 : leadingIcon != null
-                ? IconButton(onPressed: leadingOnPressed, icon: Icon(leadingIcon))
+                ? IconButton(
+                  onPressed: leadingOnPressed,
+                  icon: Icon(leadingIcon),
+                )
                 : null,
-        title: title,
+        title: Align(
+          alignment: centerTitle ? Alignment.center : Alignment.centerLeft,
+          child: title,
+        ),
         actions: actions,
       ),
     );

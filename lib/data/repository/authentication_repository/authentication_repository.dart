@@ -8,6 +8,8 @@ import '../../../personalization/controllers/user_controller.dart';
 import '../../../utils/exceptions/format_exceptions.dart';
 import '../../../utils/exceptions/platform_exceptions.dart';
 import '../../../utils/local_storage/storage_utility.dart';
+import '../../../utils/security/password_hash.dart';
+import '../../../utils/local_storage/secure_storage_service.dart';
 import '../user_repository/user_repository.dart';
 
 class AuthenticationRepository extends GetxController {
@@ -62,7 +64,47 @@ class AuthenticationRepository extends GetxController {
       _currentUser.value = appUser;
       await screenRedirect(_currentUser.value);
     } catch (_) {
+      // No authenticated user found. Attempt auto-login if the user opted to be remembered.
       _currentUser.value = null;
+
+      try {
+        final bool remember =
+            (deviceStorage.read('REMEMBER_ME') as bool?) ?? false;
+        final email = deviceStorage.read('REMEMBER_ME_EMAIL') ?? '';
+        final password =
+            await SecureStorageService.instance.read('REMEMBER_ME_PASSWORD') ??
+            '';
+        if (remember && email.isNotEmpty && password.isNotEmpty) {
+          try {
+            final cred = await loginWithEmailAndPassword(email, password);
+            _currentUser.value = cred.user;
+            await screenRedirect(_currentUser.value);
+            return;
+          } catch (_) {
+            // Try offline auto-login using locally stored hashed credentials
+            try {
+              final storage = GetStorage();
+              final offlineUsers =
+                  storage.read('offline_users') ?? <String, dynamic>{};
+              final record = offlineUsers[email.trim()];
+              if (record != null) {
+                final hashed = hashPassword(password.trim());
+                if (hashed == record['passwordHash']) {
+                  // Build simple AppUser for offline session
+                  final appUser = AppUser(
+                    uid: email.trim(),
+                    email: email.trim(),
+                  );
+                  _currentUser.value = appUser;
+                  await screenRedirect(_currentUser.value);
+                  return;
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
+
       await screenRedirect(null);
     }
   }
@@ -113,7 +155,10 @@ class AuthenticationRepository extends GetxController {
 
       try {
         if (Get.isRegistered<UserController>()) {
-          await UserController.instance.fetchUserRecord();
+          // Startup path: suppress user-facing warnings if the fetch fails (e.g., first run/offline)
+          await UserController.instance.fetchUserRecord(
+            showErrorSnackBar: false,
+          );
         } else {
           if (!Get.isRegistered<UserRepository>()) {
             Get.lazyPut(() => UserRepository(), fenix: true);
@@ -397,6 +442,13 @@ class AuthenticationRepository extends GetxController {
   Future<void> logout() async {
     try {
       await Amplify.Auth.signOut();
+      // Clear 'remember me' on explicit logout
+      try {
+        await deviceStorage.remove('REMEMBER_ME');
+        await deviceStorage.remove('REMEMBER_ME_EMAIL');
+        await SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
+      } catch (_) {}
+
       Get.offAll(() => LoginScreen());
     } catch (_) {
       throw 'Something went wrong. Please try again';

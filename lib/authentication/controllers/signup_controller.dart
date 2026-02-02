@@ -14,7 +14,7 @@ import '../../../utils/popups/loaders.dart';
 import '../../screens/signup/verify_email.dart';
 import 'package:get_storage/get_storage.dart';
 import '../../../utils/security/password_hash.dart';
-import 'package:p2p_tutoring_app/screens/user_profiles/user_profiles_screen.dart';
+import 'package:p2p_tutoring_app/personalization/screens/profile/profile_screen.dart';
 
 class SignUpController extends GetxController {
   static SignUpController get instance => Get.find();
@@ -68,7 +68,7 @@ class SignUpController extends GetxController {
           title: 'Offline',
           message: 'Account created locally. Connect to the internet to sync.',
         );
-        Get.offAll(() => const UserProfilesScreen());
+        Get.offAll(() => const ProfileScreen());
         return;
       }
 

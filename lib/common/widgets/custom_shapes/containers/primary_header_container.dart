@@ -4,10 +4,7 @@ import '../curved_edges/curved_edges_widget.dart';
 import 'circular_container.dart';
 
 class TPrimaryHeaderContainer extends StatelessWidget {
-  const TPrimaryHeaderContainer({
-    super.key,
-    required this.child,
-  });
+  const TPrimaryHeaderContainer({super.key, required this.child});
 
   final Widget child;
 
@@ -16,16 +13,27 @@ class TPrimaryHeaderContainer extends StatelessWidget {
     return TCurvedEdgesWidget(
       child: Container(
         color: TColors.dashboardAppbarBackground,
-        padding: const EdgeInsets.only(bottom: 0),
-
-        /// -- If [size.isFinite': is not true.in Stack] error occurred -> Read README.md file at [DESIGN ERRORS] # 1
         child: Stack(
           children: [
-            /// -- Background Custom Shapes
+            /// -- Background Decorative Circles
             Positioned(
-                top: -150, right: -250, child: TCircularContainer(backgroundColor: TColors.textWhite.withValues(alpha: 0.1))),
+              top: -150,
+              right: -250,
+              child: TCircularContainer(
+                backgroundColor: TColors.textWhite.withValues(alpha: 0.1),
+                y: 0.0,
+              ),
+            ),
             Positioned(
-                top: 100, right: -300, child: TCircularContainer(backgroundColor: TColors.textWhite.withValues(alpha: 0.1))),
+              top: 100,
+              right: -300,
+              child: TCircularContainer(
+                backgroundColor: TColors.textWhite.withValues(alpha: 0.1),
+                y: 0.0,
+              ),
+            ),
+
+            /// -- Actual Header Content
             child,
           ],
         ),
