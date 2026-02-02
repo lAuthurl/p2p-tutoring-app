@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../../../../../../utils/constants/colors.dart';
 import '../../../../../../utils/constants/image_strings.dart';
 import '../../../../../../utils/constants/sizes.dart';
 import '../../../../../../utils/constants/text_strings.dart';
@@ -13,7 +11,7 @@ class DashboardBanners extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = THelperFunctions.isDarkMode(context);
+    THelperFunctions.isDarkMode(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
