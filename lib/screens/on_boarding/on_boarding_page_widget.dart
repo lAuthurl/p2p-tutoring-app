@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../../utils/constants/sizes.dart';
+import '../../../../../utils/constants/colors.dart';
 import '../../models/model_on_boarding.dart';
 
 class OnBoardingPageWidget extends StatelessWidget {
@@ -43,19 +44,25 @@ class OnBoardingPageWidget extends StatelessWidget {
               const SizedBox(height: 20),
               Text(
                 model.title,
-                style: Theme.of(context).textTheme.displaySmall,
+                style: Theme.of(
+                  context,
+                ).textTheme.displaySmall!.apply(color: TColors.black),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
               Text(
                 model.subTitle,
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium!.apply(color: TColors.black),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 30),
               Text(
                 model.counterText,
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge!.apply(color: TColors.black),
               ),
             ],
           ),

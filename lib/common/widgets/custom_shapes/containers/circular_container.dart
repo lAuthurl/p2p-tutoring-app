@@ -26,6 +26,7 @@ class TCircularContainer extends StatelessWidget {
     this.showBorder = false,
     this.backgroundColor = TColors.white,
     this.borderColor = TColors.borderPrimary,
+    this.y = 0.0,
   });
 
   final Widget? child;
@@ -37,20 +38,24 @@ class TCircularContainer extends StatelessWidget {
   final Color backgroundColor;
   final EdgeInsetsGeometry? margin;
   final EdgeInsetsGeometry? padding;
+  final double y;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      margin: margin,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(radius),
-        border: showBorder ? Border.all(color: borderColor) : null,
+    return Transform.translate(
+      offset: Offset(0, y),
+      child: Container(
+        width: width,
+        height: height,
+        margin: margin,
+        padding: padding,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(radius),
+          border: showBorder ? Border.all(color: borderColor) : null,
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }

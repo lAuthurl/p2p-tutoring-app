@@ -32,9 +32,12 @@ dependencies:
   google_sign_in: ^7.2.0
   image_picker: ^1.2.1
   flutter_local_notifications: ^19.5.0
+  flutter_secure_storage: ^8.0.0
   flutter_otp_text_field: ^1.5.1+1
   line_awesome_flutter: ^3.0.1
   country_code_picker: ^3.4.1
+  carousel_slider: ^5.1.1
+  readmore: ^3.0.0
   # Removed google_fonts to use bundled Poppins fonts via assets
 
 dev_dependencies:
@@ -51,6 +54,14 @@ flutter:
   - assets/images/on_boarding_images/
   - assets/images/welcome_images/
   - assets/images/animations/
+  - assets/images/profile/
+  - assets/icons/categories/
+  - assets/images/banners/
+  - assets/images/dashboard/
+  - assets/images/animations/
+  - assets/images/forget_password/
+  - assets/icons/tutors/
+  - assets/images/courses/
   # fonts:
   # - family: Poppins
   #   fonts:

@@ -1,9 +1,10 @@
 import 'package:intl/intl.dart';
 
 class TFormatter {
-
-
-  static String formatDateAndTime(DateTime? date, {bool use24HourFormat = false}) {
+  static String formatDateAndTime(
+    DateTime? date, {
+    bool use24HourFormat = false,
+  }) {
     date ??= DateTime.now();
     final onlyDate = DateFormat('dd/MM/yyyy').format(date);
     // Use 'hh:mm a' for 12-hour with AM/PM, or 'HH:mm' for 24-hour format.
@@ -14,11 +15,16 @@ class TFormatter {
 
   static String formatDate(DateTime? date) {
     date ??= DateTime.now();
-    return DateFormat('dd-MMM-yyyy').format(date); // Customize the date format as needed
+    return DateFormat(
+      'dd-MMM-yyyy',
+    ).format(date); // Customize the date format as needed
   }
 
   static String formatCurrency(double amount) {
-    return NumberFormat.currency(locale: 'en_US', symbol: '\$').format(amount); // Customize the currency locale and symbol as needed
+    return NumberFormat.currency(
+      locale: 'en_US',
+      symbol: '\$',
+    ).format(amount); // Customize the currency locale and symbol as needed
   }
 
   static String formatPhoneNumber(String phoneNumber) {
@@ -65,7 +71,10 @@ class TFormatter {
   }
 
   /// Concatenate phone number and country code
-  static String formatPhoneNumberWithCountryCode(String countryCode, String phoneNumber) {
+  static String formatPhoneNumberWithCountryCode(
+    String countryCode,
+    String phoneNumber,
+  ) {
     // Remove leading zero if present
     // if (phoneNumber.startsWith('0')) {
     //   phoneNumber = phoneNumber.substring(1);
@@ -73,5 +82,24 @@ class TFormatter {
 
     // Combine country code and phone number
     return '$countryCode$phoneNumber';
+  }
+
+  static String formatPhoneUS(String phoneNumber) {
+    final digitsOnly = phoneNumber.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.length < 7) {
+      return phoneNumber; // not enough digits to format
+    }
+    return '(${digitsOnly.substring(0, 3)}) ${digitsOnly.substring(3, 6)} ${digitsOnly.substring(6)}';
+  }
+
+  static String formatPhoneIntl(String phoneNumber) {
+    final digitsOnly = phoneNumber.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.length < 7) return phoneNumber;
+    if (digitsOnly.length >= 8) {
+      String countryCode =
+          digitsOnly.length > 7 ? '+${digitsOnly.substring(0, 2)}' : '+';
+      return countryCode + digitsOnly.substring(2);
+    }
+    return phoneNumber;
   }
 }

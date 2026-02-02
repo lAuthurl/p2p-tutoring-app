@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 
 class TColors {
   // App theme colors
-  static const Color primary = Color(0xFFEE835F); // 🔶 CTA Orange (UPDATED)
+  static const Color primary = Color(0xFFB8AFFF); // 🔶 CTA Orange (UPDATED)
   static const Color secondary = Color(0xFF272727);
   static const Color secondaryLight = Color(0xC9346DAE);
-  static const Color primaryBackground = Color(0xFFCCFBF1);
-  static const Color secondaryBackground = Color(0xFFFFE4E6);
+  static const Color primaryBackground = Color(0xFFB8AFFF);
+  static const Color secondaryBackground = Color(0xFFEDEBFF);
   static const Color accent = Color(0xFF001BFF);
 
   // Dashboard Specific Colors
-  static const Color dashboardAppbarBackground = Color(0xFF4b68ff);
+  static const Color dashboardAppbarBackground = Color(0xFF2C2060);
 
   // Text colors
   static const Color textPrimary = Color(0xFF222A3D);
@@ -26,20 +26,20 @@ class TColors {
   static const Color disabledBackgroundDark = Color(0xFF222A3D);
 
   // Splash / Gradient Colors
-  static const Color splashGradientStart = Color(0xFFA480F0);
+  static const Color splashGradientStart = Color(0xFF7F5FFF);
   static const Color splashGradientEnd = Color(0xFF35A8E7);
 
   // Background colors
   static const Color lightBackground = Color(0xFFFFFFFF);
 
   /// 🔴 UPDATED to match Welcome UI
-  static const Color darkBackground = Color(0xFF0F172A);
+  static const Color darkBackground = Color(0xFF1F143E);
 
   // Background Container colors
   static const Color lightContainer = Color(0xFFF3F4F6);
 
   /// 🔴 UPDATED to match Welcome card/container
-  static const Color darkContainer = Color(0xFF0F172A);
+  static const Color darkContainer = Color(0xFF1F143E);
 
   static const Color cardBackgroundColor = Color(0xFFF7F5F1);
 

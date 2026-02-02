@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -41,7 +42,10 @@ class UserController extends GetxController {
   }
 
   /// Fetch user record from local storage or Amplify
-  Future<void> fetchUserRecord({bool fetchLatestRecord = false}) async {
+  Future<void> fetchUserRecord({
+    bool fetchLatestRecord = false,
+    bool showErrorSnackBar = true,
+  }) async {
     try {
       if (fetchLatestRecord) {
         profileLoading.value = true;
@@ -58,10 +62,17 @@ class UserController extends GetxController {
         }
       }
     } catch (e) {
-      TLoaders.warningSnackBar(
-        title: 'Warning',
-        message: 'Unable to fetch your information. Try again.',
-      );
+      // Avoid showing an annoying warning on automatic startup/redirects where failures
+      // are expected (e.g., first run or offline). Only show when explicitly requested.
+      if (showErrorSnackBar) {
+        TLoaders.warningSnackBar(
+          title: 'Warning',
+          message: 'Unable to fetch your information. Try again.',
+        );
+      }
+      if (kDebugMode) {
+        print('fetchUserRecord failed: $e');
+      }
     } finally {
       profileLoading.value = false;
     }
