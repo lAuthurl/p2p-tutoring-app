@@ -9,31 +9,35 @@ import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/constants/enums.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../../controllers/tutoring_controller.dart';
-import '../../../models/tutoring_session_model.dart';
+import '../../../../../models/ModelProvider.dart';
 
 class TProductMetaData extends StatelessWidget {
   const TProductMetaData({super.key, required this.session});
 
-  final TutoringSessionModel session;
+  final TutoringSession session;
 
   @override
   Widget build(BuildContext context) {
     final controller = TutoringController.instance;
 
-    // Calculate sale percentage if needed
-    final salePercentage = controller.calculateSalePercentage(
-      session.pricePerSession,
-      session.salePricePerSession,
-    );
+    final basePrice = session.pricePerSession ?? 0;
+
+    /// calculate % discount based on variation price difference
+    final adjustedPrice =
+        double.tryParse(controller.getSessionPrice(session)) ?? basePrice;
+
+    int? salePercentage;
+    if (adjustedPrice < basePrice && basePrice > 0) {
+      salePercentage = ((basePrice - adjustedPrice) / basePrice * 100).round();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        /// Price & Sale Price
+        /// PRICE
         Row(
           children: [
-            /// -- Sale Tag
-            if (salePercentage != null)
+            if (salePercentage != null && salePercentage > 0)
               Row(
                 children: [
                   TRoundedContainer(
@@ -54,13 +58,11 @@ class TProductMetaData extends StatelessWidget {
                 ],
               ),
 
-            // Original Price if sale exists
-            if (session.salePricePerSession != null)
+            if (salePercentage != null)
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    session.pricePerSession.toString(),
+                    basePrice.toStringAsFixed(0),
                     style: Theme.of(context).textTheme.titleSmall!.apply(
                       decoration: TextDecoration.lineThrough,
                     ),
@@ -69,7 +71,6 @@ class TProductMetaData extends StatelessWidget {
                 ],
               ),
 
-            // Main Price (sale price if exists)
             Obx(
               () => TProductPriceText(
                 price: controller.getSessionPrice(session),
@@ -78,81 +79,74 @@ class TProductMetaData extends StatelessWidget {
             ),
           ],
         ),
+
         const SizedBox(height: TSizes.spaceBtwItems / 1.5),
 
-        /// Session Title
+        /// TITLE
         TProductTitleText(title: session.title),
+
         const SizedBox(height: TSizes.spaceBtwItems / 1.5),
 
-        /// Duration (if available)
+        /// DURATION (SAFE)
         Builder(
           builder: (_) {
-            String? durationDisplay;
-            final sel = controller.selectedAttributes['Duration'];
-            if (sel != null && (sel).isNotEmpty) {
-              durationDisplay = sel;
-            } else {
-              if (session.sessionAttributes != null) {
-                for (final a in session.sessionAttributes!) {
-                  if (a.name.toLowerCase() == 'duration' &&
-                      a.values.isNotEmpty) {
-                    durationDisplay = a.values.first;
-                    break;
-                  }
-                }
-              }
-              if (durationDisplay == null &&
-                  session.sessionVariations != null) {
-                for (final v in session.sessionVariations!) {
-                  final dv =
-                      v.sessionAttributes['Duration'] ??
-                      v.sessionAttributes['duration'] ??
-                      '';
-                  if (dv.isNotEmpty) {
-                    durationDisplay = dv;
-                    break;
-                  }
+            String? duration;
+
+            duration = controller.selectedAttributes['Duration'];
+
+            if (duration == null) {
+              for (final attr in session.sessionAttributes ?? []) {
+                if (attr.name.toLowerCase() == 'duration' &&
+                    attr.values.isNotEmpty) {
+                  duration = attr.values.first;
+                  break;
                 }
               }
             }
 
-            if (durationDisplay != null && durationDisplay.isNotEmpty) {
-              return Column(
-                children: [
-                  Row(
-                    children: [
-                      const TProductTitleText(
-                        title: 'Duration : ',
-                        smallSize: true,
-                      ),
-                      Text(
-                        durationDisplay,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: TSizes.spaceBtwItems / 2),
-                ],
-              );
+            if (duration == null) {
+              for (final v in session.sessionVariations ?? []) {
+                final map = Map<String, String>.from(v.sessionAttributes ?? {});
+                duration = map['Duration'] ?? map['duration'];
+                if (duration != null) break;
+              }
             }
 
-            return const SizedBox.shrink();
+            if (duration == null) return const SizedBox.shrink();
+
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    const TProductTitleText(
+                      title: 'Duration : ',
+                      smallSize: true,
+                    ),
+                    Text(
+                      duration,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: TSizes.spaceBtwItems / 2),
+              ],
+            );
           },
         ),
 
-        /// Tutor / Provider
+        /// TUTOR
         if (session.tutor != null)
           Row(
             children: [
               TCircularImage(
-                image: session.tutor!.image,
+                image: session.tutor?.image ?? '',
                 width: 32,
                 height: 32,
                 overlayColor: TColors.textWhite,
               ),
               const SizedBox(width: 8),
               TBrandTitleWithVerifiedIcon(
-                title: session.tutor!.name,
+                title: session.tutor?.name ?? 'Tutor',
                 brandTextSize: TextSizes.medium,
               ),
             ],

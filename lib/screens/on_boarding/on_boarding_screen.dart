@@ -5,6 +5,12 @@ import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 import '../../../../../utils/constants/colors.dart';
 import '../../authentication/controllers/on_boarding_controller.dart';
+import '../../../../../utils/popups/exports.dart';
+import '../../../../../utils/constants/image_strings.dart';
+import '../../../../../bindings/app_bindings.dart';
+import '../../../authentication/controllers/login_controller.dart';
+import '../../../routes/routes.dart';
+import '../../data/repository/authentication_repository/authentication_repository.dart';
 
 class OnBoardingScreen extends StatelessWidget {
   const OnBoardingScreen({super.key});
@@ -12,12 +18,13 @@ class OnBoardingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final obController = Get.find<OnBoardingController>();
+    final loginController = Get.find<LoginController>();
 
     return Scaffold(
       body: Stack(
         alignment: Alignment.center,
         children: [
-          /// Liquid Swipe (default icon removed)
+          /// Liquid Swipe
           GestureDetector(
             onPanStart: (_) => obController.isUserInteracting.value = true,
             onPanEnd: (_) => obController.isUserInteracting.value = false,
@@ -31,7 +38,7 @@ class OnBoardingScreen extends StatelessWidget {
             ),
           ),
 
-          /// Swipe hint icon (visible only during interaction)
+          /// Swipe hint icon
           Obx(
             () => Positioned(
               bottom: 120,
@@ -48,12 +55,48 @@ class OnBoardingScreen extends StatelessWidget {
             ),
           ),
 
-          /// Next Button (smaller and moved to the right)
+          /// Next Button
           Positioned(
             bottom: 42,
             right: 28,
             child: OutlinedButton(
-              onPressed: obController.animateToNextSlideWithLocalStorage,
+              onPressed: () async {
+                // Check if Remember Me is enabled
+                final remember = loginController.rememberMe.value;
+                final email = loginController.email.text.trim();
+                final password = loginController.password.text;
+
+                if (remember && email.isNotEmpty && password.isNotEmpty) {
+                  try {
+                    TFullScreenLoader.openLoadingDialog(
+                      'Logging you in...',
+                      TImages.docerAnimation,
+                    );
+
+                    // Auto-login
+                    await AuthenticationRepository.instance
+                        .loginWithEmailAndPassword(email, password);
+
+                    // Inject app controllers
+                    AppBindings().dependencies();
+
+                    TFullScreenLoader.stopLoading();
+
+                    // Navigate to Home
+                    Get.offAllNamed(TRoutes.home);
+                    return;
+                  } catch (e) {
+                    TFullScreenLoader.stopLoading();
+                    TLoaders.errorSnackBar(
+                      title: 'Auto-login Failed',
+                      message: e.toString(),
+                    );
+                  }
+                }
+
+                // Otherwise, go to next onboarding slide
+                obController.animateToNextSlideWithLocalStorage();
+              },
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: TColors.borderLight, width: 1),
                 shape: const CircleBorder(),
@@ -77,7 +120,7 @@ class OnBoardingScreen extends StatelessWidget {
             ),
           ),
 
-          /// Skip Button (primary background, top-right, safe from status bar)
+          /// Skip Button
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
             right: 16,
@@ -102,7 +145,7 @@ class OnBoardingScreen extends StatelessWidget {
             ),
           ),
 
-          /// Page Indicator (moved left, slightly lower than button)
+          /// Page Indicator
           Obx(
             () => Positioned(
               bottom: 18,

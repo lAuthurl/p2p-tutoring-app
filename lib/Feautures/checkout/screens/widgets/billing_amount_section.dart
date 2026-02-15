@@ -14,101 +14,90 @@ class TBillingAmountSection extends StatelessWidget {
     final bookingController = BookingController.instance;
 
     return Obx(() {
-      // Calculate session subtotals
+      final bookingItems = bookingController.bookingItems;
+
+      // Calculate session subtotals safely
       final sessionPrices =
-          bookingController.bookingItems.map((item) {
+          bookingItems.map<double>((item) {
             return TPricingCalculator.calculateSessionPrice(
-              isPhysical: item.isPhysical,
-              applyDiscount: item.applyDiscount,
+              isPhysical: item.isPhysical ?? false,
+              applyDiscount: item.applyDiscount ?? false,
               negotiatedPrice: item.negotiatedPrice,
             );
           }).toList();
 
-      final subTotal = sessionPrices.fold(0.0, (prev, curr) => prev + curr);
-
-      // Calculate total discount
-      final totalDiscount = _calculateTotalDiscount(
-        bookingController.bookingItems,
+      final subTotal = sessionPrices.fold<double>(
+        0.0,
+        (prev, curr) => prev + curr,
       );
 
-      // Calculate total price
+      // Calculate total discount safely
+      final totalDiscount = _calculateTotalDiscount(bookingItems);
+
       final totalPrice = subTotal - totalDiscount;
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // --- Subtotal
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Subtotal',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-              Text(
-                '\$${subTotal.toStringAsFixed(2)}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
+          _buildRow(context, 'Subtotal', subTotal),
+
           const SizedBox(height: TSizes.spaceBtwItems),
 
           // --- Discounts (if any)
-          if (totalDiscount > 0)
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Discount',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ),
-                Text(
-                  '-\$${totalDiscount.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-            ),
+          if (totalDiscount > 0) _buildRow(context, 'Discount', -totalDiscount),
           if (totalDiscount > 0) const SizedBox(height: TSizes.spaceBtwItems),
 
           // --- Total
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Total',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              Text(
-                '\$${totalPrice.toStringAsFixed(2)}',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ],
-          ),
+          _buildRow(context, 'Total', totalPrice, isTotal: true),
         ],
       );
     });
   }
 
+  /// Helper to build a price row
+  Widget _buildRow(
+    BuildContext context,
+    String label,
+    double amount, {
+    bool isTotal = false,
+  }) {
+    final style =
+        isTotal
+            ? Theme.of(context).textTheme.titleMedium
+            : Theme.of(context).textTheme.bodyMedium;
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: style)),
+        Text(
+          amount < 0
+              ? "-\$${(-amount).toStringAsFixed(2)}"
+              : "\$${amount.toStringAsFixed(2)}",
+          style: style,
+        ),
+      ],
+    );
+  }
+
   /// Calculate total discount for the booking items
   double _calculateTotalDiscount(List bookingItems) {
     double totalDiscount = 0.0;
+
     for (var item in bookingItems) {
-      if (item.applyDiscount) {
-        final originalPrice =
-            item.isPhysical
-                ? item.negotiatedPrice ?? 35.0
-                : 20.0; // default base prices
+      final applyDiscount = item.applyDiscount ?? false;
+      final isPhysical = item.isPhysical ?? false;
+
+      if (applyDiscount) {
+        final originalPrice = isPhysical ? item.negotiatedPrice ?? 35.0 : 20.0;
         final discountedPrice = TPricingCalculator.calculateSessionPrice(
-          isPhysical: item.isPhysical,
+          isPhysical: isPhysical,
           applyDiscount: true,
           negotiatedPrice: item.negotiatedPrice,
         );
         totalDiscount += (originalPrice - discountedPrice);
       }
     }
+
     return totalDiscount;
   }
 }

@@ -1,0 +1,194 @@
+# -------------------------------
+# User
+# -------------------------------
+type User @model
+  @auth(rules: [
+    { allow: owner, ownerField: "id", operations: [create, read, update, delete] }
+  ])
+{
+  id: ID!
+  username: String!
+  email: String!
+  phoneNumber: String
+  profilePicture: String
+  deviceToken: String
+  isEmailVerified: Boolean
+  isProfileActive: Boolean
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+  role: String
+  verificationStatus: String
+
+
+  # Relationships
+  bookings: [Booking] @hasMany(fields: ["id"])
+  bookingItems: [BookingItem] @hasMany(fields: ["id"])
+}
+
+# -------------------------------
+# Tutor
+# -------------------------------
+type Tutor @model
+  @auth(rules: [
+    { allow: owner, ownerField: "id", operations: [create, read, update, delete] }
+  ])
+{
+  id: ID!
+  name: String!
+  email: String!
+  image: String  # ✅ Needed for providerImage
+
+  # Relationships
+  tutoringSessions: [TutoringSession] @hasMany(fields: ["id"])
+}
+
+# -------------------------------
+# Subject
+# -------------------------------
+type Subject @model
+  @auth(rules: [
+    { allow: owner, ownerField: "id", operations: [create, read, update, delete] }
+  ])
+{
+  id: ID!
+  name: String!
+  icon: String
+  thumbnail: String
+  isFeatured: Boolean
+
+  # Relationships
+  tutoringSessions: [TutoringSession] @hasMany(fields: ["id"])
+}
+
+# -------------------------------
+# TutoringSession
+# -------------------------------
+type TutoringSession @model
+  @auth(rules: [
+    { allow: owner, ownerField: "tutorId", operations: [read, update, delete] },
+    { allow: public, operations: [read] }
+  ])
+{
+  id: ID!
+
+  # Foreign keys
+  tutorId: ID!
+  subjectId: ID!
+
+  # Relationships
+  tutor: Tutor @belongsTo(fields: ["tutorId"])
+  subject: Subject @belongsTo(fields: ["subjectId"])
+  sessionAttributes: [SessionAttribute] @hasMany(fields: ["id"])
+  sessionVariations: [SessionVariation] @hasMany(fields: ["id"])
+
+  # Session details
+  title: String!
+  description: String
+
+  # Fields used in HomeController
+  thumbnail: String
+  images: [String]
+  pricePerSession: Float
+  isFeatured: Boolean
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+# -------------------------------
+# Booking
+# -------------------------------
+type Booking @model
+  @auth(rules: [
+    { allow: owner, ownerField: "userId", operations: [create, read, update, delete] },
+    { allow: public, operations: [read] }
+  ] )
+{
+  id: ID!
+  userId: ID!
+  user: User @belongsTo(fields: ["userId"])
+  bookingItems: [BookingItem] @hasMany(indexName: "byBooking", fields: ["id"])
+  totalPrice: Float
+  status: String
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+# -------------------------------
+# BookingItem
+# -------------------------------
+type BookingItem @model
+  @auth(rules: [
+    { allow: owner, ownerField: "userId", operations: [create, read, update, delete] },
+    { allow: public, operations: [read] }
+  ])
+{
+  id: ID!
+
+  userId: ID!
+  user: User @belongsTo(fields: ["userId"])
+
+  bookingId: ID! @index(name: "byBooking", sortKeyFields: ["createdAt"])
+  booking: Booking @belongsTo(fields: ["bookingId"])
+
+  sessionId: ID
+  tutorId: ID
+  bookingDate: AWSDateTime
+  timeSlot: String
+  price: Float
+  quantity: Int
+  negotiatedPrice: Float
+  applyDiscount: Boolean
+  isPhysical: Boolean
+  serviceTitle: String
+  serviceImage: String
+  providerName: String
+  providerImage: String  # ✅ Added for HomeController / BookingController usage
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+# -------------------------------
+# SessionAttribute
+# -------------------------------
+type SessionAttribute @model
+  @auth(rules: [
+    { allow: owner, ownerField: "tutorId", operations: [create, update, delete, read] },
+    { allow: public, operations: [read] }
+  ])
+{
+  id: ID!
+  tutorId: ID! # Add owner field
+  sessionId: ID!
+  name: String!
+  values: [String]
+  session: TutoringSession @belongsTo(fields: ["sessionId"])
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+
+# -------------------------------
+# SessionVariation
+# -------------------------------
+type SessionVariation @model
+  @auth(rules: [
+    { allow: owner, ownerField: "tutorId", operations: [create, update, delete, read] },
+    { allow: public, operations: [read] }
+  ])
+{
+  id: ID!
+  tutorId: ID! # Add owner field
+  sessionId: ID!
+  availableSeats: Int
+  pricePerSession: Float
+  lectureTime: AWSDateTime
+  image: String
+  metadata: String
+
+  sessionAttributes: [SessionAttribute] @hasMany(fields: ["id"])
+  session: TutoringSession @belongsTo(fields: ["sessionId"])
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}

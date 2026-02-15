@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:p2p_tutoring_app/models/TutoringSession.dart';
 
 import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/constants/sizes.dart'; // contains TProductQuantityWithAddRemoveButton
@@ -57,7 +58,9 @@ class _TBottomAddToBookingState extends State<TBottomAddToBooking> {
             // Add to booking button (static snapshot, not reactive)
             ElevatedButton(
               onPressed:
-                  () => tutoringController.addSessionToBooking(widget.session),
+                  () => tutoringController.addSessionToBooking(
+                    widget.session as TutoringSession,
+                  ),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.all(TSizes.md),
                 backgroundColor: TColors.primary,

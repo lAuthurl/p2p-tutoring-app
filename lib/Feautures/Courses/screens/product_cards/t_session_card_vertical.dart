@@ -1,53 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p2p_tutoring_app/Feautures/Courses/controllers/tutoring_controller.dart';
-import 'package:p2p_tutoring_app/Feautures/Courses/models/tutoring_session_model.dart';
-import 'package:p2p_tutoring_app/Feautures/Courses/screens/product_detail/session_detail_screen.dart';
-
+import '../../../../models/ModelProvider.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/image_strings.dart';
 import '../../../../utils/constants/sizes.dart';
+import '../../screens/product_detail/session_detail_screen.dart';
 
 class TSessionCardVertical extends StatelessWidget {
-  final TutoringSessionModel session;
+  final TutoringSession session;
   const TSessionCardVertical({super.key, required this.session});
 
   @override
   Widget build(BuildContext context) {
     final controller = TutoringController.instance;
-    final salePercentage = controller.calculateSalePercentage(
-      session.pricePerSession,
-      null,
-    );
 
-    // Prefer session.images.first, then thumbnail, then first variation image
+    /// ---- SAFE PRICE ----
+    final double price = session.pricePerSession ?? 0.0;
+
+    final salePercentage = controller.calculateSalePercentage(price, null);
+
+    /// ---- SAFE IMAGES ----
     String mainImage() {
+      // images (List<String>?)
       if (session.images != null && session.images!.isNotEmpty) {
-        return session.images!.first;
+        final img = session.images!.first;
+        if (img.isNotEmpty) return img;
       }
-      if (session.thumbnail.isNotEmpty) return session.thumbnail;
+
+      // thumbnail
+      if (session.thumbnail != null && session.thumbnail!.isNotEmpty) {
+        return session.thumbnail!;
+      }
+
+      // variation image
       if (session.sessionVariations != null &&
           session.sessionVariations!.isNotEmpty) {
-        return session.sessionVariations!.first.image ?? '';
+        final v = session.sessionVariations!.first;
+        if (v.image != null && v.image!.isNotEmpty) return v.image!;
       }
+
       return '';
     }
 
     Widget buildImage(String src, {BoxFit fit = BoxFit.cover}) {
-      final fallback = TImages.tutorPromo1; // safe fallback
-      if (src.isEmpty) {
-        return Image.asset(fallback, fit: fit);
-      }
+      final fallback = TImages.tutorPromo1;
+
+      if (src.isEmpty) return Image.asset(fallback, fit: fit);
+
       if (src.startsWith('http')) {
-        return Image.network(src, fit: fit);
+        return Image.network(
+          src,
+          fit: fit,
+          errorBuilder: (_, _, _) => Image.asset(fallback, fit: fit),
+        );
       }
+
       return Image.asset(src, fit: fit);
     }
 
-    final tutorIcon = session.tutor?.image ?? TImages.tutorAlice;
+    /// ---- SAFE RELATION (Amplify Lazy Load) ----
+    final tutorIcon =
+        session.tutor?.image?.isNotEmpty == true
+            ? session.tutor!.image!
+            : TImages.tutorAlice;
 
     return GestureDetector(
-      onTap: () => Get.to(() => SessionDetailScreen(session: session)),
+      onTap:
+          () =>
+              Get.to(() => SessionDetailScreen(sessionIdFromCtor: session.id)),
+
       child: Container(
         width: 180,
         decoration: BoxDecoration(
@@ -62,15 +84,16 @@ class TSessionCardVertical extends StatelessWidget {
             ),
           ],
         ),
+
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            /// ---------------- IMAGE ----------------
             SizedBox(
               height: 180,
               width: 180,
               child: Stack(
                 children: [
-                  // Main/session image (uses session.images first)
                   Positioned.fill(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(
@@ -80,7 +103,7 @@ class TSessionCardVertical extends StatelessWidget {
                     ),
                   ),
 
-                  // Small platform/tutor icon (bottom-left)
+                  /// Tutor avatar
                   Positioned(
                     left: 8,
                     bottom: 8,
@@ -112,7 +135,8 @@ class TSessionCardVertical extends StatelessWidget {
                     ),
                   ),
 
-                  if (salePercentage != null)
+                  /// Sale badge
+                  if (salePercentage != null && salePercentage > 0)
                     Positioned(
                       top: 8,
                       left: 8,
@@ -137,7 +161,10 @@ class TSessionCardVertical extends StatelessWidget {
                 ],
               ),
             ),
+
             const SizedBox(height: TSizes.spaceBtwItems / 2),
+
+            /// ---------------- TEXT ----------------
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: TSizes.sm),
               child: Column(
@@ -148,9 +175,11 @@ class TSessionCardVertical extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+
                   const SizedBox(height: TSizes.spaceBtwItems / 4),
+
                   Text(
-                    '\$${session.pricePerSession.toStringAsFixed(0)}',
+                    '\$${price.toStringAsFixed(0)}',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ],

@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:p2p_tutoring_app/Feautures/Courses/controllers/tutoring_controller.dart';
 import '../../../../common/widgets/icons/t_circular_icon.dart';
 import '../../../../common/widgets/layouts/grid_layout.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/device/device_utility.dart';
-import '../Courses/screens/product_cards/t_session_card_vertical.dart'; // updated
+import '../Courses/screens/product_cards/t_session_card_vertical.dart';
 import '../../../../../common/widgets/appbar/home_appbar.dart';
-import '../dashboard/course/screens/dashboard/courses_dashboard.dart';
+import 'package:p2p_tutoring_app/Feautures/Courses/controllers/tutoring_controller.dart';
+import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/home_controller.dart';
 
 class FavouriteScreen extends StatelessWidget {
-  const FavouriteScreen({super.key});
+  // ---------------- Required Controller ----------------
+  final HomeController homeController;
+
+  const FavouriteScreen({super.key, required this.homeController});
 
   @override
   Widget build(BuildContext context) {
-    final tutoringController = Get.put(TutoringController());
+    // Use the singleton instance of TutoringController
+    final tutoringController = TutoringController.instance;
 
     return Scaffold(
       appBar: TEComAppBar(
@@ -27,24 +31,34 @@ class FavouriteScreen extends StatelessWidget {
         actions: [
           TCircularIcon(
             icon: Iconsax.add,
-            onPressed: () => Get.to(() => const CoursesDashboard()),
+            onPressed:
+                () => Get.to(() => homeController), // Use passed controller
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
+      body: Obx(() {
+        // Get only favorite sessions
+        final favoriteSessions = tutoringController.favoriteSessions();
+
+        if (favoriteSessions.isEmpty) {
+          return Center(
+            child: Text(
+              'No favorites yet!',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          );
+        }
+
+        return SingleChildScrollView(
           padding: const EdgeInsets.all(TSizes.defaultSpace),
           child: Column(
             children: [
-              Obx(() {
-                final sessions = tutoringController.favoriteSessions();
-                return TGridLayout(
-                  itemCount: sessions.length,
-                  itemBuilder:
-                      (_, index) =>
-                          TSessionCardVertical(session: sessions[index]),
-                );
-              }),
+              TGridLayout(
+                itemCount: favoriteSessions.length,
+                itemBuilder:
+                    (_, index) =>
+                        TSessionCardVertical(session: favoriteSessions[index]),
+              ),
               SizedBox(
                 height:
                     TDeviceUtils.getBottomNavigationBarHeight() +
@@ -52,8 +66,8 @@ class FavouriteScreen extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
+        );
+      }),
     );
   }
 }

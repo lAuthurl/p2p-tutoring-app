@@ -1,135 +1,330 @@
+// ignore_for_file: unnecessary_null_comparison, avoid_print
+
 import 'package:get/get.dart';
-import '../models/booking_item_model.dart';
-import '../models/booking_model.dart';
+import 'package:amplify_flutter/amplify_flutter.dart';
+import '../../../models/ModelProvider.dart';
 
 class BookingController extends GetxController {
+  // ---------------- Singleton ----------------
   static BookingController get instance => Get.find();
 
-  /// Aggregate booking model (used for backend submission)
-  Rx<BookingModel> currentBooking = BookingModel.empty().obs;
+  // ---------------- Current User ----------------
+  final User? currentUser;
+  BookingController({this.currentUser}); // ✅ added named parameter
 
-  /// List of booked items (UI-friendly)
-  RxList<BookingItemModel> bookingItems = <BookingItemModel>[].obs;
+  // ---------------- Reactive State ----------------
+  final RxList<Booking> bookings = <Booking>[].obs;
+  final RxMap<String, List<BookingItem>> bookingItemsMap =
+      <String, List<BookingItem>>{}.obs;
+  final RxList<BookingItem> bookingItems = <BookingItem>[].obs;
 
-  /// Total booking cost
+  RxInt totalBookedSessions = 0.obs;
   RxDouble totalBookingPrice = 0.0.obs;
 
+  // ---------------- Lifecycle ----------------
   @override
   void onInit() {
     super.onInit();
-    _syncBookingModel();
-    _recalculateTotal();
+
+    // Rebuild flat list & totals when map changes
+    ever(bookingItemsMap, (_) {
+      _syncFlatBookingItems();
+      _recalculateTotals();
+    });
+
+    // Recalculate totals when bookings change
+    ever(bookings, (_) => _recalculateTotals());
   }
 
-  /// Create or update a booking item
-  void addBooking({
-    required String serviceId,
-    required String providerId,
-    required DateTime bookingDate,
-    required String timeSlot,
-    required double price,
-    int quantity = 1,
+  // ---------------- Helper: Check if user can sync ----------------
+  Future<bool> _canSync() async {
+    if (currentUser == null) {
+      print('⚠️ BookingController: No user set yet');
+      return false;
+    }
 
-    // Optional display details
+    try {
+      final authUser = await Amplify.Auth.getCurrentUser();
+      return authUser != null;
+    } catch (_) {
+      print('⚠️ User not signed in, skipping DataStore operations');
+      return false;
+    }
+  }
+
+  // ---------------- Sync flat booking items ----------------
+  void _syncFlatBookingItems() {
+    bookingItems.clear();
+    for (var entry in bookingItemsMap.values) {
+      bookingItems.addAll(entry);
+    }
+  }
+
+  // ---------------- UI Helpers ----------------
+  List<BookingItem> get bookingItemsForUI => bookingItems.toList();
+
+  num itemTotal(BookingItem item) {
+    final price = item.price ?? 0.0;
+    final quantity = item.quantity ?? 0;
+    return price * quantity;
+  }
+
+  void _recalculateTotals() {
+    int sessions = 0;
+    double price = 0.0;
+
+    for (var booking in bookings) {
+      final items = bookingItemsMap[booking.id] ?? [];
+      for (var item in items) {
+        sessions += item.quantity ?? 0;
+        price += (item.price ?? 0) * (item.quantity ?? 0);
+      }
+    }
+
+    totalBookedSessions.value = sessions;
+    totalBookingPrice.value = price;
+  }
+
+  int totalBookedSessionsForBooking(String bookingId) {
+    final items = bookingItemsMap[bookingId] ?? [];
+    return items.fold(0, (sum, item) => sum + (item.quantity ?? 0));
+  }
+
+  // ---------------- Fetch Bookings ----------------
+  Future<void> fetchBookings() async {
+    if (!await _canSync()) return;
+
+    try {
+      final userId = currentUser!.id;
+      final result = await Amplify.DataStore.query(
+        Booking.classType,
+        where: Booking.USER.eq(userId),
+      );
+
+      bookings.assignAll(result);
+
+      for (var booking in result) {
+        final items = await Amplify.DataStore.query(
+          BookingItem.classType,
+          where: BookingItem.BOOKING.eq(booking.id),
+        );
+
+        bookingItemsMap[booking.id] = items;
+      }
+
+      print('📦 Bookings loaded: ${bookings.length}');
+    } catch (e) {
+      print('❌ Failed to fetch bookings: $e');
+    }
+  }
+
+  // ---------------- Create Booking ----------------
+  Future<Booking?> createBooking({
+    List<BookingItem>? items,
+    double? totalPrice,
+    String status = 'pending',
+  }) async {
+    if (!await _canSync()) return null;
+
+    try {
+      final booking = Booking(
+        user: currentUser,
+        bookingItems: items,
+        totalPrice: totalPrice,
+        status: status,
+        createdAt: TemporalDateTime.now(),
+      );
+
+      await Amplify.DataStore.save(booking);
+      bookings.add(booking);
+
+      if (items != null) {
+        bookingItemsMap[booking.id] = items;
+      }
+
+      _recalculateTotals();
+      return booking;
+    } catch (e) {
+      print('❌ Failed to create booking: $e');
+      return null;
+    }
+  }
+
+  // ---------------- Create Booking Item ----------------
+  Future<BookingItem?> createBookingItem({
+    required Booking booking,
+    String? sessionId,
+    String? tutorId,
+    double price = 0.0,
+    int quantity = 1,
+    String serviceTitle = '',
+    String serviceImage = '',
+    String providerName = '',
+    String providerImage = '',
+    String timeSlot = '',
+    TemporalDateTime? bookingDate,
+  }) async {
+    if (!await _canSync()) return null;
+
+    try {
+      final item = BookingItem(
+        booking: booking,
+        user: currentUser,
+        sessionId: sessionId,
+        tutorId: tutorId,
+        price: price,
+        quantity: quantity,
+        serviceTitle: serviceTitle,
+        serviceImage: serviceImage,
+        providerName: providerName,
+        providerImage: providerImage,
+        bookingDate: bookingDate ?? TemporalDateTime.now(),
+        timeSlot: timeSlot,
+      );
+
+      await Amplify.DataStore.save(item);
+
+      final existing = bookingItemsMap[booking.id] ?? [];
+      bookingItemsMap[booking.id] = [...existing, item];
+
+      _recalculateTotals();
+      return item;
+    } catch (e) {
+      print('❌ Failed to create booking item: $e');
+      return null;
+    }
+  }
+
+  // ---------------- Add Booking Item Helper ----------------
+  Future<void> addBookingItem({
+    String? sessionId,
+    String? tutorId,
+    DateTime? bookingDate,
+    String? timeSlot,
+    double? price,
     String? serviceTitle,
     String? serviceImage,
-    String? providerName,
-    String? providerImage,
-    bool isPhysical = false,
-    bool applyDiscount = false,
-    double? negotiatedPrice,
-  }) {
-    final bookingItem = bookingItems.firstWhere(
-      (item) =>
-          item.serviceId == serviceId &&
-          item.bookingDate == bookingDate &&
-          item.timeSlot == timeSlot,
-      orElse:
-          () => BookingItemModel(
-            serviceId: serviceId,
-            providerId: providerId,
-            serviceTitle: serviceTitle ?? '',
-            serviceImage: serviceImage ?? '',
-            providerName: providerName ?? '',
-            providerImage: providerImage ?? '',
-            bookingDate: bookingDate,
-            timeSlot: timeSlot,
-            price: price,
-            quantity: 0,
-            isPhysical: isPhysical,
-            applyDiscount: applyDiscount,
-            negotiatedPrice: negotiatedPrice,
-          ),
-    );
+    String? tutorName,
+    String? tutorImage,
+    int quantity = 1,
+  }) async {
+    if (!await _canSync()) return;
 
-    if (bookingItem.quantity == 0) {
-      // Ensure display fields are populated for newly added items
-      bookingItem.serviceTitle = serviceTitle ?? bookingItem.serviceTitle;
-      bookingItem.serviceImage = serviceImage ?? bookingItem.serviceImage;
-      bookingItem.providerName = providerName ?? bookingItem.providerName;
-      bookingItem.providerImage = providerImage ?? bookingItem.providerImage;
-
-      bookingItems.add(bookingItem);
+    // Use existing booking or create a new one
+    Booking booking;
+    if (bookings.isNotEmpty) {
+      booking = bookings.first;
+    } else {
+      final created = await createBooking();
+      if (created == null) return;
+      booking = created;
     }
 
-    bookingItem.quantity += quantity;
-    totalBookingPrice.value += price * quantity;
-
-    _syncBookingModel();
-    bookingItems.refresh();
-  }
-
-  /// Update number of booked sessions
-  void updateBookingQuantity(BookingItemModel bookingItem, int newQuantity) {
-    if (newQuantity <= 0) {
-      removeBooking(bookingItem);
-      return;
-    }
-
-    final difference = newQuantity - bookingItem.quantity;
-    totalBookingPrice.value += bookingItem.price * difference;
-
-    bookingItem.quantity = newQuantity;
-
-    _syncBookingModel();
-    bookingItems.refresh();
-  }
-
-  /// Remove a booking item
-  void removeBooking(BookingItemModel bookingItem) {
-    bookingItems.remove(bookingItem);
-    totalBookingPrice.value -= bookingItem.price * bookingItem.quantity;
-
-    _syncBookingModel();
-    bookingItems.refresh();
-  }
-
-  /// Clear all bookings
-  void clearBookings() {
-    bookingItems.clear();
-    totalBookingPrice.value = 0.0;
-
-    currentBooking.value = BookingModel.empty();
-  }
-
-  /// Total booked sessions count
-  int totalBookedSessions() {
-    return bookingItems
-        .map((e) => e.quantity)
-        .fold(0, (prev, next) => prev + next);
-  }
-
-  /// Sync UI list with aggregate booking model
-  void _syncBookingModel() {
-    currentBooking.value = currentBooking.value.copyWith(
-      bookings: List.from(bookingItems),
-      createdAt: DateTime.now(),
+    await createBookingItem(
+      booking: booking,
+      sessionId: sessionId,
+      tutorId: tutorId,
+      bookingDate:
+          bookingDate != null
+              ? TemporalDateTime(bookingDate)
+              : TemporalDateTime.now(),
+      timeSlot: timeSlot ?? '',
+      price: price ?? 0,
+      quantity: quantity,
+      serviceTitle: serviceTitle ?? '',
+      serviceImage: serviceImage ?? '',
+      providerName: tutorName ?? '',
+      providerImage: tutorImage ?? '',
     );
   }
 
-  void _recalculateTotal() {
-    totalBookingPrice.value = bookingItems
-        .map((e) => e.price * e.quantity)
-        .fold(0.0, (prev, next) => prev + next);
+  // ---------------- Update Booking ----------------
+  Future<void> updateBooking(
+    Booking booking, {
+    double? totalPrice,
+    String? status,
+  }) async {
+    if (!await _canSync()) return;
+
+    try {
+      final updated = booking.copyWith(
+        totalPrice: totalPrice ?? booking.totalPrice,
+        status: status ?? booking.status,
+        updatedAt: TemporalDateTime.now(),
+      );
+
+      await Amplify.DataStore.save(updated);
+
+      final index = bookings.indexWhere((b) => b.id == booking.id);
+      if (index >= 0) bookings[index] = updated;
+    } catch (e) {
+      print('❌ Failed to update booking: $e');
+    }
+  }
+
+  // ---------------- Update Booking Item ----------------
+  Future<void> updateBookingItem(
+    BookingItem item, {
+    int? quantity,
+    double? price,
+  }) async {
+    if (!await _canSync()) return;
+
+    try {
+      final updated = item.copyWith(
+        quantity: quantity ?? item.quantity ?? 0,
+        price: price ?? item.price ?? 0.0,
+        updatedAt: TemporalDateTime.now(),
+      );
+
+      await Amplify.DataStore.save(updated);
+
+      final items = bookingItemsMap[item.booking?.id ?? ''] ?? [];
+      final index = items.indexWhere((i) => i.id == item.id);
+      if (index >= 0) {
+        items[index] = updated;
+        bookingItemsMap[item.booking?.id ?? ''] = items;
+      }
+
+      _recalculateTotals();
+    } catch (e) {
+      print('❌ Failed to update booking item: $e');
+    }
+  }
+
+  // ---------------- Delete Booking ----------------
+  Future<void> deleteBooking(Booking booking) async {
+    if (!await _canSync()) return;
+
+    try {
+      await Amplify.DataStore.delete(booking);
+      bookings.removeWhere((b) => b.id == booking.id);
+      bookingItemsMap.remove(booking.id);
+
+      _recalculateTotals();
+    } catch (e) {
+      print('❌ Failed to delete booking: $e');
+    }
+  }
+
+  // ---------------- Delete Booking Item ----------------
+  Future<void> deleteBookingItem(BookingItem item) async {
+    if (!await _canSync()) return;
+
+    try {
+      await Amplify.DataStore.delete(item);
+      final items = bookingItemsMap[item.booking?.id ?? ''] ?? [];
+      items.removeWhere((i) => i.id == item.id);
+      bookingItemsMap[item.booking?.id ?? ''] = items;
+
+      _recalculateTotals();
+    } catch (e) {
+      print('❌ Failed to delete booking item: $e');
+    }
+  }
+
+  // ---------------- Remove Booking Item Helper ----------------
+  void removeBooking(BookingItem item) async {
+    await deleteBookingItem(item);
   }
 }

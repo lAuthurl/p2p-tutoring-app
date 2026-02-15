@@ -12,44 +12,75 @@ class ProfileFormScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = UserController.instance;
+
+    // Safely get the createdAt DateTime from TemporalDateTime
+    final createdAt =
+        controller.currentUser.value?.createdAt?.getDateTimeInUtc();
+
     return Form(
       key: controller.updateUserProfileFormKey,
       child: Column(
         children: [
+          // Full Name
           TextFormField(
             controller: controller.fullName,
-            decoration: const InputDecoration(label: Text(TTexts.tFullName), prefixIcon: Icon(LineAwesomeIcons.user)),
+            decoration: const InputDecoration(
+              label: Text(TTexts.tFullName),
+              prefixIcon: Icon(LineAwesomeIcons.user),
+            ),
           ),
           const SizedBox(height: TSizes.xl - 20),
+
+          // Email
           TextFormField(
-            enabled: controller.email.text.isEmpty ? true : false,
+            enabled: controller.email.text.isEmpty,
             controller: controller.email,
-            decoration: const InputDecoration(label: Text(TTexts.tEmail), prefixIcon: Icon(LineAwesomeIcons.envelope)),
+            decoration: const InputDecoration(
+              label: Text(TTexts.tEmail),
+              prefixIcon: Icon(LineAwesomeIcons.envelope),
+            ),
           ),
           const SizedBox(height: TSizes.xl - 20),
+
+          // Phone Number
           TextFormField(
-            enabled: controller.phoneNo.text.isEmpty ? true : false,
+            enabled: controller.phoneNo.text.isEmpty,
             controller: controller.phoneNo,
-            decoration: const InputDecoration(label: Text(TTexts.tPhoneNo), prefixIcon: Icon(LineAwesomeIcons.phone_solid)),
+            decoration: const InputDecoration(
+              label: Text(TTexts.tPhoneNo),
+              prefixIcon: Icon(LineAwesomeIcons.phone_solid),
+            ),
           ),
           const SizedBox(height: TSizes.xl),
 
-          /// -- Form Submit Button
-          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => controller.updateUserProfile(), child: const Text(TTexts.tEditProfile))),
+          // Submit Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => controller.updateUserProfile(),
+              child: const Text(TTexts.tEditProfile),
+            ),
+          ),
           const SizedBox(height: TSizes.xl),
 
-          /// -- Created Date and Delete Button
+          // Created Date & Delete Button
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text.rich(
                 TextSpan(
                   text: TTexts.tJoined,
-                  style: TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: 12),
                   children: [
                     TextSpan(
-                      text: THelperFunctions.getFormattedDate(controller.user.value.createdAt!),
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      text:
+                          createdAt != null
+                              ? THelperFunctions.getFormattedDate(createdAt)
+                              : 'N/A',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),

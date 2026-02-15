@@ -1,20 +1,22 @@
+// ignore_for_file: avoid_print
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 
 import '../../../data/repository/authentication_repository/authentication_repository.dart';
 import '../../../data/services/notifications/notification_service.dart';
 import '../../../personalization/controllers/create_notification_controller.dart';
 import '../../../personalization/controllers/user_controller.dart';
-import '../../../personalization/models/user_model.dart';
 import '../../../utils/constants/enums.dart';
 import '../../../utils/constants/image_strings.dart';
 import '../../../utils/helpers/network_manager.dart';
 import '../../../utils/popups/full_screen_loader.dart';
 import '../../../utils/popups/loaders.dart';
 import '../../screens/signup/verify_email.dart';
-import 'package:get_storage/get_storage.dart';
 import '../../../utils/security/password_hash.dart';
 import 'package:p2p_tutoring_app/personalization/screens/profile/profile_screen.dart';
+import 'package:amplify_flutter/amplify_flutter.dart';
+import '../../../models/ModelProvider.dart';
 
 class SignUpController extends GetxController {
   static SignUpController get instance => Get.find();
@@ -22,27 +24,21 @@ class SignUpController extends GetxController {
   final isGoogleLoading = false.obs;
   final isFacebookLoading = false.obs;
 
-  // TextField Controllers to get data from TextFields
-
+  // TextField Controllers
   final hidePassword = true.obs;
   final fullName = TextEditingController();
   final email = TextEditingController();
   final password = TextEditingController();
   final phoneNumber = TextEditingController();
-  GlobalKey<FormState> signupFormKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> signupFormKey = GlobalKey<FormState>();
 
   /// Loader
   final isLoading = false.obs;
 
-  // As in the AuthenticationRepository we are calling _setScreen() Method
-  // so, whenever there is change in the user state(), screen will be updated.
-  // Therefore, when new user is authenticated, AuthenticationRepository() detects
-  // the change and call _setScreen() to switch screens
-
-  /// Register New User using either [EmailAndPassword] OR [PhoneNumber] authentication
+  /// Register New User using Email & Password
   Future<void> signup() async {
     try {
-      // Start Loading
+      // Start Loader
       TFullScreenLoader.openLoadingDialog(
         'We are processing your information...',
         TImages.docerAnimation,
@@ -78,7 +74,7 @@ class SignUpController extends GetxController {
         return;
       }
 
-      // Register user in the Firebase Authentication & Save user data in the Firebase
+      // Register user in Firebase/Auth backend
       await AuthenticationRepository.instance.registerWithEmailAndPassword(
         email.text.trim(),
         password.text.trim(),
@@ -86,46 +82,50 @@ class SignUpController extends GetxController {
 
       final token = await TNotificationService.getToken();
 
-      // Save Authenticated user data in the Firebase Firestore
-      final newUser = UserModel(
+      // Save user in Amplify DataStore
+      final newUser = User(
         id: AuthenticationRepository.instance.getUserID,
-        fullName: fullName.text.trim(),
+        username: fullName.text.trim(),
         email: email.text.trim(),
         phoneNumber: phoneNumber.text.trim(),
         profilePicture: '',
         deviceToken: token,
         isEmailVerified: false,
         isProfileActive: false,
-        updatedAt: DateTime.now(),
-        createdAt: DateTime.now(),
-        verificationStatus: VerificationStatus.approved,
+        createdAt: TemporalDateTime.now(),
+        updatedAt: TemporalDateTime.now(),
+        role: AppRole.user.name,
+        verificationStatus: VerificationStatus.approved.name,
       );
 
-      final userController = Get.find<UserController>();
-      await userController.saveUserRecord(userData: newUser);
+      await Amplify.DataStore.save(newUser);
 
+      // Update UserController
+      final userController = Get.find<UserController>();
+      userController.currentUser.value = newUser;
+
+      // Create welcome notification
       Get.find<CreateNotificationController>();
       await CreateNotificationController.instance.createNotification();
 
-      // Remove Loader
+      // Stop Loader
       TFullScreenLoader.stopLoading();
 
-      // Show Success Message
+      // Show success
       TLoaders.successSnackBar(
         title: 'Congratulations',
         message: 'Your account has been created! Verify email to continue.',
       );
 
-      // Move to Verify Email Screen
+      // Navigate to Email Verification
       Get.to(() => VerifyEmailScreen(email: email.text.trim()));
     } catch (e) {
-      // Show some Generic Error to the user
       TFullScreenLoader.stopLoading();
       TLoaders.errorSnackBar(title: 'Oh Snap!', message: e.toString());
     }
   }
 
-  /// [PhoneNoAuthentication]
+  /// Login with Phone Number (optional)
   Future<void> loginWithPhoneNumber(String phoneNo) async {
     try {
       await AuthenticationRepository.instance.loginWithPhoneNo(phoneNo);

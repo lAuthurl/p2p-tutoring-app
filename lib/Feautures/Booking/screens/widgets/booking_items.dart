@@ -12,10 +12,11 @@ class TBookingItems extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bookingController = Get.put(BookingController());
-    final bookingItems = bookingController.bookingItems;
 
-    return Obx(
-      () => ListView.separated(
+    return Obx(() {
+      final bookingItems = bookingController.bookingItemsForUI;
+
+      return ListView.separated(
         shrinkWrap: true,
         itemCount: bookingItems.length,
         physics: const NeverScrollableScrollPhysics(),
@@ -23,7 +24,9 @@ class TBookingItems extends StatelessWidget {
             (context, index) => const SizedBox(height: TSizes.spaceBtwSections),
         itemBuilder: (context, index) {
           final item = bookingItems[index];
-          final itemTotal = item.price * item.quantity;
+
+          final itemTotal = bookingController.itemTotal(item);
+
           return Column(
             children: [
               /// -- Booking Item Style
@@ -37,7 +40,7 @@ class TBookingItems extends StatelessWidget {
                   /// Total price
                   TProductPriceText(price: itemTotal.toString()),
 
-                  /// Remove button on the right
+                  /// Remove button
                   IconButton(
                     onPressed: () => bookingController.removeBooking(item),
                     icon: const Icon(Icons.delete, size: 20),
@@ -49,7 +52,7 @@ class TBookingItems extends StatelessWidget {
             ],
           );
         },
-      ),
-    );
+      );
+    });
   }
 }

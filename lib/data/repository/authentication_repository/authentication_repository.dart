@@ -2,7 +2,9 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:flutter/services.dart';
+import '../../../bindings/app_bindings.dart';
 import '../../../data/models/app_user.dart';
+import '../../../routes/routes.dart';
 import '../../../screens/login/login_screen.dart';
 import '../../../personalization/controllers/user_controller.dart';
 import '../../../utils/exceptions/format_exceptions.dart';
@@ -36,6 +38,16 @@ class AuthenticationRepository extends GetxController {
     initializeCurrentUser();
   }
 
+  /// Checks if a user is currently signed in
+  Future<bool> isSignedIn() async {
+    try {
+      final res = await Amplify.Auth.getCurrentUser();
+      return res.userId.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> initializeCurrentUser() async {
     try {
       final authUser = await Amplify.Auth.getCurrentUser();
@@ -62,9 +74,13 @@ class AuthenticationRepository extends GetxController {
         emailVerified: emailVerified,
       );
       _currentUser.value = appUser;
+
+      if (await AuthenticationRepository.instance.isSignedIn()) {
+        await UserController.instance.loadUserData();
+      }
+
       await screenRedirect(_currentUser.value);
     } catch (_) {
-      // No authenticated user found. Attempt auto-login if the user opted to be remembered.
       _currentUser.value = null;
 
       try {
@@ -81,7 +97,6 @@ class AuthenticationRepository extends GetxController {
             await screenRedirect(_currentUser.value);
             return;
           } catch (_) {
-            // Try offline auto-login using locally stored hashed credentials
             try {
               final storage = GetStorage();
               final offlineUsers =
@@ -90,7 +105,6 @@ class AuthenticationRepository extends GetxController {
               if (record != null) {
                 final hashed = hashPassword(password.trim());
                 if (hashed == record['passwordHash']) {
-                  // Build simple AppUser for offline session
                   final appUser = AppUser(
                     uid: email.trim(),
                     email: email.trim(),
@@ -109,8 +123,6 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// Refreshes the current user from Amplify without performing a screen redirect.
-  /// Returns the updated AppUser or null.
   Future<AppUser?> refreshCurrentUserNoRedirect() async {
     try {
       final authUser = await Amplify.Auth.getCurrentUser();
@@ -144,10 +156,6 @@ class AuthenticationRepository extends GetxController {
   }
 
   Future<void> screenRedirect(AppUser? user) async {
-    // NOTE: navigation is intentionally disabled here. Startup should not
-    // automatically push screens; users must navigate explicitly. We keep a
-    // lightweight initialization routine to prepare per-user storage and
-    // fetch any cached user record if present.
     if (user != null) {
       try {
         await TLocalStorage.init(user.uid);
@@ -155,7 +163,6 @@ class AuthenticationRepository extends GetxController {
 
       try {
         if (Get.isRegistered<UserController>()) {
-          // Startup path: suppress user-facing warnings if the fetch fails (e.g., first run/offline)
           await UserController.instance.fetchUserRecord(
             showErrorSnackBar: false,
           );
@@ -170,19 +177,29 @@ class AuthenticationRepository extends GetxController {
         }
       } catch (_) {}
     } else {
-      // Ensure the onboarding flag exists but do not navigate.
       deviceStorage.writeIfNull('isFirstTime', true);
     }
   }
 
-  /// Email/Password Sign-In
+  // ----------------------------
+  // ✅ Added function
+  Future<void> onLoginSuccess() async {
+    // Start datastore
+    await Amplify.DataStore.start();
+
+    // Inject app controllers
+    AppBindings().dependencies();
+
+    // Go home
+    Get.offAllNamed(TRoutes.home);
+  }
+  // ----------------------------
+
   Future<AppUserCredential> loginWithEmailAndPassword(
     String email,
     String password,
   ) async {
     try {
-      // If there's already a signed-in user, return it when it matches the
-      // requested email. If it's a different user, sign them out first.
       try {
         final existing = await Amplify.Auth.getCurrentUser();
         if (existing.username.toLowerCase() == email.toLowerCase()) {
@@ -195,9 +212,7 @@ class AuthenticationRepository extends GetxController {
         } else {
           await signOutNoClear();
         }
-      } catch (_) {
-        // no current user, continue to sign in
-      }
+      } catch (_) {}
 
       final res = await Amplify.Auth.signIn(
         username: email,
@@ -212,7 +227,6 @@ class AuthenticationRepository extends GetxController {
       throw 'Sign in failed';
     } on AmplifyException catch (e) {
       final msg = e.message.toLowerCase();
-      // If Amplify reports the user is already signed in, try to recover
       if (msg.contains('already')) {
         try {
           final authUser = await Amplify.Auth.getCurrentUser();
@@ -223,8 +237,6 @@ class AuthenticationRepository extends GetxController {
           _currentUser.value = appUser;
           return AppUserCredential(user: appUser);
         } catch (_) {
-          // If we can't read the current user, attempt a silent sign-out
-          // and retry sign-in once to recover from a stale session.
           try {
             await signOutNoClear();
             final retry = await Amplify.Auth.signIn(
@@ -253,13 +265,11 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// [ReAuthenticate] - ReAuthenticate User
   Future<void> reAuthenticateWithEmailAndPassword(
     String email,
     String password,
   ) async {
     try {
-      // Amplify does not support reauthenticate; perform a fresh sign in
       await Amplify.Auth.signIn(username: email, password: password);
     } on AmplifyException catch (e) {
       throw e.message;
@@ -272,7 +282,6 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// Email/Password Sign-Up
   Future<AppUserCredential> registerWithEmailAndPassword(
     String email,
     String password,
@@ -293,7 +302,6 @@ class AuthenticationRepository extends GetxController {
       return AppUserCredential(user: appUser);
     } on AmplifyException catch (e) {
       final msg = e.message.toLowerCase();
-      // If user already exists, redirect to login screen
       if (msg.contains('already') ||
           msg.contains('usernameexists') ||
           msg.contains('user already')) {
@@ -312,13 +320,10 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// Backwards-compatible: send email verification (no-op for Cognito client)
   Future<void> sendEmailVerification() async {
-    // Cognito handles verification via sign up / hosted UI flows.
     return;
   }
 
-  /// Start password reset flow (Cognito): sends a reset code to user's email/phone
   Future<void> resetPasswordStart(String username) async {
     try {
       await Amplify.Auth.resetPassword(username: username);
@@ -329,7 +334,6 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// Confirm password reset given confirmation code and new password
   Future<void> resetPasswordConfirm(
     String username,
     String newPassword,
@@ -348,17 +352,11 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// Confirm sign up with confirmation code (Cognito)
   Future<void> confirmSignUp(String username, String confirmationCode) async {
-    // Basic validation before calling Cognito
     final uname = username.trim();
     final code = confirmationCode.trim();
-    if (uname.isEmpty) {
-      throw 'Username is required to confirm verification.';
-    }
-    if (code.isEmpty) {
-      throw 'Confirmation code is required.';
-    }
+    if (uname.isEmpty) throw 'Username is required to confirm verification.';
+    if (code.isEmpty) throw 'Confirmation code is required.';
 
     try {
       final res = await Amplify.Auth.confirmSignUp(
@@ -366,7 +364,6 @@ class AuthenticationRepository extends GetxController {
         confirmationCode: code,
       );
       if (res.isSignUpComplete) {
-        // refresh local user state
         await refreshCurrentUserNoRedirect();
       }
     } on AmplifyException catch (e) {
@@ -376,16 +373,11 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// Resend confirmation code for sign up (Cognito)
   Future<void> resendConfirmationCode(String username) async {
     final uname = username.trim();
-    if (uname.isEmpty) {
+    if (uname.isEmpty)
       throw 'Username is required to resend confirmation code.';
-    }
     try {
-      // Amplify's resend sign-up may not be available on all builds/platforms.
-      // As a safe fallback, call the generic sendEmailVerification (no-op for Cognito),
-      // which preserves existing behaviour while avoiding unsupported API calls.
       await sendEmailVerification();
     } on AmplifyException catch (e) {
       throw e.message;
@@ -394,14 +386,10 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// Clear local storage and reset current user (useful for testing)
   Future<void> clearExistingUsers() async {
     try {
-      // clear local device storage
       await deviceStorage.erase();
-      // clear generic default storage
       await GetStorage().erase();
-      // clear user records storage
       await UserRepository.instance.clearAllUsers();
       _currentUser.value = null;
       Get.offAll(() => LoginScreen());
@@ -410,7 +398,6 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// Backwards-compatible phone auth stubs
   Future<void> loginWithPhoneNo(String phoneNumber) async {
     throw 'Phone authentication not implemented for Amplify/Cognito in this migration.';
   }
@@ -419,7 +406,6 @@ class AuthenticationRepository extends GetxController {
     throw 'Phone OTP verification not supported in this migration yet.';
   }
 
-  /// Google Sign-In via Hosted UI
   Future<AppUserCredential?> signInWithGoogle() async {
     try {
       await Amplify.Auth.signInWithWebUI(provider: AuthProvider.google);
@@ -438,37 +424,29 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  /// Logout
   Future<void> logout() async {
     try {
       await Amplify.Auth.signOut();
-      // Clear 'remember me' on explicit logout
       try {
         await deviceStorage.remove('REMEMBER_ME');
         await deviceStorage.remove('REMEMBER_ME_EMAIL');
         await SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
       } catch (_) {}
-
       Get.offAll(() => LoginScreen());
     } catch (_) {
       throw 'Something went wrong. Please try again';
     }
   }
 
-  /// Silent logout: sign out and clear local state but do not navigate.
   Future<void> logoutSilent() async {
-    // Preserve onboarding flag so we don't loop onboarding when clearing auth
     final dynamic wasFirstTime = deviceStorage.read('isFirstTime');
     try {
       await Amplify.Auth.signOut();
-    } catch (_) {
-      // ignore sign out errors
-    }
+    } catch (_) {}
     try {
       await deviceStorage.erase();
-      if (wasFirstTime != null) {
+      if (wasFirstTime != null)
         await deviceStorage.write('isFirstTime', wasFirstTime);
-      }
     } catch (_) {}
     try {
       await GetStorage().erase();
@@ -476,19 +454,13 @@ class AuthenticationRepository extends GetxController {
     _currentUser.value = null;
   }
 
-  /// Sign out without clearing any local storage or changing navigation state.
-  /// Useful for logging out a user so they can re-authenticate without
-  /// affecting onboarding flags or triggering redirects.
   Future<void> signOutNoClear() async {
     try {
       await Amplify.Auth.signOut();
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
     _currentUser.value = null;
   }
 
-  /// Delete User Account
   Future<void> deleteAccount() async {
     try {
       await UserRepository.instance.removeUserRecord(getUserID);

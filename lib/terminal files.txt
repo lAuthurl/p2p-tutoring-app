@@ -1,0 +1,5 @@
+amplify api gql-compile
+amplify push
+flutter clean
+flutter pub get
+amplify codegen models

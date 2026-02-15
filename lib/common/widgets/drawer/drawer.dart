@@ -8,23 +8,18 @@ import '../../../utils/constants/colors.dart';
 import '../../../utils/constants/image_strings.dart';
 import '../images/t_rounded_image.dart';
 
-/// A reusable custom drawer widget with predefined settings for account details,
-/// menu items, and a "Become a driver" section. The drawer's content is set
-/// internally and does not require parameters when used.
+/// A reusable custom drawer widget displaying account info and menu items.
 class TDrawer extends StatelessWidget {
-  /// Creates a [TDrawer] widget.
-  ///
-  /// The [accountName], [accountEmail], [rating], and [drawerItems] parameters
-  /// are used to set the content of the drawer. These values are predefined within
-  /// the widget, and no parameters need to be passed when using this widget.
   const TDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
     final userController = UserController.instance;
-    final networkImage = userController.user.value.profilePicture;
+    final user = userController.currentUser.value; // Updated to currentUser
+    final networkImage = user?.profilePicture ?? '';
     final image =
         networkImage.isNotEmpty ? networkImage : TImages.tProfileImage;
+
     return Drawer(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -50,7 +45,7 @@ class TDrawer extends StatelessWidget {
                   const SizedBox(height: 16),
                   // Name
                   Text(
-                    userController.user.value.fullName,
+                    user?.username ?? 'Guest',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: TColors.dark,
@@ -58,10 +53,10 @@ class TDrawer extends StatelessWidget {
                   ),
                   // Email
                   Text(
-                    userController.user.value.email,
+                    user?.email ?? '',
                     style: Theme.of(
                       context,
-                    ).textTheme.bodyMedium!.apply(color: TColors.dark),
+                    ).textTheme.bodyMedium?.apply(color: TColors.dark),
                   ),
                 ],
               ),
@@ -70,7 +65,7 @@ class TDrawer extends StatelessWidget {
 
           const SizedBox(height: 8),
 
-          // Drawer menu items with predefined values
+          // Drawer menu items
           ..._drawerItems(),
 
           const Spacer(),
@@ -79,9 +74,7 @@ class TDrawer extends StatelessWidget {
     );
   }
 
-  /// Builds a list of drawer items with predefined values.
-  ///
-  /// Each item includes an icon, title, and an optional subtitle.
+  /// Builds predefined drawer items
   List<Widget> _drawerItems() {
     return [
       _buildDrawerItem(
@@ -112,9 +105,7 @@ class TDrawer extends StatelessWidget {
     ];
   }
 
-  /// Helper method to build a drawer menu item.
-  ///
-  /// The item includes an icon, title, and an optional subtitle.
+  /// Helper to build a drawer menu item
   Widget _buildDrawerItem({
     required IconData icon,
     required String title,

@@ -3,22 +3,39 @@ import 'package:get/get.dart';
 
 import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/animations/fade_in_animation/fade_in_animation_controller.dart';
+import '../../personalization/controllers/user_controller.dart';
+import '../../routes/routes.dart';
+import '../on_boarding/on_boarding_screen.dart';
 
 class SplashScreen extends StatelessWidget {
   final int screenNumber; // 1, 2, or 3
 
-  const SplashScreen({super.key, required this.screenNumber});
+  const SplashScreen({super.key, this.screenNumber = 1});
 
   @override
   Widget build(BuildContext context) {
-    final FadeInAnimationController controller = Get.put(
+    // Ensure controllers are available
+    final FadeInAnimationController animationController = Get.put(
       FadeInAnimationController(),
     );
 
+    final UserController userController = Get.find<UserController>();
+
     // Start splash animation
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => controller.startSplashAnimation(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      animationController.startSplashAnimation();
+
+      // Delay navigation after splash
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!userController.hasSeenOnboarding) {
+          Get.offAll(() => OnBoardingScreen());
+        } else if (!userController.isLoggedIn) {
+          Get.offAllNamed(TRoutes.logIn);
+        } else {
+          Get.offAllNamed(TRoutes.mainDashboard);
+        }
+      });
+    });
 
     final BoxDecoration background =
         screenNumber == 3
@@ -44,7 +61,7 @@ class SplashScreen extends StatelessWidget {
         child: Center(
           child: Obx(
             () => Opacity(
-              opacity: controller.opacity.value,
+              opacity: animationController.opacity.value,
               child: Image.asset(
                 'assets/logo/t-store-splash-logo-black.png',
                 width: 180,

@@ -7,12 +7,16 @@ import 'package:p2p_tutoring_app/utils/constants/image_strings.dart';
 
 import 'widgets/signup_form_widget.dart';
 import '../login/login_screen.dart';
+import '../../authentication/controllers/signup_controller.dart';
 
 class SignupScreen extends StatelessWidget {
   const SignupScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Ensure SignupController is registered (create if not exists)
+    Get.put(SignUpController(), permanent: true);
+
     return Scaffold(
       backgroundColor: TColors.darkBackground,
       body: Center(
@@ -53,10 +57,12 @@ class SignupScreen extends StatelessWidget {
 
                 const SizedBox(height: TSizes.lg),
 
+                // Signup Form
                 const SignUpFormWidget(),
 
                 const SizedBox(height: TSizes.md),
 
+                // Link to Login
                 Center(
                   child: GestureDetector(
                     onTap: () => Get.off(() => const LoginScreen()),

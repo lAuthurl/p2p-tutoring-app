@@ -14,7 +14,6 @@ class TRoutes {
 
   // Home / Dashboards
   static const home = '/home';
-  static const coursesDashboard = '/courses-dashboard-screen';
   static const mainDashboard = '/main-dashboard-screen';
 
   // Product / Session

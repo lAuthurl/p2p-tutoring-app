@@ -25,5 +25,65 @@
         "assets": {}
       }
     }
+  },
+  "tutor": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-p2ptutoringapp-tutor-89adf-authRole",
+      "UnauthRoleArn": "arn:aws:iam::575960430498:role/amplify-p2ptutoringapp-tutor-89adf-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::575960430498:role/amplify-p2ptutoringapp-tutor-89adf-authRole",
+      "Region": "eu-west-3",
+      "DeploymentBucketName": "amplify-p2ptutoringapp-tutor-89adf-deployment",
+      "UnauthRoleName": "amplify-p2ptutoringapp-tutor-89adf-unauthRole",
+      "StackName": "amplify-p2ptutoringapp-tutor-89adf",
+      "StackId": "arn:aws:cloudformation:eu-west-3:575960430498:stack/amplify-p2ptutoringapp-tutor-89adf/91e25080-0432-11f1-97a9-0a1234694e39",
+      "AmplifyAppId": "ds64rvn4oni3e"
+    },
+    "categories": {
+      "auth": {
+        "p2ptutoringappd8ba34ec": {}
+      },
+      "function": {
+        "S3Trigger716d2200": {
+          "deploymentBucketName": "amplify-p2ptutoringapp-tutor-89adf-deployment",
+          "s3Key": "amplify-builds/S3Trigger716d2200-7436654f3568327a4d55-build.zip"
+        }
+      },
+      "storage": {
+        "assets": {}
+      },
+      "api": {
+        "p2ptutoringapp": {}
+      }
+    }
+  },
+  "peertutor": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-p2ptutoringapp-peertutor-b07fa-authRole",
+      "UnauthRoleArn": "arn:aws:iam::575960430498:role/amplify-p2ptutoringapp-peertutor-b07fa-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::575960430498:role/amplify-p2ptutoringapp-peertutor-b07fa-authRole",
+      "Region": "eu-west-3",
+      "DeploymentBucketName": "amplify-p2ptutoringapp-peertutor-b07fa-deployment",
+      "UnauthRoleName": "amplify-p2ptutoringapp-peertutor-b07fa-unauthRole",
+      "StackName": "amplify-p2ptutoringapp-peertutor-b07fa",
+      "StackId": "arn:aws:cloudformation:eu-west-3:575960430498:stack/amplify-p2ptutoringapp-peertutor-b07fa/746326a0-08d4-11f1-84f0-06f94837794d",
+      "AmplifyAppId": "ds64rvn4oni3e"
+    },
+    "categories": {
+      "auth": {
+        "p2ptutoringappd8ba34ec": {}
+      },
+      "function": {
+        "S3Trigger716d2200": {
+          "deploymentBucketName": "amplify-p2ptutoringapp-peertutor-b07fa-deployment",
+          "s3Key": "amplify-builds/S3Trigger716d2200-7436654f3568327a4d55-build.zip"
+        }
+      },
+      "api": {
+        "p2ptutoringapp": {}
+      },
+      "storage": {
+        "assets": {}
+      }
+    }
   }
 }

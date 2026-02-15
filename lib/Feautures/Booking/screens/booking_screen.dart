@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../../../utils/constants/sizes.dart';
-import '../../../common/widgets/appbar/home_appbar.dart';
 import '../controllers/booking_controller.dart';
 import 'widgets/booking_items.dart';
 import '../../checkout/screens/checkout.dart';
@@ -15,30 +13,36 @@ class BookingScreen extends StatelessWidget {
     final controller = BookingController.instance;
 
     return Scaffold(
-      appBar: TEComAppBar(
-        showBackArrow: true,
-        centerTitle: true,
-        title: Text(
+      appBar: AppBar(
+        title: const Text(
           'Bookings',
-          style: Theme.of(context).textTheme.headlineSmall,
+          style: TextStyle(
+            fontSize: 18, // bigger header text
+            fontWeight: FontWeight.bold,
+          ),
         ),
+        centerTitle: true,
       ),
-      body: const SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.all(TSizes.defaultSpace),
-          child: TBookingItems(),
-        ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16), // consistent with CheckoutScreen
+        child: const TBookingItems(),
       ),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.all(TSizes.defaultSpace),
+          padding: const EdgeInsets.all(16),
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () => Get.to(() => const CheckoutScreen()),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
               child: Obx(
-                () => Text('Checkout ${controller.totalBookingPrice.value}'),
+                () => Text(
+                  'Checkout \$${controller.totalBookingPrice.value.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 15),
+                ),
               ),
             ),
           ),

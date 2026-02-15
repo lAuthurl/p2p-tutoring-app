@@ -4,6 +4,7 @@ import 'package:p2p_tutoring_app/Feautures/Courses/screens/product_detail/widget
 import 'package:p2p_tutoring_app/Feautures/Courses/screens/product_detail/widgets/session_meta_data.dart';
 import 'package:p2p_tutoring_app/Feautures/Courses/screens/product_detail/widgets/t_session_attributes.dart';
 import 'package:p2p_tutoring_app/Feautures/Courses/screens/product_detail/widgets/t_session_image_slider.dart';
+import 'package:p2p_tutoring_app/models/ModelProvider.dart';
 import 'package:readmore/readmore.dart';
 import 'package:iconsax/iconsax.dart';
 
@@ -12,14 +13,12 @@ import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/device/device_utility.dart';
 import '../../controllers/tutoring_controller.dart';
-import '../../models/tutoring_session_model.dart'; // adjust if your model path/name differs
-import '../../models/session_attribute_model.dart';
 
 class SessionDetailScreen extends StatefulWidget {
   const SessionDetailScreen({super.key, this.sessionIdFromCtor, this.session});
 
   final String? sessionIdFromCtor;
-  final TutoringSessionModel? session;
+  final TutoringSession? session;
 
   @override
   State<SessionDetailScreen> createState() => _SessionDetailScreenState();
@@ -27,10 +26,9 @@ class SessionDetailScreen extends StatefulWidget {
 
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
   final tutoringController = Get.find<TutoringController>();
-  TutoringSessionModel? _resolvedSession;
+  TutoringSession? _resolvedSession;
   String? _error;
 
-  // Helper to safely extract an id from Get.arguments (or constructor)
   String? _extractSessionId(dynamic args) {
     if (widget.sessionIdFromCtor != null &&
         widget.sessionIdFromCtor!.isNotEmpty) {
@@ -39,17 +37,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     if (args == null) return null;
     if (args is String) return args;
     if (args is Map) {
-      // safe access - do not call [] on non-map
       return (args['sessionId'] ?? args['id'] ?? args['session']?['id'])
           ?.toString();
     }
-    // If a SessionModel (or similar) was passed
     try {
       final dynamic maybeModel = args;
-      final id = maybeModel.id;
-      return id?.toString();
+      return maybeModel.id;
     } catch (_) {
-      // args was neither a String, Map nor model with id property
       return null;
     }
   }
@@ -58,9 +52,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   void initState() {
     super.initState();
 
-    // Resolve the session now so we can initialize controller state before first build
     final args = Get.arguments;
-    TutoringSessionModel? sessionToShow = widget.session;
+    TutoringSession? sessionToShow = widget.session;
 
     if (sessionToShow == null) {
       final sessionId = _extractSessionId(args);
@@ -85,34 +78,18 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     _resolvedSession = sessionToShow;
 
-    // Initialize selection state synchronously before first build so the price and image
-    // shown on the detail screen reflect this session (avoids showing stale values).
+    // Initialize selected quantity and default attributes
     tutoringController.initializeAlreadySelectedQuantity(_resolvedSession!);
 
-    // Ensure default attribute selections: 'Mode' -> Online and 'Duration' -> 1hr when available
-    // Use safe lookups without referring to SessionAttributeModel directly
     final attrs = _resolvedSession!.sessionAttributes ?? [];
-
-    SessionAttributeModel? modeAttr;
     for (final a in attrs) {
-      if (a.name.toLowerCase() == 'mode') {
-        modeAttr = a;
-        break;
+      if (a.name.toLowerCase() == 'mode' && (a.values?.isNotEmpty ?? false)) {
+        tutoringController.selectedAttributes['Mode'] = 'Online';
       }
-    }
-    if (modeAttr != null && modeAttr.values.isNotEmpty) {
-      tutoringController.selectedAttributes['Mode'] = 'Online';
-    }
-
-    SessionAttributeModel? durationAttr;
-    for (final a in attrs) {
-      if (a.name.toLowerCase() == 'duration') {
-        durationAttr = a;
-        break;
+      if (a.name.toLowerCase() == 'duration' &&
+          (a.values?.isNotEmpty ?? false)) {
+        tutoringController.selectedAttributes['Duration'] = '1hr';
       }
-    }
-    if (durationAttr != null && durationAttr.values.isNotEmpty) {
-      tutoringController.selectedAttributes['Duration'] = '1hr';
     }
   }
 
@@ -132,37 +109,28 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// 1 - Session Image Slider
             TSessionImageSlider(session: resolvedSession),
-
-            /// 2 - Session Details
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: TSizes.defaultSpace,
-                // reduced vertical padding to bring content up closer to thumbnails
                 vertical: TSizes.defaultSpace / 4,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  /// - Rating & Share
                   const TRatingAndShare(),
-
                   const SizedBox(height: TSizes.spaceBtwItems / 2),
-
-                  /// - Price, Title, Seats, & Tutor
                   TProductMetaData(session: resolvedSession),
                   const SizedBox(height: TSizes.spaceBtwSections / 2),
-
-                  /// -- Attributes
                   if (resolvedSession.sessionVariations != null &&
-                      resolvedSession.sessionVariations!.isNotEmpty)
-                    TSessionAttributes(session: resolvedSession),
+                      (resolvedSession.sessionVariations?.isNotEmpty ?? false))
+                    TSessionAttributes(
+                      session: resolvedSession,
+                      tutorId: resolvedSession.tutor?.id ?? '',
+                    ),
                   if (resolvedSession.sessionVariations != null &&
-                      resolvedSession.sessionVariations!.isNotEmpty)
+                      (resolvedSession.sessionVariations?.isNotEmpty ?? false))
                     const SizedBox(height: TSizes.spaceBtwSections),
-
-                  /// -- Checkout / Add-to-Booking Button
                   SizedBox(
                     width: TDeviceUtils.getScreenWidth(context),
                     child: ElevatedButton(
@@ -171,25 +139,41 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                             resolvedSession,
                           ),
                       style: ButtonStyle(
-                        padding: MaterialStateProperty.all(
+                        padding: WidgetStateProperty.all(
                           const EdgeInsets.all(TSizes.md),
                         ),
-                        backgroundColor: MaterialStateProperty.resolveWith(
-                          (states) => const Color(0xFF2C2060),
+                        backgroundColor: WidgetStateProperty.all(
+                          TColors.primary,
                         ),
-                        overlayColor: MaterialStateProperty.resolveWith(
-                          (states) => const Color(0xFF2C2060).withOpacity(0.12),
+                        overlayColor: WidgetStateProperty.all(
+                          TColors.primary.withAlpha((0.12 * 255).round()),
                         ),
-                        foregroundColor: MaterialStateProperty.all(
+                        foregroundColor: WidgetStateProperty.all(
                           TColors.textWhite,
                         ),
+                        shadowColor: WidgetStateProperty.all(
+                          const Color(0xFF2C2060).withAlpha(50),
+                        ),
+                        elevation: WidgetStateProperty.resolveWith<double>(
+                          (states) =>
+                              states.contains(WidgetState.pressed) ? 2 : 4,
+                        ),
+                        shape: WidgetStateProperty.all(
+                          RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
-                      child: const Text('Book Session'),
+                      child: const Text(
+                        'Book Session',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: TSizes.spaceBtwSections),
-
-                  /// - Description
                   const TSectionHeading(
                     title: 'Description',
                     showActionButton: false,
@@ -212,8 +196,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: TSizes.spaceBtwSections),
-
-                  /// - Reviews
                   const Divider(),
                   const SizedBox(height: TSizes.spaceBtwItems),
                   Row(

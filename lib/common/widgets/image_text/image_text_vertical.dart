@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../utils/helpers/helper_functions.dart';
@@ -39,9 +38,11 @@ class TVerticalImageAndText extends StatelessWidget {
               overlayColor:
                   Theme.of(context).brightness == Brightness.dark
                       ? TColors.white
-                      : TColors.dark,
+                      : TColors.dark.withValues(alpha: 0.12),
+              isNetworkImage: image.startsWith('http'),
             ),
             const SizedBox(height: TSizes.spaceBtwItems / 2),
+            Text(title, style: TextStyle(color: textColor)),
           ],
         ),
       ),

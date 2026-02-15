@@ -79,7 +79,7 @@ class _TPromoSliderState extends State<TPromoSlider> {
                             ? Theme.of(context).colorScheme.primary
                             : Theme.of(
                               context,
-                            ).colorScheme.onSurface.withOpacity(0.12),
+                            ).colorScheme.onSurface.withValues(alpha: 0.12),
                     y: 0,
                   ),
                 ),

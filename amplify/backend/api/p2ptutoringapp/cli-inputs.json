@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "serviceConfiguration": {
+    "apiName": "p2ptutoringapp",
+    "serviceName": "AppSync",
+    "defaultAuthType": {
+      "mode": "AMAZON_COGNITO_USER_POOLS",
+      "cognitoUserPoolId": "authp2ptutoringappd8ba34ec"
+    },
+    "conflictResolution": {
+      "defaultResolutionStrategy": {
+        "type": "AUTOMERGE"
+      }
+    },
+    "additionalAuthTypes": [
+      {
+        "mode": "API_KEY",
+        "expirationTime": 365,
+        "apiKeyExpirationDate": "2027-02-09T17:00:39.475Z",
+        "keyDescription": "authur"
+      }
+    ]
+  }
+}

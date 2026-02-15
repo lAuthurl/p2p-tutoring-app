@@ -5,6 +5,7 @@ import 'package:p2p_tutoring_app/utils/constants/colors.dart';
 import 'package:p2p_tutoring_app/utils/constants/sizes.dart';
 import 'package:p2p_tutoring_app/utils/constants/image_strings.dart';
 
+import '../../authentication/controllers/login_controller.dart';
 import 'widgets/login_form_widget.dart';
 import '../signup/signup_screen.dart';
 
@@ -13,6 +14,9 @@ class LoginScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Ensure LoginController is registered
+    final loginController = Get.put(LoginController(), permanent: true);
+
     return Scaffold(
       backgroundColor: TColors.darkBackground,
       body: Center(
@@ -63,10 +67,42 @@ class LoginScreen extends StatelessWidget {
 
                 const SizedBox(height: TSizes.lg),
 
+                // Login Form
                 const LoginFormWidget(),
 
                 const SizedBox(height: TSizes.md),
 
+                // Google Sign-In Button
+                Obx(
+                  () => ElevatedButton.icon(
+                    onPressed:
+                        loginController.isGoogleLoading.value
+                            ? null
+                            : () => loginController.googleSignIn(),
+                    icon: Image.asset(
+                      'assets/logo/google-logo.png',
+                      height: 24,
+                      width: 24,
+                    ),
+                    label: Text(
+                      loginController.isGoogleLoading.value
+                          ? 'Signing in...'
+                          : 'Sign in with Google',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: TColors.primary,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: TSizes.md),
+
+                // Signup Link
                 Center(
                   child: GestureDetector(
                     onTap: () => Get.off(() => const SignupScreen()),

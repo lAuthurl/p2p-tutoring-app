@@ -26,7 +26,7 @@ class TSearchContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = THelperFunctions.isDarkMode(context);
     return GestureDetector(
-      // onTap: () => Get.to(() => const SearchScreen()),
+      onTap: onTap,
       child: Padding(
         padding: padding,
         child: Container(
@@ -46,7 +46,7 @@ class TSearchContainer extends StatelessWidget {
                     ? Border.all(
                       color: Theme.of(
                         context,
-                      ).colorScheme.onSurface.withOpacity(0.08),
+                      ).colorScheme.onSurface.withValues(alpha: 0.08),
                     )
                     : null,
           ),

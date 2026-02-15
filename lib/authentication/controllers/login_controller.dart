@@ -1,61 +1,56 @@
-import 'package:p2p_tutoring_app/personalization/controllers/create_notification_controller.dart';
-import 'package:p2p_tutoring_app/utils/popups/exports.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
-import '../../../utils/security/password_hash.dart';
-import '../../../utils/local_storage/secure_storage_service.dart';
+import 'package:amplify_flutter/amplify_flutter.dart';
 
-import '../../../data/repository/authentication_repository/authentication_repository.dart';
-import '../../../data/services/notifications/notification_service.dart';
-import '../../../personalization/controllers/user_controller.dart';
-import '../../../utils/constants/image_strings.dart';
-import 'package:p2p_tutoring_app/personalization/screens/profile/profile_screen.dart';
-import '../../../utils/helpers/network_manager.dart';
 import '../../../routes/routes.dart';
+import '../../../data/repository/authentication_repository/authentication_repository.dart';
+import '../../../personalization/controllers/user_controller.dart';
+import '../../../personalization/controllers/create_notification_controller.dart';
+import '../../../models/ModelProvider.dart';
+import '../../../utils/helpers/network_manager.dart';
+import '../../../utils/local_storage/secure_storage_service.dart';
+import '../../../utils/popups/exports.dart';
+import '../../../utils/constants/image_strings.dart';
+import '../../Feautures/Booking/controllers/booking_controller.dart';
+import '../../Feautures/dashboard/Home/controllers/home_controller.dart';
+import '../../Feautures/dashboard/Home/controllers/subject_controller.dart';
+import '../../data/services/notifications/notification_service.dart';
+import '../../../utils/constants/enums.dart';
 
 class LoginController extends GetxController {
   static LoginController get instance => Get.find();
 
-  /// TextField Controllers to get data from TextFields
+  // ---------------- State ----------------
   final hidePassword = true.obs;
+  final isLoading = false.obs;
+  final isGoogleLoading = false.obs;
+
   final localStorage = GetStorage();
   final email = TextEditingController();
   final password = TextEditingController();
-  GlobalKey<FormState> loginFormKey = GlobalKey<FormState>();
+  final rememberMe = false.obs;
+  final GlobalKey<FormState> loginFormKey = GlobalKey<FormState>();
 
-  /// Loader
-  final isLoading = false.obs;
-  final isGoogleLoading = false.obs;
-  final isFacebookLoading = false.obs;
-
-  final RxBool rememberMe = false.obs;
-
+  // ---------------- Init ----------------
   @override
   void onInit() {
-    // Load remembered credentials (email is stored in GetStorage; password is in secure storage)
+    super.onInit();
+
     email.text = localStorage.read('REMEMBER_ME_EMAIL') ?? '';
     rememberMe.value = localStorage.read('REMEMBER_ME') ?? false;
 
-    // Persist remember-me toggle immediately so it can be used on next app run
-    ever<bool>(rememberMe, (val) {
-      try {
-        localStorage.write('REMEMBER_ME', val);
-        if (!val) {
-          localStorage.remove('REMEMBER_ME_EMAIL');
-          // remove secure password when toggled off
-          SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
-        }
-      } catch (_) {}
+    ever<bool>(rememberMe, (val) async {
+      localStorage.write('REMEMBER_ME', val);
+      if (!val) {
+        localStorage.remove('REMEMBER_ME_EMAIL');
+        await SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
+      }
     });
 
-    // Load secure password asynchronously and attempt auto-login if requested
     _loadRememberedCredentials();
-
-    super.onInit();
   }
 
-  // Async helper to load password and trigger auto-login
   Future<void> _loadRememberedCredentials() async {
     try {
       final pwd = await SecureStorageService.instance.read(
@@ -63,173 +58,184 @@ class LoginController extends GetxController {
       );
       if (pwd != null && pwd.isNotEmpty) {
         password.text = pwd;
-
-        // If remember toggle is on and we have credentials, try to login automatically
         if (rememberMe.value && email.text.trim().isNotEmpty) {
-          try {
-            await AuthenticationRepository.instance.loginWithEmailAndPassword(
-              email.text.trim(),
-              pwd,
-            );
-
-            await AuthenticationRepository.instance
-                .refreshCurrentUserNoRedirect();
-            final token = await TNotificationService.getToken();
-            try {
-              final userController = Get.find<UserController>();
-              await userController.updateUserRecordWithToken(token);
-              await userController.fetchUserRecord();
-            } catch (_) {}
-
-            Get.offAllNamed(TRoutes.mainDashboard);
-            return;
-          } catch (_) {
-            // Auto-login failed — leave fields populated so user can retry
-          }
+          await emailAndPasswordLogin(autoLogin: true);
         }
       }
     } catch (_) {}
   }
 
-  /// [EmailAndPasswordLogin]
-  Future<void> emailAndPasswordLogin() async {
+  // ---------------- Post-Login Controller Init ----------------
+  void _injectControllers(User user) {
+    final userController = Get.put(UserController(), permanent: true);
+    userController.currentUser.value = user;
+
+    if (!Get.isRegistered<SubjectController>()) {
+      Get.put(SubjectController(), permanent: true);
+    }
+
+    if (!Get.isRegistered<HomeController>()) {
+      Get.put(HomeController(), permanent: true);
+    }
+
+    if (!Get.isRegistered<BookingController>()) {
+      Get.put(BookingController(currentUser: user), permanent: true);
+    }
+  }
+
+  // ---------------- Email & Password Login ----------------
+  Future<void> emailAndPasswordLogin({bool autoLogin = false}) async {
     try {
-      // Start Loading
+      isLoading.value = true;
       TFullScreenLoader.openLoadingDialog(
         'Logging you in...',
         TImages.docerAnimation,
       );
 
-      // Check Internet Connectivity
       final isConnected = await NetworkManager.instance.isConnected();
       if (!isConnected) {
-        // Attempt offline login using locally stored hashed credentials
-        final storage = GetStorage();
-        final offlineUsers =
-            storage.read('offline_users') ?? <String, dynamic>{};
-        final record = offlineUsers[email.text.trim()];
-        if (record == null) {
-          TFullScreenLoader.stopLoading();
-          TLoaders.customToast(
-            message: 'No Internet Connection and no offline account found',
-          );
-          return;
-        }
-        final hashed = hashPassword(password.text.trim());
-        if (hashed == record['passwordHash']) {
-          // Persist remember-me locally if requested
-          if (rememberMe.value) {
-            localStorage.write('REMEMBER_ME', true);
-            localStorage.write('REMEMBER_ME_EMAIL', email.text.trim());
-            // store password securely
-            await SecureStorageService.instance.write(
-              'REMEMBER_ME_PASSWORD',
-              password.text.trim(),
-            );
-          }
-
-          TFullScreenLoader.stopLoading();
-          TLoaders.successSnackBar(
-            title: 'Offline Login',
-            message: 'Signed in locally',
-          );
-          Get.offAll(() => const ProfileScreen());
-          return;
-        } else {
-          TFullScreenLoader.stopLoading();
-          TLoaders.errorSnackBar(
-            title: 'Login Failed',
-            message: 'Invalid credentials for offline login',
-          );
-          return;
-        }
-      }
-
-      // Form Validation (null-safe)
-      final isValid = loginFormKey.currentState?.validate() ?? false;
-      if (!isValid) {
         TFullScreenLoader.stopLoading();
+        isLoading.value = false;
+        TLoaders.customToast(message: 'No Internet connection.');
         return;
       }
 
-      // Login user using EMail & Password Authentication
+      if (!loginFormKey.currentState!.validate() && !autoLogin) {
+        TFullScreenLoader.stopLoading();
+        isLoading.value = false;
+        return;
+      }
+
+      // Authenticate via Amplify
       await AuthenticationRepository.instance.loginWithEmailAndPassword(
         email.text.trim(),
         password.text.trim(),
       );
 
-      // Refresh local user and update tokens/records
       await AuthenticationRepository.instance.refreshCurrentUserNoRedirect();
-      final token = await TNotificationService.getToken();
-      try {
-        final userController = Get.find<UserController>();
-        await userController.updateUserRecordWithToken(token);
-        // Assign user data to RxUser of UserController to use in app
-        await userController.fetchUserRecord();
-      } catch (_) {
-        // UserController not registered or failed; skip profile update
+      final authUser = await Amplify.Auth.getCurrentUser();
+
+      // Load or create user record
+      final users = await Amplify.DataStore.query(
+        User.classType,
+        where: User.ID.eq(authUser.userId),
+      );
+
+      late User userRecord;
+      if (users.isNotEmpty) {
+        userRecord = users.first;
+      } else {
+        userRecord = User(
+          id: authUser.userId,
+          username: email.text.trim(),
+          email: email.text.trim(),
+          createdAt: TemporalDateTime.now(),
+          updatedAt: TemporalDateTime.now(),
+          role: AppRole.user.name,
+          verificationStatus: VerificationStatus.approved.name,
+        );
+        await Amplify.DataStore.save(userRecord);
       }
 
-      // Persist 'remember me' if checked
+      // Persist remember-me
       if (rememberMe.value) {
-        localStorage.write('REMEMBER_ME', true);
         localStorage.write('REMEMBER_ME_EMAIL', email.text.trim());
         await SecureStorageService.instance.write(
           'REMEMBER_ME_PASSWORD',
           password.text.trim(),
         );
       } else {
-        localStorage.remove('REMEMBER_ME');
         localStorage.remove('REMEMBER_ME_EMAIL');
         await SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
       }
 
-      // Remove Loader
-      TFullScreenLoader.stopLoading();
+      // ✅ Inject Controllers
+      _injectControllers(userRecord);
 
-      // Navigate to user profiles page after successful login
+      TFullScreenLoader.stopLoading();
+      isLoading.value = false;
       Get.offAllNamed(TRoutes.mainDashboard);
     } catch (e) {
       TFullScreenLoader.stopLoading();
-      TLoaders.errorSnackBar(title: 'Oh Snap', message: e.toString());
+      isLoading.value = false;
+      TLoaders.errorSnackBar(title: 'Login Failed', message: e.toString());
     }
   }
 
-  /// [GoogleSignInAuthentication]
+  // ---------------- Google Sign-In ----------------
   Future<void> googleSignIn() async {
     try {
-      // Start Loading
+      isGoogleLoading.value = true;
       TFullScreenLoader.openLoadingDialog(
         'Logging you in...',
         TImages.docerAnimation,
       );
 
-      // Check Internet Connectivity
       final isConnected = await NetworkManager.instance.isConnected();
-      if (!isConnected) {
+      if (!isConnected) return;
+
+      final userCredentials =
+          await AuthenticationRepository.instance.signInWithGoogle();
+      final googleUser = userCredentials?.user;
+
+      if (googleUser == null) {
         TFullScreenLoader.stopLoading();
+        isGoogleLoading.value = false;
+        TLoaders.errorSnackBar(
+          title: 'Login Failed',
+          message: 'Google user data not available',
+        );
         return;
       }
 
-      // Sign In with Google
-      final userCredentials =
-          await AuthenticationRepository.instance.signInWithGoogle();
+      final authUser = await Amplify.Auth.getCurrentUser();
+      final users = await Amplify.DataStore.query(
+        User.classType,
+        where: User.ID.eq(authUser.userId),
+      );
 
-      final userController = Get.find<UserController>();
-      // Save Authenticated user data in the Firebase Firestore
-      await userController.saveUserRecord(userCredentials: userCredentials);
+      final token = await TNotificationService.getToken();
+      late User userRecord;
 
-      Get.find<CreateNotificationController>();
+      if (users.isNotEmpty) {
+        final existing = users.first;
+        userRecord = existing.copyWith(
+          username: googleUser.displayName ?? existing.username,
+          email: googleUser.email ?? existing.email,
+          profilePicture: googleUser.photoURL ?? existing.profilePicture,
+          deviceToken: token,
+          updatedAt: TemporalDateTime.now(),
+          role: AppRole.user.name,
+          verificationStatus: VerificationStatus.approved.name,
+        );
+      } else {
+        userRecord = User(
+          id: authUser.userId,
+          username: googleUser.displayName ?? '',
+          email: googleUser.email ?? '',
+          profilePicture: googleUser.photoURL ?? '',
+          deviceToken: token,
+          createdAt: TemporalDateTime.now(),
+          updatedAt: TemporalDateTime.now(),
+          role: AppRole.user.name,
+          verificationStatus: VerificationStatus.approved.name,
+        );
+      }
+
+      await Amplify.DataStore.save(userRecord);
+
+      // ✅ Inject Controllers
+      _injectControllers(userRecord);
+
       await CreateNotificationController.instance.createNotification();
 
-      // Remove Loader
       TFullScreenLoader.stopLoading();
-
-      // Redirect to User Profiles screen after successful Google sign-in
+      isGoogleLoading.value = false;
       Get.offAllNamed(TRoutes.mainDashboard);
     } catch (e) {
       TFullScreenLoader.stopLoading();
-      TLoaders.errorSnackBar(title: 'Oh Snap', message: e.toString());
+      isGoogleLoading.value = false;
+      TLoaders.errorSnackBar(title: 'Login Failed', message: e.toString());
     }
   }
 }
