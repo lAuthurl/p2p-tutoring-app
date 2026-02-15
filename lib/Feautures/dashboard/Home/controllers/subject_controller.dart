@@ -20,6 +20,7 @@ class SubjectController extends GetxController {
   Future<bool> _canSync() async {
     try {
       final user = await Amplify.Auth.getCurrentUser();
+      // ignore: unnecessary_null_comparison
       return user != null;
     } catch (_) {
       print('⚠️ User not signed in, skipping DataStore fetch for subjects');
