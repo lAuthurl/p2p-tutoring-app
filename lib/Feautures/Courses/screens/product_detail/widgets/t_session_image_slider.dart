@@ -93,7 +93,7 @@ class TSessionImageSlider extends StatelessWidget {
                             );
                           },
                           errorBuilder:
-                              (_, __, ___) => Image.asset(
+                              (_, _, _) => Image.asset(
                                 TImages.tutorPromo1,
                                 fit: BoxFit.contain,
                               ),
@@ -154,7 +154,7 @@ class TSessionImageSlider extends StatelessWidget {
                   physics: const AlwaysScrollableScrollPhysics(),
                   itemCount: visibleImages.length,
                   separatorBuilder:
-                      (_, __) => const SizedBox(width: TSizes.spaceBtwItems),
+                      (_, _) => const SizedBox(width: TSizes.spaceBtwItems),
                   itemBuilder: (_, index) {
                     final imageSelected =
                         (selectedImage?.isNotEmpty ?? false)

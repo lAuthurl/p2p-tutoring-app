@@ -269,8 +269,9 @@ class TutoringController extends GetxController {
       sessions.where((s) => isFavourite(s.id)).toList();
 
   int? calculateSalePercentage(double originalPrice, double? salePrice) {
-    if (salePrice == null || salePrice >= originalPrice || originalPrice == 0)
+    if (salePrice == null || salePrice >= originalPrice || originalPrice == 0) {
       return null;
+    }
     final percent = ((originalPrice - salePrice) / originalPrice * 100).round();
     return percent > 0 ? percent : null;
   }
@@ -304,8 +305,9 @@ class TutoringController extends GetxController {
 
   List<String> getAllSessionImages(TutoringSession session) {
     final List<String> images = [];
-    if ((session.thumbnail?.isNotEmpty ?? false))
+    if ((session.thumbnail?.isNotEmpty ?? false)) {
       images.add(session.thumbnail!);
+    }
     if ((session.images?.isNotEmpty ?? false)) images.addAll(session.images!);
     return images;
   }

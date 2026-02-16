@@ -375,8 +375,9 @@ class AuthenticationRepository extends GetxController {
 
   Future<void> resendConfirmationCode(String username) async {
     final uname = username.trim();
-    if (uname.isEmpty)
+    if (uname.isEmpty) {
       throw 'Username is required to resend confirmation code.';
+    }
     try {
       await sendEmailVerification();
     } on AmplifyException catch (e) {
@@ -445,8 +446,9 @@ class AuthenticationRepository extends GetxController {
     } catch (_) {}
     try {
       await deviceStorage.erase();
-      if (wasFirstTime != null)
+      if (wasFirstTime != null) {
         await deviceStorage.write('isFirstTime', wasFirstTime);
+      }
     } catch (_) {}
     try {
       await GetStorage().erase();

@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import '../../../../models/ModelProvider.dart';

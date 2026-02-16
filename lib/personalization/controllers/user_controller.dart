@@ -77,11 +77,12 @@ class UserController extends GetxController {
       );
 
       if (users.isEmpty) {
-        if (showErrorSnackBar)
+        if (showErrorSnackBar) {
           TLoaders.warningSnackBar(
             title: 'Warning',
             message: 'User record not found.',
           );
+        }
         currentUser.value = null;
         return;
       }
@@ -90,11 +91,12 @@ class UserController extends GetxController {
       profileImageUrl.value = currentUser.value?.profilePicture ?? '';
       assignDataToProfile();
     } catch (e) {
-      if (showErrorSnackBar)
+      if (showErrorSnackBar) {
         TLoaders.warningSnackBar(
           title: 'Warning',
           message: 'Unable to fetch your information.',
         );
+      }
       if (kDebugMode) print('fetchUserRecord failed: $e');
     } finally {
       profileLoading.value = false;
