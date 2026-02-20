@@ -1,11 +1,15 @@
+import 'dart:async';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import 'package:amplify_api/amplify_api.dart';
 import 'package:amplify_datastore/amplify_datastore.dart';
-
+import 'package:p2p_tutoring_app/data_store%20_manager.dart';
 import 'amplifyconfiguration.dart';
 import 'models/ModelProvider.dart';
 
+/// -------------------------------
+/// AmplifyInitializer: Configure Amplify
+/// -------------------------------
 class AmplifyInitializer {
   static bool _configured = false;
 
@@ -17,20 +21,21 @@ class AmplifyInitializer {
     }
 
     try {
-      // Add plugins in correct order: Auth → API → DataStore
+      // Add plugins in correct order
       await Amplify.addPlugins([
         AmplifyAuthCognito(),
-        AmplifyAPI(), // for GraphQL/REST
+        AmplifyAPI(),
         AmplifyDataStore(modelProvider: ModelProvider.instance),
       ]);
 
-      // Single configure call
       await Amplify.configure(amplifyconfig);
-
       _configured = true;
       safePrint('🟢 Amplify fully configured');
 
-      // Optional: start DataStore safely if user is signed in
+      // Initialize DataStore hub listener
+      DataStoreManager().init();
+
+      // Start DataStore if signed in
       await _startDataStoreIfSignedIn();
     } on AmplifyAlreadyConfiguredException {
       _configured = true;
@@ -54,6 +59,17 @@ class AmplifyInitializer {
       }
     } catch (e) {
       safePrint('⚠️ Failed to start DataStore: $e');
+    }
+  }
+
+  /// Logout helper
+  static Future<void> logout() async {
+    try {
+      await Amplify.Auth.signOut();
+      await DataStoreManager().clear(); // clear local DataStore
+      safePrint('✅ User logged out and DataStore cleared');
+    } catch (e) {
+      safePrint('❌ Logout failed: $e');
     }
   }
 }

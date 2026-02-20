@@ -1,16 +1,20 @@
 import 'dart:async';
-
 import 'package:get/get.dart';
-
-import '../../../common/widgets/success_screen/success_screen.dart';
 import '../../../data/repository/authentication_repository/authentication_repository.dart';
-import '../../../utils/constants/image_strings.dart';
-import '../../../utils/constants/text_strings.dart';
+import '../../../authentication/controllers/login_controller.dart';
 import '../../../routes/routes.dart';
-import '../../../utils/popups/loaders.dart';
 
 class VerifyEmailController extends GetxController {
   static VerifyEmailController get instance => Get.find();
+
+  Timer? _autoRedirectTimer;
+  bool _initiallyVerified = false;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _startVerificationFlow();
+  }
 
   @override
   void onClose() {
@@ -18,50 +22,36 @@ class VerifyEmailController extends GetxController {
     super.onClose();
   }
 
-  @override
-  void onInit() {
-    /// Send Email Whenever Verify Screen appears & Set Timer for auto redirect.
-    // Capture the initial verified state so we only redirect when verification
-    // transitions from false -> true (prevents immediate redirect on load).
-    _captureInitialVerificationStateAndStart();
-
-    super.onInit();
-  }
-
-  bool _initiallyVerified = false;
-  Timer? _autoRedirectTimer;
-
-  Future<void> _captureInitialVerificationStateAndStart() async {
+  /// Start the auto-verification and login flow
+  Future<void> _startVerificationFlow() async {
     try {
-      final current =
+      // Get initial verification status
+      final user =
           await AuthenticationRepository.instance
               .refreshCurrentUserNoRedirect();
-      _initiallyVerified = current?.emailVerified ?? false;
+      _initiallyVerified = user?.emailVerified ?? false;
     } catch (_) {
       _initiallyVerified = false;
     }
-    await sendEmailVerification();
-    setTimerForAutoRedirect();
+
+    // Send verification email if needed
+    await _sendEmailVerification();
+
+    // Start periodic verification checks
+    _startAutoRedirectTimer();
   }
 
-  /// Send Email Verification link
-  Future<void> sendEmailVerification() async {
+  Future<void> _sendEmailVerification() async {
     try {
       await AuthenticationRepository.instance.sendEmailVerification();
-      TLoaders.successSnackBar(
-        title: 'Email Sent',
-        message: 'Please Check your inbox and verify your email.',
-      );
     } catch (e) {
-      TLoaders.errorSnackBar(title: 'Oh Snap!', message: e.toString());
+      print("Send Email Verification Failed: $e");
     }
   }
 
-  /// Timer to automatically redirect on Email Verification
-  void setTimerForAutoRedirect() {
-    // Check every 2 seconds for up to 2 minutes.
-    const checkInterval = Duration(seconds: 2);
-    const maxChecks = 60; // ~2 minutes
+  void _startAutoRedirectTimer() {
+    const checkInterval = Duration(seconds: 3);
+    const maxChecks = 40; // ~2 minutes
     int checks = 0;
 
     _autoRedirectTimer = Timer.periodic(checkInterval, (timer) async {
@@ -71,104 +61,80 @@ class VerifyEmailController extends GetxController {
             await AuthenticationRepository.instance
                 .refreshCurrentUserNoRedirect();
         final nowVerified = user?.emailVerified ?? false;
-        // Only redirect when verification transitioned from false -> true.
+
         if (nowVerified && !_initiallyVerified) {
           timer.cancel();
-          Get.off(
-            () => SuccessScreen(
-              image: TImages.successfullyRegisterAnimation,
-              title: TTexts.yourAccountCreatedTitle,
-              subTitle: TTexts.yourAccountCreatedSubTitle,
-              onPressed: () => Get.offAllNamed(TRoutes.profileScreen),
-            ),
-          );
+          await _autoLoginAfterVerification();
         }
       } catch (_) {}
 
-      if (checks >= maxChecks) {
-        timer.cancel();
-      }
+      if (checks >= maxChecks) timer.cancel();
     });
   }
 
-  /// Manually Check if Email Verified
+  /// Manually check email verification (e.g., on "Refresh" button)
   Future<void> checkEmailVerificationStatus() async {
-    await AuthenticationRepository.instance.refreshCurrentUserNoRedirect();
-    final currentUser = AuthenticationRepository.instance.firebaseUser;
-    if (currentUser != null && currentUser.emailVerified) {
-      Get.off(
-        () => SuccessScreen(
-          image: TImages.successfullyRegisterAnimation,
-          title: TTexts.yourAccountCreatedTitle,
-          subTitle: TTexts.yourAccountCreatedSubTitle,
-          onPressed: () => Get.offAllNamed(TRoutes.profileScreen),
-        ),
-      );
+    final user =
+        await AuthenticationRepository.instance.refreshCurrentUserNoRedirect();
+    if (user != null && user.emailVerified) {
+      await _autoLoginAfterVerification();
     }
   }
 
-  /// Confirm an email verification code (from Cognito sign up)
+  /// Confirm verification code from Cognito
   Future<void> confirmCode(String username, String code) async {
     final uname = username.trim();
     final confirmationCode = code.trim();
-    if (uname.isEmpty) {
-      TLoaders.errorSnackBar(
-        title: 'Verification Failed',
-        message: 'No username/email provided.',
-      );
-      return;
-    }
-    if (confirmationCode.isEmpty) {
-      TLoaders.errorSnackBar(
-        title: 'Verification Failed',
-        message: 'Please enter the confirmation code.',
-      );
-      return;
-    }
+    if (uname.isEmpty || confirmationCode.isEmpty) return;
 
     try {
       await AuthenticationRepository.instance.confirmSignUp(
         uname,
         confirmationCode,
       );
-      // Navigate to the success screen only after confirmation succeeds.
-      Get.off(
-        () => SuccessScreen(
-          image: TImages.successfullyRegisterAnimation,
-          title: TTexts.yourAccountCreatedTitle,
-          subTitle: TTexts.yourAccountCreatedSubTitle,
-          onPressed: () => Get.offAllNamed(TRoutes.profileScreen),
-        ),
-      );
-      // also refresh verification status in background
-      await checkEmailVerificationStatus();
+      await _autoLoginAfterVerification();
     } catch (e) {
-      TLoaders.errorSnackBar(
-        title: 'Verification Failed',
-        message: e.toString(),
-      );
+      print("Confirmation Failed: $e");
     }
   }
 
-  /// Resend confirmation code (Cognito)
+  /// Resend verification code
   Future<void> resendCode(String username) async {
     try {
       await AuthenticationRepository.instance.resendConfirmationCode(username);
-      TLoaders.successSnackBar(
-        title: 'Email Sent',
-        message: 'Verification code resent. Please check your inbox.',
-      );
     } catch (e) {
-      TLoaders.errorSnackBar(title: 'Resend Failed', message: e.toString());
+      print("Resend Code Failed: $e");
     }
   }
 
-  /// Clear local users/storage
-  Future<void> clearLocalUsers() async {
+  /// Auto-login using remembered credentials
+  Future<void> _autoLoginAfterVerification() async {
     try {
-      await AuthenticationRepository.instance.clearExistingUsers();
+      final loginController = Get.find<LoginController>();
+
+      final remember = loginController.rememberMe.value;
+      final email = loginController.email.text.trim();
+      final password = loginController.password.text;
+
+      if (remember && email.isNotEmpty && password.isNotEmpty) {
+        // Perform login
+        await AuthenticationRepository.instance.loginWithEmailAndPassword(
+          email,
+          password,
+        );
+        Get.offAllNamed(TRoutes.home);
+      } else {
+        // Fallback to login screen
+        Get.offAllNamed(TRoutes.logIn);
+      }
     } catch (e) {
-      TLoaders.errorSnackBar(title: 'Error', message: e.toString());
+      print("Auto-login Failed: $e");
+      Get.offAllNamed(TRoutes.logIn);
     }
+  }
+
+  /// Skip button action (immediate login)
+  Future<void> skip() async {
+    await _autoLoginAfterVerification();
   }
 }

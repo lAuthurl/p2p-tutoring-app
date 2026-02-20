@@ -249,6 +249,7 @@ class TutoringController extends GetxController {
       serviceImage: serviceImage,
       tutorName: session.tutor?.name ?? '',
       tutorImage: session.tutor?.image ?? '',
+      session: session,
     );
 
     Get.back();

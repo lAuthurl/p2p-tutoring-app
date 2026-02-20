@@ -1,8 +1,3 @@
-/* -- App Text Strings -- */
-
-import 'package:get/get.dart';
-import '../../../personalization/controllers/user_controller.dart';
-
 /// This class contains all the App Text in String formats.
 class TTexts {
   // -- GLOBAL Texts
@@ -29,11 +24,7 @@ class TTexts {
   static const String appName = "P2P Tutoring App";
 
   /// Home AppBar title dynamically includes current user's name
-  static String get homeAppbarTitle {
-    final userController = Get.find<UserController>();
-    final userName = userController.currentUser.value?.username ?? "User";
-    return "Welcome, $userName";
-  }
+  static const String homeAppbarTitle = "Dashboard – Let's Get Started!";
 
   static const String homeAppbarSubTitle =
       "Learn. Collaborate. Succeed."; // Subtext to relate all UI

@@ -16,7 +16,7 @@ class App extends StatelessWidget {
       initialBinding: GeneralBindings(),
       initialRoute: TRoutes.splash,
       // Respect the system theme preference (allow light mode)
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.dark,
       theme: TAppTheme.lightTheme,
       darkTheme: TAppTheme.darkTheme,
       debugShowCheckedModeBanner: false,

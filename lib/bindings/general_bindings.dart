@@ -1,4 +1,7 @@
 import 'package:get/get.dart';
+import 'package:p2p_tutoring_app/Feautures/Booking/controllers/booking_controller.dart';
+import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/home_controller.dart';
+import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/subject_controller.dart';
 import 'package:p2p_tutoring_app/personalization/controllers/theme_controller.dart';
 
 import '../utils/helpers/network_manager.dart';
@@ -49,11 +52,23 @@ class GeneralBindings extends Bindings {
     Get.put(OnBoardingController(), permanent: true);
 
     // ================= AUTH FLOW =================
-    Get.lazyPut(() => LoginController());
-    Get.lazyPut(() => SignUpController());
-    Get.lazyPut(() => OTPController());
-    Get.lazyPut(() => VerifyEmailController());
-    Get.lazyPut(() => MailVerificationController());
+    // Lazy loading ensures controller is only created when needed
+    Get.lazyPut(
+      () => LoginController(),
+      fenix: true,
+    ); // <--- make it persistent
+    Get.lazyPut(() => SignUpController(), fenix: true);
+    Get.lazyPut(() => OTPController(), fenix: true);
+    Get.lazyPut(() => VerifyEmailController(), fenix: true);
+    Get.lazyPut(() => MailVerificationController(), fenix: true);
+    Get.lazyPut<HomeController>(() => HomeController());
+    Get.lazyPut<SubjectController>(() => SubjectController());
+    Get.lazyPut<BookingController>(() => BookingController());
+
+    // These require signed-in user + datastore started
+    Get.put(SubjectController(), permanent: true);
+    Get.put(HomeController(), permanent: true);
+    Get.put(BookingController(), permanent: true);
 
     // ================= ANIMATION CONTROLLER =================
     // Ensure FadeInAnimationController is available

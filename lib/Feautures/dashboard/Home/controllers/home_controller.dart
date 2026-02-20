@@ -3,26 +3,21 @@
 import 'dart:math';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
-import '../../../../models/ModelProvider.dart';
-import '../../../../personalization/controllers/user_controller.dart';
+import '../../../../../models/ModelProvider.dart';
+import '../../../../../personalization/controllers/user_controller.dart';
 import '../../../Booking/controllers/booking_controller.dart';
-import 'subject_controller.dart';
+import '../controllers/subject_controller.dart';
 
 class HomeController extends GetxController {
-  // ---------------- Singleton ----------------
   static HomeController get instance => Get.find<HomeController>();
 
-  // ---------------- Controllers ----------------
-  final UserController userController = Get.find<UserController>();
-  final SubjectController subjectController = Get.find<SubjectController>();
+  // ---------------- Dependencies ----------------
+  late final UserController userController;
+  late final SubjectController subjectController;
 
   // ---------------- State ----------------
-  final isReady = false.obs;
-  final isLoading = false.obs;
-
-  // ---------------- Carousel ----------------
-  final carouselCurrentIndex = 0.obs;
-  void updatePageIndicator(int index) => carouselCurrentIndex.value = index;
+  final RxBool isReady = false.obs;
+  final RxBool isLoading = false.obs;
 
   // ---------------- Sessions ----------------
   final RxList<TutoringSession> featuredSessions = <TutoringSession>[].obs;
@@ -31,128 +26,132 @@ class HomeController extends GetxController {
 
   // ---------------- Lifecycle ----------------
   @override
+  void onInit() {
+    super.onInit();
+
+    userController = Get.find<UserController>();
+    subjectController = Get.find<SubjectController>();
+
+    ever<User?>(userController.currentUser, (user) {
+      if (user != null) {
+        _startAppFlow();
+      } else {
+        _resetState();
+      }
+    });
+  }
+
+  @override
   void onReady() {
     super.onReady();
 
-    // React to login/logout
-    ever<User?>(userController.currentUser, (user) async {
-      if (user != null) {
-        await _startAfterLogin();
-      } else {
-        _clearData();
-      }
-    });
-
-    // Trigger startup if already logged in
     if (userController.currentUser.value != null) {
-      _startAfterLogin();
+      _startAppFlow();
     }
   }
 
-  // ---------------- After Login ----------------
-  Future<void> _startAfterLogin() async {
-    if (isReady.value || isLoading.value) return;
+  // ---------------- Main Startup Flow ----------------
+  Future<void> _startAppFlow() async {
+    if (isLoading.value || isReady.value) return;
 
     isLoading.value = true;
+    isReady.value = false;
 
     try {
-      // Ensure user is signed in
       final session = await Amplify.Auth.fetchAuthSession();
+
       if (!session.isSignedIn) {
-        isReady.value = true;
+        print("⚠️ Not signed in. Startup halted.");
         return;
       }
 
-      // Make sure BookingController is registered
-      if (!Get.isRegistered<BookingController>()) {
-        Get.put(BookingController(), permanent: true);
-      }
+      final user = userController.currentUser.value!;
+      await _ensureUserExists(user);
 
-      // ---------------- Safe user creation ----------------
-      final currentUser = userController.currentUser.value!;
-      final existingUsers = await Amplify.DataStore.query(
-        User.classType,
-        where: User.ID.eq(currentUser.id),
-      );
+      _ensureBookingController();
 
-      if (existingUsers.isEmpty) {
-        await Amplify.DataStore.save(currentUser);
-        print('✅ New user created in DataStore');
-      } else {
-        print('✅ User already exists, skipping creation');
-      }
+      // ✅ Updated: use fetchSubjects()
+      await subjectController.fetchSubjects();
 
-      // Fetch subjects and sessions
-      await fetchSubjects();
-      await fetchSessions();
+      await _loadSessions();
 
-      print("🏠 HomeController ready for user ${currentUser.username}");
-    } catch (e) {
-      print('❌ Error in HomeController startup: $e');
-    } finally {
+      print("🏠 HomeController fully ready for ${user.username}");
       isReady.value = true;
+    } catch (e) {
+      print('❌ Startup error: $e');
+    } finally {
       isLoading.value = false;
     }
   }
 
+  // ---------------- Ensure User Exists ----------------
+  Future<void> _ensureUserExists(User user) async {
+    final existing = await Amplify.DataStore.query(
+      User.classType,
+      where: User.ID.eq(user.id),
+    );
+
+    if (existing.isEmpty) {
+      await Amplify.DataStore.save(user);
+      print('✅ User created in DataStore');
+    } else {
+      print('✅ User already exists');
+    }
+  }
+
+  // ---------------- BookingController ----------------
+  void _ensureBookingController() {
+    if (!Get.isRegistered<BookingController>()) {
+      Get.put(BookingController(), permanent: true);
+    }
+  }
+
+  // ---------------- Load Sessions ----------------
+  Future<void> _loadSessions() async {
+    final sessions = await Amplify.DataStore.query(TutoringSession.classType);
+
+    if (sessions.isEmpty) {
+      featuredSessions.clear();
+      popularSessions.clear();
+      recentSessions.clear();
+      return;
+    }
+
+    featuredSessions.assignAll(sessions.where((s) => s.isFeatured ?? false));
+
+    final start = max(0, sessions.length - 4);
+
+    popularSessions.assignAll(sessions.sublist(start));
+
+    recentSessions.assignAll(sessions.sublist(start).reversed.toList());
+
+    print(
+      '🔹 Sessions loaded: total=${sessions.length}, '
+      'featured=${featuredSessions.length}, '
+      'popular=${popularSessions.length}, '
+      'recent=${recentSessions.length}',
+    );
+  }
+
   // ---------------- Clear on Logout ----------------
-  void _clearData() {
+  void _resetState() {
     featuredSessions.clear();
     popularSessions.clear();
     recentSessions.clear();
+
+    subjectController.subjects.clear();
+
     isReady.value = false;
   }
 
-  // ---------------- Featured Subjects ----------------
-  List<Subject> getFeaturedSubjects({int limit = 8}) {
-    final subjects =
-        subjectController.subjects.where((s) => s.isFeatured ?? false).toList();
-    return subjects.length <= limit ? subjects : subjects.sublist(0, limit);
-  }
-
-  // ---------------- Get Sessions ----------------
-  List<TutoringSession> getFeaturedSessions() => featuredSessions.toList();
-
+  // ---------------- Public Getters ----------------
   List<TutoringSession> getAllSessions() {
     final all = [...featuredSessions, ...popularSessions, ...recentSessions];
-    final unique = {for (var s in all) s.id: s}.values.toList();
-    return unique;
+
+    return {for (var s in all) s.id: s}.values.toList();
   }
 
-  // ---------------- Fetch Subjects ----------------
-  Future<void> fetchSubjects() async {
-    try {
-      final subjects = await Amplify.DataStore.query(Subject.classType);
-      subjectController.subjects.assignAll(subjects);
-      print('✅ Subjects loaded: ${subjects.length}');
-    } catch (e) {
-      print('❌ Error fetching subjects: $e');
-    }
-  }
-
-  // ---------------- Fetch Sessions ----------------
-  Future<void> fetchSessions() async {
-    try {
-      final sessions = await Amplify.DataStore.query(TutoringSession.classType);
-      if (sessions.isEmpty) return;
-
-      // Featured sessions
-      final featured = sessions.where((s) => s.isFeatured ?? false).toList();
-      featuredSessions.assignAll(featured);
-
-      // Popular sessions: last 4 sessions
-      final startPopular = max(0, sessions.length - 4);
-      popularSessions.assignAll(sessions.sublist(startPopular));
-
-      // Recent sessions: last 4 sessions reversed
-      final startRecent = max(0, sessions.length - 4);
-      recentSessions.assignAll(sessions.sublist(startRecent).reversed.toList());
-
-      print(
-        '🔹 Sessions loaded: total=${sessions.length}, featured=${featuredSessions.length}, popular=${popularSessions.length}, recent=${recentSessions.length}',
-      );
-    } catch (e) {
-      print('❌ Error fetching sessions: $e');
-    }
+  List<Subject> getFeaturedSubjects({int limit = 10}) {
+    return subjectController.getFeaturedSubjects(limit: limit);
   }
 }

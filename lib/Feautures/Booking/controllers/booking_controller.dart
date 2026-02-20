@@ -120,6 +120,7 @@ class BookingController extends GetxController {
 
   // ---------------- Create Booking ----------------
   Future<Booking?> createBooking({
+    required TutoringSession session,
     List<BookingItem>? items,
     double? totalPrice,
     String status = 'pending',
@@ -133,6 +134,7 @@ class BookingController extends GetxController {
         totalPrice: totalPrice,
         status: status,
         createdAt: TemporalDateTime.now(),
+        sessionId: session.id,
       );
 
       await Amplify.DataStore.save(booking);
@@ -197,6 +199,7 @@ class BookingController extends GetxController {
 
   // ---------------- Add Booking Item Helper ----------------
   Future<void> addBookingItem({
+    required TutoringSession session,
     String? sessionId,
     String? tutorId,
     DateTime? bookingDate,
@@ -215,7 +218,7 @@ class BookingController extends GetxController {
     if (bookings.isNotEmpty) {
       booking = bookings.first;
     } else {
-      final created = await createBooking();
+      final created = await createBooking(session: session);
       if (created == null) return;
       booking = created;
     }

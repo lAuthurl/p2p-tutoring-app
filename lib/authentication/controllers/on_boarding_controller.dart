@@ -11,15 +11,15 @@ import '../../screens/welcome/welcome_screen.dart';
 import '../../../Feautures/dashboard/Home/screens/home/home.dart';
 
 class OnBoardingController extends GetxController {
-  //Variables
+  // Variables
   final userStorage = GetStorage(); // Use for local Storage
   final controller = LiquidController();
   RxInt currentPage = 0.obs;
 
-  // track whether the user is currently interacting with the swiper
+  // Track whether the user is currently interacting with the swiper
   final RxBool isUserInteracting = false.obs;
 
-  //Functions to trigger Skip, Next and onPageChange Events
+  // Functions to trigger Skip, Next and onPageChange Events
   dynamic skip() => controller.jumpToPage(page: 2);
 
   dynamic animateToNextSlide() =>
@@ -44,10 +44,17 @@ class OnBoardingController extends GetxController {
     }
   }
 
+  /// Animate directly to the last slide
+  void animateToLastSlide() {
+    final lastPage = pages.length - 1;
+    controller.animateToPage(page: lastPage);
+    currentPage.value = lastPage;
+  }
+
   int onPageChangedCallback(int activePageIndex) =>
       currentPage.value = activePageIndex;
 
-  //Three Onboarding Pages
+  // Three Onboarding Pages
   final pages = [
     OnBoardingPageWidget(
       model: OnBoardingModel(

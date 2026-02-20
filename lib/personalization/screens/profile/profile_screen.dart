@@ -6,6 +6,7 @@ import 'package:line_awesome_flutter/line_awesome_flutter.dart';
 
 import '../../../../../common/widgets/images/t_rounded_image.dart';
 import '../../../../../common/widgets/buttons/primary_button.dart';
+import '../../../Feautures/dashboard/Home/controllers/subject_controller.dart';
 import '../../../common/widgets/shimmers/shimmer.dart';
 import '../../../../../data/repository/authentication_repository/authentication_repository.dart';
 import '../../../../../utils/constants/colors.dart';
@@ -26,6 +27,10 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeController = ThemeController.instance;
     final userController = UserController.instance;
+
+    if (!Get.isRegistered<SubjectController>()) {
+      Get.lazyPut(() => SubjectController());
+    }
 
     return Scaffold(
       appBar: AppBar(

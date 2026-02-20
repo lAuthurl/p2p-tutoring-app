@@ -23,11 +23,13 @@ import 'ModelProvider.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 import 'package:collection/collection.dart';
 
+
 /** This is an auto generated class representing the Subject type in your schema. */
 class Subject extends amplify_core.Model {
   static const classType = const _SubjectModelType();
   final String id;
   final String? _name;
+  final String? _description;
   final String? _icon;
   final String? _thumbnail;
   final bool? _isFeatured;
@@ -37,359 +39,274 @@ class Subject extends amplify_core.Model {
 
   @override
   getInstanceType() => classType;
-
-  @Deprecated(
-    '[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.',
-  )
+  
+  @Deprecated('[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.')
   @override
   String getId() => id;
-
+  
   SubjectModelIdentifier get modelIdentifier {
-    return SubjectModelIdentifier(id: id);
+      return SubjectModelIdentifier(
+        id: id
+      );
   }
-
+  
   String get name {
     try {
       return _name!;
-    } catch (e) {
+    } catch(e) {
       throw amplify_core.AmplifyCodeGenModelException(
-        amplify_core
-            .AmplifyExceptionMessages
-            .codeGenRequiredFieldForceCastExceptionMessage,
-        recoverySuggestion:
-            amplify_core
-                .AmplifyExceptionMessages
-                .codeGenRequiredFieldForceCastRecoverySuggestion,
-        underlyingException: e.toString(),
-      );
+          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
+          recoverySuggestion:
+            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
+          underlyingException: e.toString()
+          );
     }
   }
-
+  
+  String? get description {
+    return _description;
+  }
+  
   String? get icon {
     return _icon;
   }
-
+  
   String? get thumbnail {
     return _thumbnail;
   }
-
+  
   bool? get isFeatured {
     return _isFeatured;
   }
-
+  
   List<TutoringSession>? get tutoringSessions {
     return _tutoringSessions;
   }
-
+  
   amplify_core.TemporalDateTime? get createdAt {
     return _createdAt;
   }
-
+  
   amplify_core.TemporalDateTime? get updatedAt {
     return _updatedAt;
   }
-
-  const Subject._internal({
-    required this.id,
-    required name,
-    icon,
-    thumbnail,
-    isFeatured,
-    tutoringSessions,
-    createdAt,
-    updatedAt,
-  }) : _name = name,
-       _icon = icon,
-       _thumbnail = thumbnail,
-       _isFeatured = isFeatured,
-       _tutoringSessions = tutoringSessions,
-       _createdAt = createdAt,
-       _updatedAt = updatedAt;
-
-  factory Subject({
-    String? id,
-    required String name,
-    String? icon,
-    String? thumbnail,
-    bool? isFeatured,
-    List<TutoringSession>? tutoringSessions,
-  }) {
+  
+  const Subject._internal({required this.id, required name, description, icon, thumbnail, isFeatured, tutoringSessions, createdAt, updatedAt}): _name = name, _description = description, _icon = icon, _thumbnail = thumbnail, _isFeatured = isFeatured, _tutoringSessions = tutoringSessions, _createdAt = createdAt, _updatedAt = updatedAt;
+  
+  factory Subject({String? id, required String name, String? description, String? icon, String? thumbnail, bool? isFeatured, List<TutoringSession>? tutoringSessions}) {
     return Subject._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       name: name,
+      description: description,
       icon: icon,
       thumbnail: thumbnail,
       isFeatured: isFeatured,
-      tutoringSessions:
-          tutoringSessions != null
-              ? List<TutoringSession>.unmodifiable(tutoringSessions)
-              : tutoringSessions,
-    );
+      tutoringSessions: tutoringSessions != null ? List<TutoringSession>.unmodifiable(tutoringSessions) : tutoringSessions);
   }
-
+  
   bool equals(Object other) {
     return this == other;
   }
-
+  
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
     return other is Subject &&
-        id == other.id &&
-        _name == other._name &&
-        _icon == other._icon &&
-        _thumbnail == other._thumbnail &&
-        _isFeatured == other._isFeatured &&
-        DeepCollectionEquality().equals(
-          _tutoringSessions,
-          other._tutoringSessions,
-        );
+      id == other.id &&
+      _name == other._name &&
+      _description == other._description &&
+      _icon == other._icon &&
+      _thumbnail == other._thumbnail &&
+      _isFeatured == other._isFeatured &&
+      DeepCollectionEquality().equals(_tutoringSessions, other._tutoringSessions);
   }
-
+  
   @override
   int get hashCode => toString().hashCode;
-
+  
   @override
   String toString() {
     var buffer = new StringBuffer();
-
+    
     buffer.write("Subject {");
     buffer.write("id=" + "$id" + ", ");
     buffer.write("name=" + "$_name" + ", ");
+    buffer.write("description=" + "$_description" + ", ");
     buffer.write("icon=" + "$_icon" + ", ");
     buffer.write("thumbnail=" + "$_thumbnail" + ", ");
-    buffer.write(
-      "isFeatured=" +
-          (_isFeatured != null ? _isFeatured.toString() : "null") +
-          ", ",
-    );
-    buffer.write(
-      "createdAt=" + (_createdAt != null ? _createdAt.format() : "null") + ", ",
-    );
-    buffer.write(
-      "updatedAt=" + (_updatedAt != null ? _updatedAt.format() : "null"),
-    );
+    buffer.write("isFeatured=" + (_isFeatured != null ? _isFeatured!.toString() : "null") + ", ");
+    buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
+    buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
     buffer.write("}");
-
+    
     return buffer.toString();
   }
-
-  Subject copyWith({
-    String? name,
-    String? icon,
-    String? thumbnail,
-    bool? isFeatured,
-    List<TutoringSession>? tutoringSessions,
-  }) {
+  
+  Subject copyWith({String? name, String? description, String? icon, String? thumbnail, bool? isFeatured, List<TutoringSession>? tutoringSessions}) {
     return Subject._internal(
       id: id,
       name: name ?? this.name,
+      description: description ?? this.description,
       icon: icon ?? this.icon,
       thumbnail: thumbnail ?? this.thumbnail,
       isFeatured: isFeatured ?? this.isFeatured,
-      tutoringSessions: tutoringSessions ?? this.tutoringSessions,
-    );
+      tutoringSessions: tutoringSessions ?? this.tutoringSessions);
   }
-
+  
   Subject copyWithModelFieldValues({
     ModelFieldValue<String>? name,
+    ModelFieldValue<String?>? description,
     ModelFieldValue<String?>? icon,
     ModelFieldValue<String?>? thumbnail,
     ModelFieldValue<bool?>? isFeatured,
-    ModelFieldValue<List<TutoringSession>?>? tutoringSessions,
+    ModelFieldValue<List<TutoringSession>?>? tutoringSessions
   }) {
     return Subject._internal(
       id: id,
       name: name == null ? this.name : name.value,
+      description: description == null ? this.description : description.value,
       icon: icon == null ? this.icon : icon.value,
       thumbnail: thumbnail == null ? this.thumbnail : thumbnail.value,
       isFeatured: isFeatured == null ? this.isFeatured : isFeatured.value,
-      tutoringSessions:
-          tutoringSessions == null
-              ? this.tutoringSessions
-              : tutoringSessions.value,
+      tutoringSessions: tutoringSessions == null ? this.tutoringSessions : tutoringSessions.value
     );
   }
-
-  Subject.fromJson(Map<String, dynamic> json)
+  
+  Subject.fromJson(Map<String, dynamic> json)  
     : id = json['id'],
       _name = json['name'],
+      _description = json['description'],
       _icon = json['icon'],
       _thumbnail = json['thumbnail'],
       _isFeatured = json['isFeatured'],
-      _tutoringSessions =
-          json['tutoringSessions'] is Map
-              ? (json['tutoringSessions']['items'] is List
-                  ? (json['tutoringSessions']['items'] as List)
-                      .where((e) => e != null)
-                      .map(
-                        (e) => TutoringSession.fromJson(
-                          new Map<String, dynamic>.from(e),
-                        ),
-                      )
-                      .toList()
-                  : null)
-              : (json['tutoringSessions'] is List
-                  ? (json['tutoringSessions'] as List)
-                      .where((e) => e?['serializedData'] != null)
-                      .map(
-                        (e) => TutoringSession.fromJson(
-                          new Map<String, dynamic>.from(e?['serializedData']),
-                        ),
-                      )
-                      .toList()
-                  : null),
-      _createdAt =
-          json['createdAt'] != null
-              ? amplify_core.TemporalDateTime.fromString(json['createdAt'])
-              : null,
-      _updatedAt =
-          json['updatedAt'] != null
-              ? amplify_core.TemporalDateTime.fromString(json['updatedAt'])
-              : null;
-
+      _tutoringSessions = json['tutoringSessions']  is Map
+        ? (json['tutoringSessions']['items'] is List
+          ? (json['tutoringSessions']['items'] as List)
+              .where((e) => e != null)
+              .map((e) => TutoringSession.fromJson(new Map<String, dynamic>.from(e)))
+              .toList()
+          : null)
+        : (json['tutoringSessions'] is List
+          ? (json['tutoringSessions'] as List)
+              .where((e) => e?['serializedData'] != null)
+              .map((e) => TutoringSession.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
+              .toList()
+          : null),
+      _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
+      _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
+  
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': _name,
-    'icon': _icon,
-    'thumbnail': _thumbnail,
-    'isFeatured': _isFeatured,
-    'tutoringSessions':
-        _tutoringSessions?.map((TutoringSession? e) => e?.toJson()).toList(),
-    'createdAt': _createdAt?.format(),
-    'updatedAt': _updatedAt?.format(),
+    'id': id, 'name': _name, 'description': _description, 'icon': _icon, 'thumbnail': _thumbnail, 'isFeatured': _isFeatured, 'tutoringSessions': _tutoringSessions?.map((TutoringSession? e) => e?.toJson()).toList(), 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
-
+  
   Map<String, Object?> toMap() => {
     'id': id,
     'name': _name,
+    'description': _description,
     'icon': _icon,
     'thumbnail': _thumbnail,
     'isFeatured': _isFeatured,
     'tutoringSessions': _tutoringSessions,
     'createdAt': _createdAt,
-    'updatedAt': _updatedAt,
+    'updatedAt': _updatedAt
   };
 
-  static final amplify_core.QueryModelIdentifier<SubjectModelIdentifier>
-  MODEL_IDENTIFIER =
-      amplify_core.QueryModelIdentifier<SubjectModelIdentifier>();
+  static final amplify_core.QueryModelIdentifier<SubjectModelIdentifier> MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<SubjectModelIdentifier>();
   static final ID = amplify_core.QueryField(fieldName: "id");
   static final NAME = amplify_core.QueryField(fieldName: "name");
+  static final DESCRIPTION = amplify_core.QueryField(fieldName: "description");
   static final ICON = amplify_core.QueryField(fieldName: "icon");
   static final THUMBNAIL = amplify_core.QueryField(fieldName: "thumbnail");
   static final ISFEATURED = amplify_core.QueryField(fieldName: "isFeatured");
   static final TUTORINGSESSIONS = amplify_core.QueryField(
     fieldName: "tutoringSessions",
-    fieldType: amplify_core.ModelFieldType(
-      amplify_core.ModelFieldTypeEnum.model,
+    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'TutoringSession'));
+  static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
+    modelSchemaDefinition.name = "Subject";
+    modelSchemaDefinition.pluralName = "Subjects";
+    
+    modelSchemaDefinition.authRules = [
+      amplify_core.AuthRule(
+        authStrategy: amplify_core.AuthStrategy.OWNER,
+        ownerField: "owner",
+        identityClaim: "cognito:username",
+        provider: amplify_core.AuthRuleProvider.USERPOOLS,
+        operations: const [
+          amplify_core.ModelOperation.CREATE,
+          amplify_core.ModelOperation.READ,
+          amplify_core.ModelOperation.UPDATE,
+          amplify_core.ModelOperation.DELETE
+        ]),
+      amplify_core.AuthRule(
+        authStrategy: amplify_core.AuthStrategy.PUBLIC,
+        operations: const [
+          amplify_core.ModelOperation.READ
+        ])
+    ];
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: Subject.NAME,
+      isRequired: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: Subject.DESCRIPTION,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: Subject.ICON,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: Subject.THUMBNAIL,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: Subject.ISFEATURED,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
+      key: Subject.TUTORINGSESSIONS,
+      isRequired: false,
       ofModelName: 'TutoringSession',
-    ),
-  );
-  static var schema = amplify_core.Model.defineSchema(
-    define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
-      modelSchemaDefinition.name = "Subject";
-      modelSchemaDefinition.pluralName = "Subjects";
-
-      modelSchemaDefinition.authRules = [
-        amplify_core.AuthRule(
-          authStrategy: amplify_core.AuthStrategy.OWNER,
-          ownerField: "id",
-          identityClaim: "cognito:username",
-          provider: amplify_core.AuthRuleProvider.USERPOOLS,
-          operations: const [
-            amplify_core.ModelOperation.CREATE,
-            amplify_core.ModelOperation.READ,
-            amplify_core.ModelOperation.UPDATE,
-            amplify_core.ModelOperation.DELETE,
-          ],
-        ),
-      ];
-
-      modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: Subject.NAME,
-          isRequired: true,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: Subject.ICON,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: Subject.THUMBNAIL,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: Subject.ISFEATURED,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.bool,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.hasMany(
-          key: Subject.TUTORINGSESSIONS,
-          isRequired: false,
-          ofModelName: 'TutoringSession',
-          associatedKey: TutoringSession.SUBJECT,
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.nonQueryField(
-          fieldName: 'createdAt',
-          isRequired: false,
-          isReadOnly: true,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.dateTime,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.nonQueryField(
-          fieldName: 'updatedAt',
-          isRequired: false,
-          isReadOnly: true,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.dateTime,
-          ),
-        ),
-      );
-    },
-  );
+      associatedKey: TutoringSession.SUBJECT
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.nonQueryField(
+      fieldName: 'createdAt',
+      isRequired: false,
+      isReadOnly: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.nonQueryField(
+      fieldName: 'updatedAt',
+      isRequired: false,
+      isReadOnly: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
+    ));
+  });
 }
 
 class _SubjectModelType extends amplify_core.ModelType<Subject> {
   const _SubjectModelType();
-
+  
   @override
   Subject fromJson(Map<String, dynamic> jsonData) {
     return Subject.fromJson(jsonData);
   }
-
+  
   @override
   String modelName() {
     return 'Subject';
@@ -404,32 +321,37 @@ class SubjectModelIdentifier implements amplify_core.ModelIdentifier<Subject> {
   final String id;
 
   /** Create an instance of SubjectModelIdentifier using [id] the primary key. */
-  const SubjectModelIdentifier({required this.id});
-
+  const SubjectModelIdentifier({
+    required this.id});
+  
   @override
-  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{'id': id});
-
+  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{
+    'id': id
+  });
+  
   @override
-  List<Map<String, dynamic>> serializeAsList() =>
-      serializeAsMap().entries
-          .map((entry) => (<String, dynamic>{entry.key: entry.value}))
-          .toList();
-
+  List<Map<String, dynamic>> serializeAsList() => serializeAsMap()
+    .entries
+    .map((entry) => (<String, dynamic>{ entry.key: entry.value }))
+    .toList();
+  
   @override
   String serializeAsString() => serializeAsMap().values.join('#');
-
+  
   @override
   String toString() => 'SubjectModelIdentifier(id: $id)';
-
+  
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) {
       return true;
     }
-
-    return other is SubjectModelIdentifier && id == other.id;
+    
+    return other is SubjectModelIdentifier &&
+      id == other.id;
   }
-
+  
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode =>
+    id.hashCode;
 }

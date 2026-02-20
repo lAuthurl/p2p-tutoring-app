@@ -3,7 +3,8 @@
 # -------------------------------
 type User @model
   @auth(rules: [
-    { allow: owner, ownerField: "id", operations: [create, read, update, delete] }
+    { allow: owner, operations: [create, read, update, delete] },
+    { allow: public, operations: [read] }
   ])
 {
   id: ID!
@@ -14,11 +15,10 @@ type User @model
   deviceToken: String
   isEmailVerified: Boolean
   isProfileActive: Boolean
-  createdAt: AWSDateTime
-  updatedAt: AWSDateTime
   role: String
   verificationStatus: String
-
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
 
   # Relationships
   bookings: [Booking] @hasMany(fields: ["id"])
@@ -30,13 +30,14 @@ type User @model
 # -------------------------------
 type Tutor @model
   @auth(rules: [
-    { allow: owner, ownerField: "id", operations: [create, read, update, delete] }
+    { allow: owner, operations: [create, read, update, delete] },
+    { allow: public, operations: [read] }
   ])
 {
   id: ID!
   name: String!
   email: String!
-  image: String  # ✅ Needed for providerImage
+  image: String              # needed for providerImage
 
   # Relationships
   tutoringSessions: [TutoringSession] @hasMany(fields: ["id"])
@@ -47,17 +48,19 @@ type Tutor @model
 # -------------------------------
 type Subject @model
   @auth(rules: [
-    { allow: owner, ownerField: "id", operations: [create, read, update, delete] }
+    { allow: owner, operations: [create, read, update, delete] },
+    { allow: public, operations: [read] }
   ])
 {
   id: ID!
   name: String!
+  description: String
   icon: String
   thumbnail: String
   isFeatured: Boolean
 
-  # Relationships
-  tutoringSessions: [TutoringSession] @hasMany(fields: ["id"])
+  # Relationship with index on child
+  tutoringSessions: [TutoringSession] @hasMany(indexName: "bySubject", fields: ["id"])
 }
 
 # -------------------------------
@@ -65,27 +68,25 @@ type Subject @model
 # -------------------------------
 type TutoringSession @model
   @auth(rules: [
-    { allow: owner, ownerField: "tutorId", operations: [read, update, delete] },
+    { allow: owner, operations: [read, update, delete] }, # tutor owns session
     { allow: public, operations: [read] }
   ])
 {
   id: ID!
 
-  # Foreign keys
   tutorId: ID!
-  subjectId: ID!
+  subjectId: ID! @index(name: "bySubject")   # index for Subject → TutoringSession
 
   # Relationships
   tutor: Tutor @belongsTo(fields: ["tutorId"])
   subject: Subject @belongsTo(fields: ["subjectId"])
   sessionAttributes: [SessionAttribute] @hasMany(fields: ["id"])
   sessionVariations: [SessionVariation] @hasMany(fields: ["id"])
+  bookings: [Booking] @hasMany(indexName: "bySession", fields: ["id"])
 
   # Session details
   title: String!
   description: String
-
-  # Fields used in HomeController
   thumbnail: String
   images: [String]
   pricePerSession: Float
@@ -100,16 +101,24 @@ type TutoringSession @model
 # -------------------------------
 type Booking @model
   @auth(rules: [
-    { allow: owner, ownerField: "userId", operations: [create, read, update, delete] },
+    { allow: owner, operations: [create, read, update, delete] }, # student owns booking
     { allow: public, operations: [read] }
-  ] )
+  ])
 {
   id: ID!
-  userId: ID!
+
+  userId: ID! @index(name: "byUser")   # index for User → Booking
   user: User @belongsTo(fields: ["userId"])
+
+  sessionId: ID! @index(name: "bySession")   # index for TutoringSession → Booking
+  #   ^ required for the centralized TutoringSession.bookings
+
+  # BookingItems relationship
   bookingItems: [BookingItem] @hasMany(indexName: "byBooking", fields: ["id"])
+
   totalPrice: Float
   status: String
+
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
 }
@@ -119,20 +128,21 @@ type Booking @model
 # -------------------------------
 type BookingItem @model
   @auth(rules: [
-    { allow: owner, ownerField: "userId", operations: [create, read, update, delete] },
+    { allow: owner, operations: [create, read, update, delete] },
     { allow: public, operations: [read] }
   ])
 {
   id: ID!
 
-  userId: ID!
+  userId: ID! @index(name: "byUser")  # index for User → BookingItem
   user: User @belongsTo(fields: ["userId"])
 
-  bookingId: ID! @index(name: "byBooking", sortKeyFields: ["createdAt"])
+  bookingId: ID! @index(name: "byBooking", sortKeyFields: ["createdAt"])  # composite index
   booking: Booking @belongsTo(fields: ["bookingId"])
 
   sessionId: ID
   tutorId: ID
+
   bookingDate: AWSDateTime
   timeSlot: String
   price: Float
@@ -143,7 +153,7 @@ type BookingItem @model
   serviceTitle: String
   serviceImage: String
   providerName: String
-  providerImage: String  # ✅ Added for HomeController / BookingController usage
+  providerImage: String
 
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
@@ -154,33 +164,37 @@ type BookingItem @model
 # -------------------------------
 type SessionAttribute @model
   @auth(rules: [
-    { allow: owner, ownerField: "tutorId", operations: [create, update, delete, read] },
+    { allow: owner, operations: [create, read, update, delete] },
     { allow: public, operations: [read] }
   ])
 {
   id: ID!
-  tutorId: ID! # Add owner field
-  sessionId: ID!
+
+  tutorId: ID!
+  sessionId: ID! @index(name: "bySession")   # index for TutoringSession → SessionAttribute
   name: String!
   values: [String]
+
   session: TutoringSession @belongsTo(fields: ["sessionId"])
+
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
 }
-
 
 # -------------------------------
 # SessionVariation
 # -------------------------------
 type SessionVariation @model
   @auth(rules: [
-    { allow: owner, ownerField: "tutorId", operations: [create, update, delete, read] },
+    { allow: owner, operations: [create, read, update, delete] },
     { allow: public, operations: [read] }
   ])
 {
   id: ID!
-  tutorId: ID! # Add owner field
-  sessionId: ID!
+
+  tutorId: ID!
+  sessionId: ID! @index(name: "bySession")   # index for TutoringSession → SessionVariation
+
   availableSeats: Int
   pricePerSession: Float
   lectureTime: AWSDateTime
@@ -189,6 +203,7 @@ type SessionVariation @model
 
   sessionAttributes: [SessionAttribute] @hasMany(fields: ["id"])
   session: TutoringSession @belongsTo(fields: ["sessionId"])
+
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
 }
