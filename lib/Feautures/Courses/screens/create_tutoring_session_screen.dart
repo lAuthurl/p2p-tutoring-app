@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: public_member_api_docs, use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -20,38 +20,47 @@ class CreateTutoringSessionScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text("Create Tutoring Session")),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(TSizes.defaultSpace),
         child: Form(
           key: controller.formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // IMAGE PICKER
-              GetBuilder<SessionCreationController>(
-                builder:
-                    (_) => Column(
-                      children: [
-                        TRoundedImage(
-                          width: 100,
-                          height: 100,
-                          isNetworkImage: false,
-                          imageUrl: controller.selectedImage?.path ?? "",
-                          borderRadius: 50,
-                          fit: BoxFit.cover,
-                        ),
-                        TextButton.icon(
-                          onPressed: controller.pickImage,
-                          icon: const Icon(Icons.image),
-                          label: const Text("Upload Thumbnail"),
-                        ),
-                      ],
-                    ),
-              ),
+              // -----------------------------
+              // THUMBNAIL PREVIEW
+              // -----------------------------
+              Obx(() {
+                final thumbnailUrl = controller.selectedThumbnail;
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TRoundedImage(
+                        width: 100,
+                        height: 100,
+                        isNetworkImage: thumbnailUrl != null,
+                        imageUrl: thumbnailUrl ?? "",
+                        borderRadius: 50,
+                        fit: BoxFit.cover,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        thumbnailUrl != null
+                            ? "Thumbnail auto-selected"
+                            : "Select a subject to see thumbnail",
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                );
+              }),
 
               const SizedBox(height: TSizes.spaceBtwSections),
 
-              // TITLE
+              // -----------------------------
+              // SESSION TITLE
+              // -----------------------------
               TextFormField(
                 controller: controller.title,
                 decoration: InputDecoration(
@@ -63,7 +72,9 @@ class CreateTutoringSessionScreen extends StatelessWidget {
 
               const SizedBox(height: TSizes.spaceBtwInputFields),
 
+              // -----------------------------
               // DESCRIPTION
+              // -----------------------------
               TextFormField(
                 controller: controller.description,
                 maxLines: 3,
@@ -75,7 +86,9 @@ class CreateTutoringSessionScreen extends StatelessWidget {
 
               const SizedBox(height: TSizes.spaceBtwInputFields),
 
+              // -----------------------------
               // PRICE
+              // -----------------------------
               TextFormField(
                 controller: controller.price,
                 keyboardType: TextInputType.number,
@@ -87,7 +100,9 @@ class CreateTutoringSessionScreen extends StatelessWidget {
 
               const SizedBox(height: TSizes.spaceBtwInputFields),
 
+              // -----------------------------
               // SUBJECT DROPDOWN
+              // -----------------------------
               Obx(
                 () => DropdownButtonFormField<String>(
                   initialValue:
@@ -103,7 +118,9 @@ class CreateTutoringSessionScreen extends StatelessWidget {
                             ),
                           )
                           .toList(),
-                  onChanged: (v) => controller.subjectId.value = v ?? '',
+                  onChanged: (v) {
+                    controller.subjectId.value = v ?? '';
+                  },
                   decoration: InputDecoration(
                     label: const Text("Subject"),
                     prefixIcon: const Icon(Icons.category),
@@ -118,7 +135,9 @@ class CreateTutoringSessionScreen extends StatelessWidget {
 
               const SizedBox(height: TSizes.spaceBtwSections),
 
-              // SUBMIT BUTTON
+              // -----------------------------
+              // CREATE BUTTON
+              // -----------------------------
               Obx(
                 () => SizedBox(
                   width: double.infinity,

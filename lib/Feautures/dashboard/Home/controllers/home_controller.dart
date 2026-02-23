@@ -1,6 +1,4 @@
-// ignore_for_file: avoid_print
-
-import 'dart:math';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import '../../../../../models/ModelProvider.dart';
@@ -44,7 +42,6 @@ class HomeController extends GetxController {
   @override
   void onReady() {
     super.onReady();
-
     if (userController.currentUser.value != null) {
       _startAppFlow();
     }
@@ -59,9 +56,8 @@ class HomeController extends GetxController {
 
     try {
       final session = await Amplify.Auth.fetchAuthSession();
-
       if (!session.isSignedIn) {
-        print("⚠️ Not signed in. Startup halted.");
+        debugPrint("⚠️ User not signed in. Startup halted.");
         return;
       }
 
@@ -69,16 +65,13 @@ class HomeController extends GetxController {
       await _ensureUserExists(user);
 
       _ensureBookingController();
-
-      // ✅ Updated: use fetchSubjects()
       await subjectController.fetchSubjects();
-
       await _loadSessions();
 
-      print("🏠 HomeController fully ready for ${user.username}");
+      debugPrint("🏠 HomeController fully ready for ${user.username}");
       isReady.value = true;
     } catch (e) {
-      print('❌ Startup error: $e');
+      debugPrint('❌ HomeController startup error: $e');
     } finally {
       isLoading.value = false;
     }
@@ -90,12 +83,11 @@ class HomeController extends GetxController {
       User.classType,
       where: User.ID.eq(user.id),
     );
-
     if (existing.isEmpty) {
       await Amplify.DataStore.save(user);
-      print('✅ User created in DataStore');
+      debugPrint('✅ User created in DataStore');
     } else {
-      print('✅ User already exists');
+      debugPrint('✅ User already exists');
     }
   }
 
@@ -110,22 +102,14 @@ class HomeController extends GetxController {
   Future<void> _loadSessions() async {
     final sessions = await Amplify.DataStore.query(TutoringSession.classType);
 
-    if (sessions.isEmpty) {
-      featuredSessions.clear();
-      popularSessions.clear();
-      recentSessions.clear();
-      return;
-    }
-
+    // Featured: only sessions with isFeatured = true
     featuredSessions.assignAll(sessions.where((s) => s.isFeatured ?? false));
 
-    final start = max(0, sessions.length - 4);
+    // Popular & Recent: assign all sessions (no slicing)
+    popularSessions.assignAll(sessions);
+    recentSessions.assignAll(sessions.reversed.toList());
 
-    popularSessions.assignAll(sessions.sublist(start));
-
-    recentSessions.assignAll(sessions.sublist(start).reversed.toList());
-
-    print(
+    debugPrint(
       '🔹 Sessions loaded: total=${sessions.length}, '
       'featured=${featuredSessions.length}, '
       'popular=${popularSessions.length}, '
@@ -138,17 +122,40 @@ class HomeController extends GetxController {
     featuredSessions.clear();
     popularSessions.clear();
     recentSessions.clear();
-
     subjectController.subjects.clear();
-
     isReady.value = false;
   }
 
   // ---------------- Public Getters ----------------
   List<TutoringSession> getAllSessions() {
     final all = [...featuredSessions, ...popularSessions, ...recentSessions];
-
+    // Deduplicate by ID
     return {for (var s in all) s.id: s}.values.toList();
+  }
+
+  /// ---------------- Fetch All Sessions Without Limit ----------------
+  Future<List<TutoringSession>> fetchAllSessions() async {
+    try {
+      final sessions = await Amplify.DataStore.query(TutoringSession.classType);
+      final uniqueSessions = {for (var s in sessions) s.id: s}.values.toList();
+
+      // Sort newest first
+      uniqueSessions.sort((a, b) {
+        final aTime =
+            a.createdAt?.getDateTimeInUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime =
+            b.createdAt?.getDateTimeInUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+
+      debugPrint('🔹 fetchAllSessions: total=${uniqueSessions.length}');
+      return uniqueSessions;
+    } catch (e) {
+      debugPrint('❌ fetchAllSessions error: $e');
+      return [];
+    }
   }
 
   List<Subject> getFeaturedSubjects({int limit = 10}) {

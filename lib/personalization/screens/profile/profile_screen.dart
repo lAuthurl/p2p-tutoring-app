@@ -67,7 +67,7 @@ class ProfileScreen extends StatelessWidget {
                   final imageUrl =
                       (user?.profilePicture?.isNotEmpty ?? false)
                           ? user!.profilePicture!
-                          : TImages.tProfileImage;
+                          : TImages.tdefaultpfp;
 
                   return userController.imageUploading.value
                       ? const TShimmerEffect(width: 80, height: 80, radius: 100)

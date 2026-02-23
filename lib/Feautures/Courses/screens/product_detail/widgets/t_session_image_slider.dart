@@ -28,7 +28,7 @@ class TSessionImageSlider extends StatelessWidget {
     if (n.contains('bob')) return TImages.tutorBob;
     if (n.contains('carol')) return TImages.tutorCarol;
     // Fallback
-    return TImages.tutorAlice;
+    return TImages.tdefaultpfp;
   }
 
   @override

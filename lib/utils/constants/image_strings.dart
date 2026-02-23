@@ -46,6 +46,7 @@ class TImages {
 
   // -- Profile Images
   static const String tProfileImage = "assets/images/profile/profile-pic.png";
+  static const String tdefaultpfp = "assets/images/profile/default_pfp.jpg";
 
   // -- Dashboard Images
   static const String tUserProfileImage =

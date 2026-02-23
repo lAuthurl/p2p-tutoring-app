@@ -63,7 +63,7 @@ class TSessionCardVertical extends StatelessWidget {
     final tutorIcon =
         session.tutor?.image?.isNotEmpty == true
             ? session.tutor!.image!
-            : TImages.tutorAlice;
+            : TImages.tdefaultpfp;
 
     return GestureDetector(
       onTap:
