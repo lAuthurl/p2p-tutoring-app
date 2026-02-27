@@ -10,11 +10,15 @@ import '../../../../../models/ModelProvider.dart';
 class TSessionAttributes extends StatelessWidget {
   final TutoringSession session;
 
-  const TSessionAttributes({super.key, required this.session});
+  /// Use a unique tag based on session ID
+  final String tag;
+
+  TSessionAttributes({super.key, required this.session}) : tag = session.id;
 
   @override
   Widget build(BuildContext context) {
-    final controller = SessionCreationController.instance;
+    // Use Get.find with the tag to safely get the controller
+    final controller = Get.find<SessionCreationController>(tag: tag);
 
     return Obx(() {
       final attrs = controller.sessionAttributes;

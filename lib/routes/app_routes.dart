@@ -12,7 +12,6 @@ import '../personalization/screens/profile/profile_screen.dart';
 import 'routes.dart';
 
 // Feature screens
-import '../Feautures/Courses/screens/product_detail/session_detail_screen.dart';
 import '../Feautures/Booking/screens/booking_screen.dart';
 import '../Feautures/dashboard/Home/screens/home/home.dart';
 import '../Feautures/favourites/favourite.dart';
@@ -41,14 +40,6 @@ class AppRoutes {
     // Home / Dashboards
     GetPage(name: TRoutes.home, page: () => ProfileScreen()),
     GetPage(name: TRoutes.mainDashboard, page: () => HomeScreen()),
-
-    // Product / Session routes
-    GetPage(
-      name: TRoutes.sessions,
-      page: () => const _FeaturePlaceholder('Sessions List'),
-    ),
-    GetPage(name: TRoutes.sessionDetail, page: () => SessionDetailScreen()),
-    GetPage(name: TRoutes.productDetail, page: () => SessionDetailScreen()),
 
     // Booking / Cart / Checkout
     GetPage(name: TRoutes.bookings, page: () => BookingScreen()),

@@ -1,0 +1,12 @@
+{
+  "resourceName": "assets",
+  "policyUUID": "aeebedb3",
+  "bucketName": "assets",
+  "storageAccess": "auth",
+  "guestAccess": [],
+  "authAccess": [
+    "READ"
+  ],
+  "triggerFunction": "S3Trigger716d2200",
+  "groupAccess": {}
+}

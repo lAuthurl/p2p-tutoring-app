@@ -1,5 +1,6 @@
 // ignore_for_file: public_member_api_docs, use_build_context_synchronously
 
+import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:readmore/readmore.dart';
@@ -16,71 +17,53 @@ import '../../../Courses/screens/product_detail/widgets/session_meta_data.dart';
 import '../../../Courses/screens/product_detail/widgets/t_session_attributes.dart';
 import '../../../Courses/screens/product_detail/widgets/t_session_image_slider.dart';
 import '../../../../models/ModelProvider.dart';
+import 'chat.dart';
+import 'tutor_profile.dart';
 
 class SessionDetailScreen extends StatefulWidget {
-  const SessionDetailScreen({super.key, this.sessionIdFromCtor, this.session});
+  final TutoringSession session;
+  final String tag;
 
-  final String? sessionIdFromCtor;
-  final TutoringSession? session;
+  const SessionDetailScreen({
+    super.key,
+    required this.session,
+    required this.tag,
+  });
 
   @override
   State<SessionDetailScreen> createState() => _SessionDetailScreenState();
 }
 
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
-  late final TutoringController tutoringController;
-  late final SessionCreationController sessionCreationController;
-  TutoringSession? _session;
-  String? _error;
+  late final TutoringController _tutoringController;
+  late final SessionCreationController _creationController;
 
   @override
   void initState() {
     super.initState();
 
-    // Initialize controllers
-    tutoringController = Get.put(TutoringController(), permanent: true);
-    sessionCreationController = Get.put(
-      SessionCreationController(),
-      permanent: true,
-    );
+    // Initialize controllers with per-screen tag
+    _tutoringController = Get.put(TutoringController(), tag: widget.tag);
+    _creationController = Get.put(SessionCreationController(), tag: widget.tag);
 
-    _resolveSession();
+    _initializeAttributes(widget.session);
   }
 
-  void _resolveSession() {
-    // Prefer session passed via constructor
-    _session = widget.session;
-
-    // If null, try arguments or sessionId
-    if (_session == null) {
-      final args = Get.arguments;
-      final sessionId = widget.sessionIdFromCtor ?? _extractSessionId(args);
-
-      if (sessionId == null) {
-        _error = 'No session provided';
-        return;
-      }
-
-      try {
-        _session = tutoringController.sessions.firstWhere(
-          (s) => s.id == sessionId,
-        );
-      } catch (_) {
-        _error = 'Session not found';
-      }
+  @override
+  void dispose() {
+    if (Get.isRegistered<TutoringController>(tag: widget.tag)) {
+      Get.delete<TutoringController>(tag: widget.tag);
     }
-
-    if (_session != null) {
-      _initializeSelectedAttributes(_session!);
+    if (Get.isRegistered<SessionCreationController>(tag: widget.tag)) {
+      Get.delete<SessionCreationController>(tag: widget.tag);
     }
+    super.dispose();
   }
 
-  void _initializeSelectedAttributes(TutoringSession session) {
-    final controller = sessionCreationController;
-
-    // 1️⃣ Extract session-specific attributes from variations
+  void _initializeAttributes(TutoringSession session) {
     final sessionAttrs = <String, List<String>>{};
     final variations = session.sessionVariations ?? [];
+
     for (final variation in variations) {
       final attrs = variation.sessionAttributes ?? [];
       for (final attr in attrs) {
@@ -95,175 +78,228 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       }
     }
 
-    // 2️⃣ Default attributes
-    final defaultAttrs = {
+    const defaultAttrs = {
       "Mode": ["Online", "Offline"],
       "Duration": ["1hr", "2hr"],
       "Payment": ["Before Session", "After Session"],
     };
 
-    // 3️⃣ Merge defaults with session-specific attributes
-    final mergedAttrs = {...defaultAttrs, ...sessionAttrs};
-
-    // 4️⃣ Initialize controller once
-    controller.initializeAttributesForSession(mergedAttrs);
+    final merged = {...defaultAttrs, ...sessionAttrs};
+    _creationController.initializeAttributesForSession(merged);
   }
 
-  String? _extractSessionId(dynamic args) {
-    if (args == null) return null;
-    if (args is String) return args;
-    if (args is Map) {
-      return (args['sessionId'] ?? args['id'] ?? args['session']?['id'])
-          ?.toString();
-    }
+  Future<Tutor?> _getTutorOrFetch(TutoringSession session) async {
     try {
-      return args.id;
-    } catch (_) {
+      if (session.tutor != null) return session.tutor;
+
+      final tutorId = (session.tutor != null) ? session.tutor!.id : null;
+
+      if (tutorId != null && tutorId.isNotEmpty) {
+        final tutors = await Amplify.DataStore.query(
+          Tutor.classType,
+          where: Tutor.ID.eq(tutorId),
+        );
+        if (tutors.isNotEmpty) return tutors.first;
+      }
+
+      Get.snackbar(
+        "Error",
+        "Tutor information not available",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
+
+      return null;
+    } catch (e, st) {
+      safePrint("❌ Failed to fetch tutor for session ${session.id}: $e\n$st");
       return null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Session')),
-        body: Center(child: Text(_error!)),
-      );
-    }
+    final session = widget.session;
+    TDeviceUtils.getScreenWidth(context);
+    const buttonHeight = 56.0;
 
-    final session = _session!;
-
+    // Wrap the entire reactive portion in a single Obx
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image Slider
-            TSessionImageSlider(session: session),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: TSizes.defaultSpace,
-                vertical: TSizes.defaultSpace / 4,
+      body: Stack(
+        children: [
+          Obx(() {
+            return SingleChildScrollView(
+              padding: EdgeInsets.only(
+                bottom: buttonHeight + TSizes.spaceBtwItems,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const TRatingAndShare(),
-                  const SizedBox(height: TSizes.spaceBtwItems / 2),
+                  TSessionImageSlider(session: session),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TSizes.defaultSpace,
+                      vertical: TSizes.defaultSpace / 4,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const TRatingAndShare(),
+                        const SizedBox(height: TSizes.spaceBtwItems / 2),
 
-                  // Meta: title, price, tutor info
-                  TProductMetaData(session: session),
-                  const SizedBox(height: TSizes.spaceBtwSections / 2),
+                        // Pass normal Map, child handles price calculation
+                        TProductMetaData(
+                          session: session,
+                          selectedAttributes: Map<String, String>.from(
+                            _creationController.selectedAttributes,
+                          ), // convert RxMap -> normal Map here
+                        ),
+                        const SizedBox(height: TSizes.spaceBtwSections / 2),
+                        TSessionAttributes(session: session),
+                        const SizedBox(height: TSizes.spaceBtwSections / 2),
 
-                  // Session Attributes (interactive)
-                  TSessionAttributes(session: session),
-                  const SizedBox(height: TSizes.spaceBtwSections),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  final tutor = await _getTutorOrFetch(session);
+                                  if (tutor != null) {
+                                    Get.to(
+                                      () => TutorProfileScreen(tutor: tutor),
+                                    );
+                                  }
+                                },
+                                style: _outlinedButtonStyle(),
+                                child: const Text(
+                                  "Tutor Profile",
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: TSizes.spaceBtwItems),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  final tutor = await _getTutorOrFetch(session);
+                                  if (tutor != null) {
+                                    Get.to(
+                                      () => ChatScreen(
+                                        tutor: tutor,
+                                        sessionId: session.id,
+                                      ),
+                                    );
+                                  }
+                                },
+                                style: _outlinedButtonStyle(),
+                                child: const Text(
+                                  "Chat",
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: TSizes.spaceBtwSections),
+                        const SizedBox(height: TSizes.spaceBtwSections / 2),
 
-                  // Book button
-                  SizedBox(
-                    width: TDeviceUtils.getScreenWidth(context),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final selectedAttrs = Map<String, String>.from(
-                          sessionCreationController.selectedAttributes,
-                        );
-
-                        tutoringController.addSessionToBooking(
-                          session,
-                          selectedAttributes: selectedAttrs,
-                        );
-
-                        Get.snackbar(
-                          "Added to Booking",
-                          "Session added with your selected options",
-                          snackPosition: SnackPosition.BOTTOM,
-                        );
-                      },
-                      style: ButtonStyle(
-                        padding: MaterialStateProperty.all(
-                          const EdgeInsets.all(TSizes.md),
+                        const TSectionHeading(
+                          title: "Description",
+                          showActionButton: false,
                         ),
-                        backgroundColor: MaterialStateProperty.all(
-                          TColors.primary,
-                        ),
-                        overlayColor: MaterialStateProperty.all(
-                          TColors.primary.withAlpha((0.12 * 255).round()),
-                        ),
-                        foregroundColor: MaterialStateProperty.all(
-                          TColors.textWhite,
-                        ),
-                        shadowColor: MaterialStateProperty.all(
-                          const Color(0xFF2C2060).withAlpha(50),
-                        ),
-                        elevation: MaterialStateProperty.resolveWith<double>(
-                          (states) =>
-                              states.contains(MaterialState.pressed) ? 2 : 4,
-                        ),
-                        shape: MaterialStateProperty.all(
-                          RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                        const SizedBox(height: TSizes.spaceBtwItems),
+                        ReadMoreText(
+                          session.description ?? "No description provided.",
+                          trimLines: 3,
+                          trimMode: TrimMode.Line,
+                          trimCollapsedText: " Show more",
+                          trimExpandedText: " Less",
+                          moreStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          lessStyle: const TextStyle(
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                      child: const Text(
-                        'Book Session',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                        const SizedBox(height: TSizes.spaceBtwSections / 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const TSectionHeading(
+                              title: "Reviews",
+                              showActionButton: false,
+                            ),
+                            IconButton(
+                              icon: const Icon(Iconsax.arrow_right_3, size: 18),
+                              onPressed: () {},
+                            ),
+                          ],
                         ),
-                      ),
+                      ],
                     ),
-                  ),
-
-                  const SizedBox(height: TSizes.spaceBtwSections),
-                  const TSectionHeading(
-                    title: 'Description',
-                    showActionButton: false,
-                  ),
-                  const SizedBox(height: TSizes.spaceBtwItems),
-                  ReadMoreText(
-                    session.description ?? 'No description provided.',
-                    trimLines: 2,
-                    colorClickableText: Colors.pink,
-                    trimMode: TrimMode.Line,
-                    trimCollapsedText: ' Show more',
-                    trimExpandedText: ' Less',
-                    moreStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    lessStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-
-                  const SizedBox(height: TSizes.spaceBtwSections),
-                  const Divider(),
-                  const SizedBox(height: TSizes.spaceBtwItems),
-
-                  // Reviews
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const TSectionHeading(
-                        title: 'Reviews (199)',
-                        showActionButton: false,
-                      ),
-                      IconButton(
-                        icon: const Icon(Iconsax.arrow_right_3, size: 18),
-                        onPressed: () {},
-                      ),
-                    ],
                   ),
                 ],
               ),
+            );
+          }),
+
+          /// Book Session Button
+          Positioned(
+            bottom: -8,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(TSizes.defaultSpace),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    onPressed: () => _bookSession(session),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: TColors.primary,
+                      padding: const EdgeInsets.all(TSizes.md),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      "Book Session",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: TColors.textWhite,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+
+  void _bookSession(TutoringSession session) {
+    _tutoringController.addSessionToBooking(
+      session,
+      selectedAttributes: Map<String, String>.from(
+        _creationController.selectedAttributes,
+      ),
+    );
+
+    Get.snackbar(
+      "Added to Booking",
+      "Session added with your selected options",
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
+  ButtonStyle _outlinedButtonStyle() => OutlinedButton.styleFrom(
+    padding: const EdgeInsets.symmetric(vertical: TSizes.md),
+    foregroundColor: TColors.primary,
+    side: BorderSide(color: TColors.primary.withOpacity(0.4)),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  );
 }

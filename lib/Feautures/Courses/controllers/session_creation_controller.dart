@@ -75,28 +75,38 @@ class SessionCreationController extends GetxController {
         "https://p2p-tutoring-assets.s3.amazonaws.com/images/courses/others.png",
   };
 
-  /// Fetch or create a tutor for the current user
-  Future<Tutor> _getOrCreateTutor() async {
+  /// -----------------------------
+  /// Public method to get or create a tutor for the current user
+  /// -----------------------------
+  Future<Tutor> getOrCreateTutor() async {
     final user = UserController.instance.currentUser.value;
-    if (user == null) throw Exception("User not signed in");
+    if (user == null) {
+      throw Exception("User not signed in");
+    }
 
-    final tutors = await Amplify.DataStore.query(
-      Tutor.classType,
-      where: Tutor.NAME.eq(user.username),
-    );
+    try {
+      final tutors = await Amplify.DataStore.query(
+        Tutor.classType,
+        where: Tutor.NAME.eq(user.username),
+      );
 
-    if (tutors.isNotEmpty) return tutors.first;
+      if (tutors.isNotEmpty) {
+        return tutors.first;
+      }
 
-    // Create a new tutor object
-    final newTutor = Tutor(name: user.username, email: user.email);
-
-    // Save the tutor (returns void)
-    await Amplify.DataStore.save(newTutor);
-
-    // Return the saved object manually
-    return newTutor;
+      // Create a new tutor object
+      final newTutor = Tutor(name: user.username, email: user.email);
+      await Amplify.DataStore.save(newTutor);
+      return newTutor;
+    } catch (e, st) {
+      safePrint("❌ Failed to fetch or create tutor: $e\n$st");
+      throw Exception("Failed to fetch or create tutor");
+    }
   }
 
+  /// -----------------------------
+  /// Session creation logic
+  /// -----------------------------
   Future<void> createSession() async {
     if (!formKey.currentState!.validate()) return;
     if (subjectId.value.isEmpty) {
@@ -107,7 +117,7 @@ class SessionCreationController extends GetxController {
     isUploading.value = true;
 
     try {
-      final tutor = await _getOrCreateTutor();
+      final tutor = await getOrCreateTutor();
 
       final subjects = await Amplify.DataStore.query(
         Subject.classType,
@@ -191,21 +201,15 @@ class SessionCreationController extends GetxController {
   }
 
   /// -----------------------------
-  /// Add this inside SessionCreationController
+  /// Helpers
   /// -----------------------------
   void initializeAttributesForSession(Map<String, List<String>> attrs) {
-    // Clear previous attributes
     sessionAttributes.clear();
     selectedAttributes.clear();
 
-    // Assign new session-specific attributes
     sessionAttributes.addAll(attrs);
-
-    // Set default selected value for each attribute
     attrs.forEach((key, values) {
-      if (values.isNotEmpty) {
-        selectedAttributes[key] = values.first;
-      }
+      if (values.isNotEmpty) selectedAttributes[key] = values.first;
     });
   }
 
