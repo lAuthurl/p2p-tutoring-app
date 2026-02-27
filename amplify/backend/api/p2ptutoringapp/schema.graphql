@@ -68,7 +68,7 @@ type Subject @model
 # -------------------------------
 type TutoringSession @model
   @auth(rules: [
-    { allow: owner, operations: [read, update, delete] }, # tutor owns session
+    { allow: owner, operations: [create, read, update, delete] }, # tutor owns session
     { allow: public, operations: [read] }
   ])
 {
@@ -154,6 +154,8 @@ type BookingItem @model
   serviceImage: String
   providerName: String
   providerImage: String
+
+  selectedAttributes: AWSJSON
 
   createdAt: AWSDateTime
   updatedAt: AWSDateTime

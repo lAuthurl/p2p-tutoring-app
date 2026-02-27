@@ -27,9 +27,6 @@ class CreateTutoringSessionScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // -----------------------------
-              // THUMBNAIL PREVIEW
-              // -----------------------------
               Obx(() {
                 final thumbnailUrl = controller.selectedThumbnail;
                 return Center(
@@ -55,12 +52,8 @@ class CreateTutoringSessionScreen extends StatelessWidget {
                   ),
                 );
               }),
-
               const SizedBox(height: TSizes.spaceBtwSections),
 
-              // -----------------------------
-              // SESSION TITLE
-              // -----------------------------
               TextFormField(
                 controller: controller.title,
                 decoration: InputDecoration(
@@ -69,12 +62,8 @@ class CreateTutoringSessionScreen extends StatelessWidget {
                 ),
                 validator: (v) => v!.isEmpty ? "Required" : null,
               ),
-
               const SizedBox(height: TSizes.spaceBtwInputFields),
 
-              // -----------------------------
-              // DESCRIPTION
-              // -----------------------------
               TextFormField(
                 controller: controller.description,
                 maxLines: 3,
@@ -83,12 +72,8 @@ class CreateTutoringSessionScreen extends StatelessWidget {
                   prefixIcon: const Icon(LineAwesomeIcons.align_left_solid),
                 ),
               ),
-
               const SizedBox(height: TSizes.spaceBtwInputFields),
 
-              // -----------------------------
-              // PRICE
-              // -----------------------------
               TextFormField(
                 controller: controller.price,
                 keyboardType: TextInputType.number,
@@ -97,15 +82,11 @@ class CreateTutoringSessionScreen extends StatelessWidget {
                   prefixIcon: const Icon(LineAwesomeIcons.money_bill_solid),
                 ),
               ),
-
               const SizedBox(height: TSizes.spaceBtwInputFields),
 
-              // -----------------------------
-              // SUBJECT DROPDOWN
-              // -----------------------------
               Obx(
                 () => DropdownButtonFormField<String>(
-                  initialValue:
+                  value:
                       controller.subjectId.value.isEmpty
                           ? null
                           : controller.subjectId.value,
@@ -118,9 +99,7 @@ class CreateTutoringSessionScreen extends StatelessWidget {
                             ),
                           )
                           .toList(),
-                  onChanged: (v) {
-                    controller.subjectId.value = v ?? '';
-                  },
+                  onChanged: (v) => controller.subjectId.value = v ?? '',
                   decoration: InputDecoration(
                     label: const Text("Subject"),
                     prefixIcon: const Icon(Icons.category),
@@ -132,12 +111,8 @@ class CreateTutoringSessionScreen extends StatelessWidget {
                               : null,
                 ),
               ),
-
               const SizedBox(height: TSizes.spaceBtwSections),
 
-              // -----------------------------
-              // CREATE BUTTON
-              // -----------------------------
               Obx(
                 () => SizedBox(
                   width: double.infinity,

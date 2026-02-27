@@ -12,7 +12,7 @@ class SessionCreationController extends GetxController {
 
   final formKey = GlobalKey<FormState>();
 
-  // Text Controllers
+  // Form fields
   final title = TextEditingController();
   final description = TextEditingController();
   final price = TextEditingController();
@@ -21,9 +21,38 @@ class SessionCreationController extends GetxController {
   final isFeatured = false.obs;
   final isUploading = false.obs;
 
-  /// -------------------------
-  /// Predefined subject thumbnails
-  /// -------------------------
+  // Attributes
+  final RxMap<String, List<String>> sessionAttributes =
+      <String, List<String>>{}.obs;
+
+  /// Track selected attribute values
+  final RxMap<String, String> selectedAttributes = <String, String>{}.obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+
+    // Default session attributes
+    sessionAttributes["Duration"] = ["1hr", "2hr"];
+    sessionAttributes["Mode"] = ["Online", "Offline"];
+    sessionAttributes["Payment"] = ["Before Session", "After Session"];
+
+    // Set defaults for selected attributes
+    sessionAttributes.forEach((key, values) {
+      if (values.isNotEmpty) {
+        selectedAttributes[key] = values.first;
+      }
+    });
+  }
+
+  /// Called when user selects a value for an attribute
+  void onAttributeSelected(String name, String value) {
+    selectedAttributes[name] = value;
+  }
+
+  String? get selectedThumbnail =>
+      subjectId.value.isNotEmpty ? seededThumbnails[subjectId.value] : null;
+
   final Map<String, String> seededThumbnails = {
     "1":
         "https://p2p-tutoring-assets.s3.amazonaws.com/images/courses/math-basics.png",
@@ -46,41 +75,30 @@ class SessionCreationController extends GetxController {
         "https://p2p-tutoring-assets.s3.amazonaws.com/images/courses/others.png",
   };
 
-  /// Get thumbnail based on selected subject
-  String? get selectedThumbnail => seededThumbnails[subjectId.value];
-
-  /// ================================
-  /// ENSURE TUTOR EXISTS
-  /// ================================
-  Future<Tutor> getOrCreateTutor() async {
-    final currentUser = UserController.instance.currentUser.value;
-    if (currentUser == null) {
-      throw Exception("User not authenticated");
-    }
+  /// Fetch or create a tutor for the current user
+  Future<Tutor> _getOrCreateTutor() async {
+    final user = UserController.instance.currentUser.value;
+    if (user == null) throw Exception("User not signed in");
 
     final tutors = await Amplify.DataStore.query(
       Tutor.classType,
-      where: Tutor.NAME.eq(currentUser.username),
+      where: Tutor.NAME.eq(user.username),
     );
 
     if (tutors.isNotEmpty) return tutors.first;
 
-    final newTutor = Tutor(
-      name: currentUser.username,
-      email: currentUser.email,
-    );
+    // Create a new tutor object
+    final newTutor = Tutor(name: user.username, email: user.email);
 
+    // Save the tutor (returns void)
     await Amplify.DataStore.save(newTutor);
-    safePrint('✅ Tutor created for user: ${currentUser.username}');
+
+    // Return the saved object manually
     return newTutor;
   }
 
-  /// ================================
-  /// CREATE SESSION
-  /// ================================
   Future<void> createSession() async {
     if (!formKey.currentState!.validate()) return;
-
     if (subjectId.value.isEmpty) {
       Get.snackbar("Error", "Please select a subject");
       return;
@@ -89,16 +107,8 @@ class SessionCreationController extends GetxController {
     isUploading.value = true;
 
     try {
-      final currentUser = UserController.instance.currentUser.value;
-      if (currentUser == null) {
-        Get.snackbar("Error", "User not found");
-        return;
-      }
+      final tutor = await _getOrCreateTutor();
 
-      // Ensure tutor exists
-      final tutor = await getOrCreateTutor();
-
-      // Fetch subject
       final subjects = await Amplify.DataStore.query(
         Subject.classType,
         where: Subject.ID.eq(subjectId.value),
@@ -106,53 +116,113 @@ class SessionCreationController extends GetxController {
 
       if (subjects.isEmpty) {
         Get.snackbar("Error", "Subject not found");
+        isUploading.value = false;
         return;
       }
 
-      final subject = subjects.first;
-
-      // Use seeded thumbnail if subject is selected
-      final thumbnailUrl = selectedThumbnail;
-
-      // Create session object
       final session = TutoringSession(
         title: title.text.trim(),
         description: description.text.trim(),
         pricePerSession: double.tryParse(price.text.trim()) ?? 0,
         isFeatured: isFeatured.value,
-        thumbnail: thumbnailUrl,
+        thumbnail: selectedThumbnail,
         tutor: tutor,
-        subject: subject,
+        subject: subjects.first,
       );
 
-      // Save session to DataStore
       await Amplify.DataStore.save(session);
 
-      safePrint('✅ Session created: ${session.title}');
+      // Save attributes
+      final savedAttrs = <SessionAttribute>[];
+      for (final e in sessionAttributes.entries) {
+        final attr = SessionAttribute(
+          name: e.key,
+          values: e.value,
+          session: session,
+          tutorId: tutor.id,
+        );
+        await Amplify.DataStore.save(attr);
+        savedAttrs.add(attr);
+      }
 
-      // -----------------------------
-      // REFRESH HOMESCREEN
-      // -----------------------------
+      // Generate and save variations
+      final combos = _generateCombinations(sessionAttributes);
+      for (final combo in combos) {
+        final variationAttrs = <SessionAttribute>[];
+        for (final saved in savedAttrs) {
+          if (combo.containsKey(saved.name)) {
+            variationAttrs.add(
+              SessionAttribute(
+                name: saved.name,
+                values: [combo[saved.name]!],
+                session: session,
+                tutorId: tutor.id,
+              ),
+            );
+          }
+        }
+
+        await Amplify.DataStore.save(
+          SessionVariation(
+            session: session,
+            tutorId: tutor.id,
+            pricePerSession: double.tryParse(price.text.trim()) ?? 0,
+            availableSeats: 10,
+            sessionAttributes: variationAttrs,
+          ),
+        );
+      }
+
+      // Refresh HomeController
       if (Get.isRegistered<HomeController>()) {
         final homeController = Get.find<HomeController>();
-
-        // Insert newly created session at top of recent sessions
         homeController.recentSessions.insert(0, session);
-
-        // Optional: update getters to include this new session
         homeController.getAllSessions();
-
-        safePrint('🏠 HomeController updated with new session');
       }
 
       Get.back();
-      Get.snackbar("Success", "Session created successfully!");
+      Get.snackbar("Success", "Session created!");
     } catch (e, st) {
       safePrint('❌ Error creating session: $e\n$st');
       Get.snackbar("Error", "Failed to create session");
     } finally {
       isUploading.value = false;
     }
+  }
+
+  /// -----------------------------
+  /// Add this inside SessionCreationController
+  /// -----------------------------
+  void initializeAttributesForSession(Map<String, List<String>> attrs) {
+    // Clear previous attributes
+    sessionAttributes.clear();
+    selectedAttributes.clear();
+
+    // Assign new session-specific attributes
+    sessionAttributes.addAll(attrs);
+
+    // Set default selected value for each attribute
+    attrs.forEach((key, values) {
+      if (values.isNotEmpty) {
+        selectedAttributes[key] = values.first;
+      }
+    });
+  }
+
+  List<Map<String, String>> _generateCombinations(
+    Map<String, List<String>> map,
+  ) {
+    List<Map<String, String>> combos = [{}];
+    map.forEach((key, values) {
+      List<Map<String, String>> newList = [];
+      for (var combo in combos) {
+        for (var val in values) {
+          newList.add({...combo, key: val});
+        }
+      }
+      combos = newList;
+    });
+    return combos;
   }
 
   @override

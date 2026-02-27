@@ -12,6 +12,14 @@ class TutoringController extends GetxController {
     return Get.put(TutoringController());
   }
 
+  int? calculateSalePercentage(double originalPrice, double? salePrice) {
+    if (salePrice == null || salePrice >= originalPrice || originalPrice == 0) {
+      return null;
+    }
+    final percent = ((originalPrice - salePrice) / originalPrice * 100).round();
+    return percent > 0 ? percent : null;
+  }
+
   // ---------------- Reactive State ----------------
   final sessions = <TutoringSession>[].obs;
   final RxList<TutoringSession> featuredSessions = <TutoringSession>[].obs;
@@ -19,6 +27,7 @@ class TutoringController extends GetxController {
 
   RxInt selectedQuantity = 0.obs;
   RxMap<String, String> selectedAttributes = <String, String>{}.obs;
+
   Rx<SessionVariation> selectedVariation =
       SessionVariation(
         availableSeats: 0,
@@ -56,22 +65,14 @@ class TutoringController extends GetxController {
   // ---------------- AWS DataStore Observers ----------------
   void _observeSessions() async {
     if (!await _canSync()) return;
-
     try {
       Amplify.DataStore.observeQuery(TutoringSession.classType).listen((
         snapshot,
       ) {
         final awsSessions =
             snapshot.items.whereType<TutoringSession>().toList();
-
         if (awsSessions.isNotEmpty) _mergeSessions(awsSessions);
         isSynced.value = snapshot.isSynced;
-
-        print(
-          snapshot.isSynced
-              ? '✅ Sessions fully synced: total=${sessions.length}'
-              : '🔄 Sessions partially loaded: total=${sessions.length}',
-        );
       }, onError: (e) => print('❌ Error observing sessions: $e'));
     } catch (e) {
       print('❌ Failed to start observeQuery: $e');
@@ -86,54 +87,46 @@ class TutoringController extends GetxController {
     popularSessions.assignAll(
       sessions.length > 4 ? sessions.sublist(0, 4) : sessions.toList(),
     );
-
-    print(
-      '🔹 Sessions updated: total=${sessions.length}, featured=${featuredSessions.length}, popular=${popularSessions.length}',
-    );
   }
 
-  // ---------------- Public method to fetch sessions ----------------
   Future<void> fetchSessions() async {
     if (!await _canSync()) return;
-
     try {
       final sessionsResponse = await Amplify.DataStore.query(
         TutoringSession.classType,
       );
-
       if (sessionsResponse.isEmpty) return;
       _mergeSessions(sessionsResponse);
-
-      print(
-        '🔹 Sessions fetched: total=${sessionsResponse.length}, '
-        'featured=${featuredSessions.length}, popular=${popularSessions.length}',
-      );
     } catch (e) {
       print('❌ Error fetching sessions: $e');
     }
   }
 
   // ---------------- Session Utilities ----------------
-  double _computeAdjustedPrice(TutoringSession session) {
+  double _computeAdjustedPrice(
+    TutoringSession session,
+    Map<String, String>? attributes,
+  ) {
     double price = session.pricePerSession ?? 0;
 
+    final variation = selectedVariation.value;
     if ((session.sessionVariations?.isNotEmpty ?? false) &&
-        selectedVariation.value.id.isNotEmpty) {
+        variation.id.isNotEmpty) {
       final v = session.sessionVariations!.firstWhere(
-        (v) => v.id == selectedVariation.value.id,
-        orElse: () => selectedVariation.value,
+        (v) => v.id == variation.id,
+        orElse: () => variation,
       );
       price = v.pricePerSession ?? price;
     }
 
-    final duration = (selectedAttributes['Duration'] ?? '').toLowerCase();
+    final duration = (attributes?['Duration'] ?? '').toLowerCase();
     if (duration.contains('2hr') ||
         duration.contains('2 h') ||
         duration.contains('2h')) {
       price *= 2;
     }
 
-    final mode = (selectedAttributes['Mode'] ?? '').toLowerCase();
+    final mode = (attributes?['Mode'] ?? '').toLowerCase();
     if (mode.contains('in-person') ||
         mode.contains('offline') ||
         mode.contains('physical')) {
@@ -144,80 +137,43 @@ class TutoringController extends GetxController {
   }
 
   String getSessionPrice(TutoringSession session) {
-    final price = _computeAdjustedPrice(session);
+    final price = _computeAdjustedPrice(session, selectedAttributes);
     return price % 1 == 0 ? price.toStringAsFixed(0) : price.toStringAsFixed(2);
   }
 
   void initializeAlreadySelectedQuantity(TutoringSession session) {
     selectedAttributes.clear();
 
-    if (selectedVariation.value.id.isNotEmpty &&
-        !(session.sessionVariations ?? []).any(
-          (v) => v.id == selectedVariation.value.id,
-        )) {
-      selectedVariation.value = SessionVariation(
-        availableSeats: 0,
-        pricePerSession: 0,
-        lectureTime: TemporalDateTime(DateTime.now()),
-        sessionAttributes: null,
-        id: '',
-        tutorId: session.tutor?.id ?? '',
-      );
-    }
+    selectedVariation.value = SessionVariation(
+      availableSeats: 0,
+      pricePerSession: 0,
+      lectureTime: TemporalDateTime(DateTime.now()),
+      sessionAttributes: null,
+      id: '',
+      tutorId: session.tutor?.id ?? '',
+    );
 
     selectedSessionImage.value =
         (session.images?.isNotEmpty ?? false)
             ? session.images!.first
             : session.thumbnail ?? '';
 
-    if ((session.sessionVariations?.isEmpty ?? true)) {
-      selectedQuantity.value = BookingController.instance.bookingItems.fold(
-        0,
-        (prev, item) => prev + (item.quantity ?? 0),
-      );
-    } else {
-      final variationId = selectedVariation.value.id;
-      selectedQuantity.value =
-          (variationId.isNotEmpty)
-              ? BookingController.instance.bookingItems
-                  .where((item) => item.timeSlot == variationId)
-                  .fold<int>(0, (prev, item) => prev + (item.quantity ?? 0))
-              : 0;
-
-      if ((session.sessionVariations?.length ?? 0) == 1 &&
-          selectedVariation.value.id.isEmpty) {
-        final single = session.sessionVariations!.first;
-        selectedVariation.value = single;
-        selectedAttributes.clear();
-
-        if (single.sessionAttributes != null) {
-          for (var attr in single.sessionAttributes!) {
-            if (attr.values?.isNotEmpty ?? false) {
-              selectedAttributes[attr.name] = attr.values!.first;
-            }
-          }
-        }
-
-        selectedAttributes.putIfAbsent('Duration', () => '1hr');
-        if ((single.image?.isNotEmpty ?? false)) {
-          selectedSessionImage.value = single.image!;
-        }
-
-        selectedQuantity.value = BookingController.instance.bookingItems
-            .where((i) => i.timeSlot == single.id)
-            .fold<int>(0, (prev, item) => prev + (item.quantity ?? 0));
-      }
-    }
+    initializeDefaultAttributes(session);
   }
 
-  // ---------------- Add session to booking safely ----------------
-  Future<void> addSessionToBooking(TutoringSession session) async {
+  /// ---------------- Core: Book Session ----------------
+  Future<void> addSessionToBooking(
+    TutoringSession session, {
+    Map<String, String>? selectedAttributes,
+  }) async {
     if (!await _canSync()) {
       Get.snackbar('Error', 'Cannot book session: not signed in.');
       return;
     }
 
     final variation = selectedVariation.value;
+
+    // Ensure a variation is selected if the session has variations
     if ((session.sessionVariations?.isNotEmpty ?? false) &&
         variation.id.isEmpty) {
       Get.snackbar(
@@ -227,6 +183,7 @@ class TutoringController extends GetxController {
       return;
     }
 
+    // Resolve image
     String serviceImage = '';
     if ((session.images?.isNotEmpty ?? false)) {
       serviceImage = session.images!.first;
@@ -236,8 +193,10 @@ class TutoringController extends GetxController {
       serviceImage = variation.image!;
     }
 
-    final adjustedPrice = _computeAdjustedPrice(session);
+    // Compute price with selected attributes
+    final adjustedPrice = _computeAdjustedPrice(session, selectedAttributes);
 
+    // Add booking item
     BookingController.instance.addBookingItem(
       sessionId: session.id,
       tutorId: session.tutor?.id ?? '',
@@ -250,12 +209,17 @@ class TutoringController extends GetxController {
       tutorName: session.tutor?.name ?? '',
       tutorImage: session.tutor?.image ?? '',
       session: session,
+      selectedAttributes: selectedAttributes,
     );
 
     Get.back();
+    Get.snackbar(
+      "Added to Booking",
+      "Session added with your selected options",
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 
-  // ---------------- Favorites ----------------
   bool isFavourite(String sessionId) => favorites[sessionId]?.value ?? false;
 
   void toggleFavoriteSession(String sessionId) {
@@ -268,14 +232,6 @@ class TutoringController extends GetxController {
 
   List<TutoringSession> favoriteSessions() =>
       sessions.where((s) => isFavourite(s.id)).toList();
-
-  int? calculateSalePercentage(double originalPrice, double? salePrice) {
-    if (salePrice == null || salePrice >= originalPrice || originalPrice == 0) {
-      return null;
-    }
-    final percent = ((originalPrice - salePrice) / originalPrice * 100).round();
-    return percent > 0 ? percent : null;
-  }
 
   List<String> getAttributesAvailabilityInVariation(
     List<SessionVariation> variations,
@@ -312,8 +268,72 @@ class TutoringController extends GetxController {
     if ((session.images?.isNotEmpty ?? false)) images.addAll(session.images!);
     return images;
   }
+}
 
-  void showEnlargedImage(String imageUrl) {
-    print('Show enlarged image: $imageUrl'); // Replace with UI logic
+/// ---------------- Extension ----------------
+extension TutoringControllerExtensions on TutoringController {
+  /// Initialize default attributes for a given session
+  void initializeDefaultAttributes(TutoringSession session) {
+    selectedAttributes.clear();
+
+    final variations = session.sessionVariations ?? [];
+    if (variations.isNotEmpty) {
+      final firstVariation = variations.first;
+
+      if (firstVariation.sessionAttributes != null) {
+        for (var attr in firstVariation.sessionAttributes!) {
+          if (attr.values?.isNotEmpty ?? false) {
+            selectedAttributes[attr.name] = attr.values!.first;
+          }
+        }
+      }
+
+      selectedAttributes.putIfAbsent('Duration', () {
+        final durationAttr =
+            firstVariation.sessionAttributes
+                ?.firstWhere(
+                  (a) =>
+                      a.name.toLowerCase() == 'duration' &&
+                      (a.values?.isNotEmpty ?? false),
+                  orElse:
+                      () => SessionAttribute(
+                        tutorId: session.tutor?.id ?? '',
+                        name: 'Duration',
+                        values: ['1hr'],
+                        session: session,
+                        id: '',
+                      ),
+                )
+                .values
+                ?.first;
+        return durationAttr ?? '1hr';
+      });
+
+      selectedAttributes.putIfAbsent('Mode', () {
+        final modeAttr =
+            firstVariation.sessionAttributes
+                ?.firstWhere(
+                  (a) =>
+                      a.name.toLowerCase() == 'mode' &&
+                      (a.values?.isNotEmpty ?? false),
+                  orElse:
+                      () => SessionAttribute(
+                        tutorId: session.tutor?.id ?? '',
+                        name: 'Mode',
+                        values: ['Online'],
+                        session: session,
+                        id: '',
+                      ),
+                )
+                .values
+                ?.first;
+        return modeAttr ?? 'Online';
+      });
+    } else {
+      selectedAttributes['Duration'] = '1hr';
+      selectedAttributes['Mode'] = 'Online';
+    }
+
+    update();
   }
 }

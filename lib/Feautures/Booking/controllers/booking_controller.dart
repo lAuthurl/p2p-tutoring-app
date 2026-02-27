@@ -1,5 +1,6 @@
 // ignore_for_file: unnecessary_null_comparison, avoid_print
 
+import 'dart:convert';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import '../../../models/ModelProvider.dart';
@@ -165,6 +166,7 @@ class BookingController extends GetxController {
     String providerImage = '',
     String timeSlot = '',
     TemporalDateTime? bookingDate,
+    Map<String, String>? selectedAttributes, // ✅ new parameter
   }) async {
     if (!await _canSync()) return null;
 
@@ -182,6 +184,10 @@ class BookingController extends GetxController {
         providerImage: providerImage,
         bookingDate: bookingDate ?? TemporalDateTime.now(),
         timeSlot: timeSlot,
+        selectedAttributes:
+            selectedAttributes != null
+                ? jsonEncode(selectedAttributes) // ✅ encode as JSON
+                : null,
       );
 
       await Amplify.DataStore.save(item);
@@ -210,6 +216,7 @@ class BookingController extends GetxController {
     String? tutorName,
     String? tutorImage,
     int quantity = 1,
+    Map<String, String>? selectedAttributes, // ✅ new parameter
   }) async {
     if (!await _canSync()) return;
 
@@ -238,6 +245,7 @@ class BookingController extends GetxController {
       serviceImage: serviceImage ?? '',
       providerName: tutorName ?? '',
       providerImage: tutorImage ?? '',
+      selectedAttributes: selectedAttributes, // ✅ pass through
     );
   }
 
