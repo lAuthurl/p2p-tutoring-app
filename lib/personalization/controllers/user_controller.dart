@@ -20,7 +20,7 @@ class UserController extends GetxController {
   static UserController get instance => Get.find();
 
   // ---------------------------------------------------------------------------
-  // STORAGE (Onboarding & Login State)
+  // STORAGE
   // ---------------------------------------------------------------------------
   final _storage = GetStorage();
 
@@ -29,10 +29,11 @@ class UserController extends GetxController {
 
   void setHasSeenOnboarding(bool value) =>
       _storage.write('HAS_SEEN_ONBOARDING', value);
+
   void setLoggedIn(bool value) => _storage.write('IS_LOGGED_IN', value);
 
   // ---------------------------------------------------------------------------
-  // ONBOARDING TRACKER
+  // ONBOARDING STATE
   // ---------------------------------------------------------------------------
   final isLastPage = false.obs;
   void setIsLastPage(bool value) => isLastPage.value = value;
@@ -46,16 +47,25 @@ class UserController extends GetxController {
   final hidePassword = false.obs;
   final profileImageUrl = ''.obs;
 
-  // Forms
+  // ---------------------------------------------------------------------------
+  // FORM KEYS
+  // ---------------------------------------------------------------------------
   final updateUserProfileFormKey = GlobalKey<FormState>();
   final reAuthFormKey = GlobalKey<FormState>();
 
-  // Text Controllers
+  // ---------------------------------------------------------------------------
+  // TEXT CONTROLLERS
+  // ---------------------------------------------------------------------------
   final verifyEmail = TextEditingController();
   final verifyPassword = TextEditingController();
+
   final email = TextEditingController();
   final phoneNo = TextEditingController();
   final fullName = TextEditingController();
+
+  // ✅ NEW
+  final skills = TextEditingController();
+  final about = TextEditingController();
 
   // ---------------------------------------------------------------------------
   // FETCH USER
@@ -68,6 +78,7 @@ class UserController extends GetxController {
       if (!fetchLatestRecord && currentUser.value != null) return;
 
       profileLoading.value = true;
+
       final authUser = await Amplify.Auth.getCurrentUser();
       if (authUser.userId.isEmpty) throw 'No signed-in user found';
 
@@ -88,7 +99,6 @@ class UserController extends GetxController {
       }
 
       currentUser.value = users.first;
-      profileImageUrl.value = currentUser.value?.profilePicture ?? '';
       assignDataToProfile();
     } catch (e) {
       if (showErrorSnackBar) {
@@ -103,6 +113,9 @@ class UserController extends GetxController {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // LOAD ALL USER RELATED DATA
+  // ---------------------------------------------------------------------------
   Future<void> loadUserData() async {
     try {
       await fetchUserRecord(fetchLatestRecord: true, showErrorSnackBar: false);
@@ -116,7 +129,7 @@ class UserController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
-  // PROFILE UPDATE
+  // UPDATE PROFILE
   // ---------------------------------------------------------------------------
   Future<void> updateUserProfile() async {
     try {
@@ -142,16 +155,28 @@ class UserController extends GetxController {
         username: fullName.text.trim(),
         email: email.text.trim(),
         phoneNumber: phoneNo.text.trim(),
+        skills:
+            skills.text
+                .trim()
+                .split(',')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList(),
+        about: about.text.trim(), // ✅ NEW
       );
 
       await Amplify.DataStore.save(updatedUser);
+
       currentUser.value = updatedUser;
+      assignDataToProfile();
 
       TFullScreenLoader.stopLoading();
+
       TLoaders.successSnackBar(
         title: 'Updated',
         message: 'Profile updated successfully.',
       );
+
       Get.offNamed(TRoutes.profileScreen);
     } catch (e) {
       TFullScreenLoader.stopLoading();
@@ -175,9 +200,11 @@ class UserController extends GetxController {
       if (image == null || user == null) return;
 
       imageUploading.value = true;
+
       final uploadedUrl = await _uploadImageToS3('Users/Images/Profile', image);
 
       final updatedUser = user.copyWith(profilePicture: uploadedUrl);
+
       await Amplify.DataStore.save(updatedUser);
 
       currentUser.value = updatedUser;
@@ -196,17 +223,21 @@ class UserController extends GetxController {
 
   Future<String> _uploadImageToS3(String folder, XFile image) async {
     final filename = '${DateTime.now().millisecondsSinceEpoch}_${image.name}';
+
     final storagePath = StoragePath.fromString('$folder/$filename');
+
     await Amplify.Storage.uploadFile(
       localFile: AWSFile.fromPath(image.path),
       path: storagePath,
     ).result;
+
     final urlResult = await Amplify.Storage.getUrl(path: storagePath).result;
+
     return urlResult.url.toString();
   }
 
   // ---------------------------------------------------------------------------
-  // REAUTHENTICATE
+  // REAUTHENTICATION
   // ---------------------------------------------------------------------------
   Future<void> reAuthenticateEmailAndPasswordUser() async {
     try {
@@ -220,7 +251,7 @@ class UserController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
-  // ACCOUNT DELETE
+  // DELETE ACCOUNT
   // ---------------------------------------------------------------------------
   void deleteAccountWarningPopup() {
     Get.defaultDialog(
@@ -245,8 +276,11 @@ class UserController extends GetxController {
         'Processing...',
         TImages.docerAnimation,
       );
+
       await Amplify.Auth.deleteUser();
+
       TFullScreenLoader.stopLoading();
+
       Get.offAllNamed(TRoutes.logIn);
     } catch (e) {
       TFullScreenLoader.stopLoading();
@@ -276,12 +310,30 @@ class UserController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
-  // UTILS
+  // ASSIGN DATA TO CONTROLLERS
   // ---------------------------------------------------------------------------
   void assignDataToProfile() {
     fullName.text = currentUser.value?.username ?? '';
     email.text = currentUser.value?.email ?? '';
     phoneNo.text = currentUser.value?.phoneNumber ?? '';
     profileImageUrl.value = currentUser.value?.profilePicture ?? '';
+
+    skills.text = (currentUser.value?.skills ?? []).join(', ');
+    about.text = currentUser.value?.about ?? '';
+  }
+
+  // ---------------------------------------------------------------------------
+  // DISPOSE
+  // ---------------------------------------------------------------------------
+  @override
+  void onClose() {
+    verifyEmail.dispose();
+    verifyPassword.dispose();
+    email.dispose();
+    phoneNo.dispose();
+    fullName.dispose();
+    skills.dispose();
+    about.dispose();
+    super.onClose();
   }
 }

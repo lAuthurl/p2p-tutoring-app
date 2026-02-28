@@ -19,85 +19,114 @@ class ProfileFormScreen extends StatelessWidget {
 
     return Form(
       key: controller.updateUserProfileFormKey,
-      child: Column(
-        children: [
-          // Full Name
-          TextFormField(
-            controller: controller.fullName,
-            decoration: const InputDecoration(
-              label: Text(TTexts.tFullName),
-              prefixIcon: Icon(LineAwesomeIcons.user),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// ---------------- FULL NAME ----------------
+            TextFormField(
+              controller: controller.fullName,
+              decoration: const InputDecoration(
+                label: Text(TTexts.tFullName),
+                prefixIcon: Icon(LineAwesomeIcons.user),
+              ),
             ),
-          ),
-          const SizedBox(height: TSizes.xl - 20),
+            const SizedBox(height: TSizes.xl - 20),
 
-          // Email
-          TextFormField(
-            enabled: controller.email.text.isEmpty,
-            controller: controller.email,
-            decoration: const InputDecoration(
-              label: Text(TTexts.tEmail),
-              prefixIcon: Icon(LineAwesomeIcons.envelope),
+            /// ---------------- EMAIL ----------------
+            TextFormField(
+              enabled: controller.email.text.isEmpty,
+              controller: controller.email,
+              decoration: const InputDecoration(
+                label: Text(TTexts.tEmail),
+                prefixIcon: Icon(LineAwesomeIcons.envelope),
+              ),
             ),
-          ),
-          const SizedBox(height: TSizes.xl - 20),
+            const SizedBox(height: TSizes.xl - 20),
 
-          // Phone Number
-          TextFormField(
-            enabled: controller.phoneNo.text.isEmpty,
-            controller: controller.phoneNo,
-            decoration: const InputDecoration(
-              label: Text(TTexts.tPhoneNo),
-              prefixIcon: Icon(LineAwesomeIcons.phone_solid),
+            /// ---------------- PHONE ----------------
+            TextFormField(
+              enabled: controller.phoneNo.text.isEmpty,
+              controller: controller.phoneNo,
+              decoration: const InputDecoration(
+                label: Text(TTexts.tPhoneNo),
+                prefixIcon: Icon(LineAwesomeIcons.phone_solid),
+              ),
             ),
-          ),
-          const SizedBox(height: TSizes.xl),
+            const SizedBox(height: TSizes.xl),
 
-          // Submit Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => controller.updateUserProfile(),
-              child: const Text(TTexts.tEditProfile),
+            /// ---------------- SKILLS ----------------
+            TextFormField(
+              controller: controller.skills,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                label: Text("Skills"),
+                hintText: "e.g. Flutter, UI/UX Design, Mathematics, Physics",
+                prefixIcon: Icon(LineAwesomeIcons.brain_solid),
+              ),
             ),
-          ),
-          const SizedBox(height: TSizes.xl),
+            const SizedBox(height: TSizes.xl - 10),
 
-          // Created Date & Delete Button
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text.rich(
-                TextSpan(
-                  text: TTexts.tJoined,
-                  style: const TextStyle(fontSize: 12),
-                  children: [
-                    TextSpan(
-                      text:
-                          createdAt != null
-                              ? THelperFunctions.getFormattedDate(createdAt)
-                              : 'N/A',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+            /// ---------------- ABOUT YOURSELF ----------------
+            TextFormField(
+              controller: controller.about,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                label: Text("About Yourself"),
+                hintText:
+                    "Tell others about yourself, your experience, teaching style, etc.",
+                alignLabelWithHint: true,
+                prefixIcon: Icon(LineAwesomeIcons.user_edit_solid),
+              ),
+            ),
+            const SizedBox(height: TSizes.xl),
+
+            /// ---------------- SUBMIT BUTTON ----------------
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => controller.updateUserProfile(),
+                child: const Text(TTexts.tEditProfile),
+              ),
+            ),
+            const SizedBox(height: TSizes.xl),
+
+            /// ---------------- JOINED DATE & DELETE ----------------
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text.rich(
+                  TextSpan(
+                    text: TTexts.tJoined,
+                    style: const TextStyle(fontSize: 12),
+                    children: [
+                      TextSpan(
+                        text:
+                            createdAt != null
+                                ? THelperFunctions.getFormattedDate(createdAt)
+                                : 'N/A',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              ElevatedButton(
-                onPressed: () => controller.deleteAccountWarningPopup(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                  elevation: 0,
-                  foregroundColor: Colors.red,
-                  side: BorderSide.none,
+                ElevatedButton(
+                  onPressed: () => controller.deleteAccountWarningPopup(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                    elevation: 0,
+                    foregroundColor: Colors.red,
+                    side: BorderSide.none,
+                  ),
+                  child: const Text(TTexts.tDelete),
                 ),
-                child: const Text(TTexts.tDelete),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

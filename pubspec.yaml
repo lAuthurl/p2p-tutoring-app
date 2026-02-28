@@ -18,6 +18,7 @@ dependencies:
   get_storage: ^2.1.1
   iconsax: ^0.0.8
   logger: ^2.6.2
+  path: ^1.9.1
 
   # Amplify Flutter latest packages
   amplify_flutter: ^2.9.0

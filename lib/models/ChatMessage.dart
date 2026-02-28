@@ -23,15 +23,16 @@ import 'ModelProvider.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 
 
-/** This is an auto generated class representing the Review type in your schema. */
-class Review extends amplify_core.Model {
-  static const classType = const _ReviewModelType();
+/** This is an auto generated class representing the ChatMessage type in your schema. */
+class ChatMessage extends amplify_core.Model {
+  static const classType = const _ChatMessageModelType();
   final String id;
-  final User? _user;
   final String? _sessionId;
-  final Tutor? _tutor;
-  final double? _rating;
-  final String? _comment;
+  final String? _senderId;
+  final String? _senderName;
+  final String? _text;
+  final bool? _isVoice;
+  final String? _audioUrl;
   final amplify_core.TemporalDateTime? _createdAt;
   final amplify_core.TemporalDateTime? _updatedAt;
 
@@ -42,14 +43,10 @@ class Review extends amplify_core.Model {
   @override
   String getId() => id;
   
-  ReviewModelIdentifier get modelIdentifier {
-      return ReviewModelIdentifier(
+  ChatMessageModelIdentifier get modelIdentifier {
+      return ChatMessageModelIdentifier(
         id: id
       );
-  }
-  
-  User? get user {
-    return _user;
   }
   
   String get sessionId {
@@ -65,13 +62,9 @@ class Review extends amplify_core.Model {
     }
   }
   
-  Tutor? get tutor {
-    return _tutor;
-  }
-  
-  double get rating {
+  String get senderId {
     try {
-      return _rating!;
+      return _senderId!;
     } catch(e) {
       throw amplify_core.AmplifyCodeGenModelException(
           amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
@@ -82,8 +75,20 @@ class Review extends amplify_core.Model {
     }
   }
   
-  String? get comment {
-    return _comment;
+  String? get senderName {
+    return _senderName;
+  }
+  
+  String? get text {
+    return _text;
+  }
+  
+  bool? get isVoice {
+    return _isVoice;
+  }
+  
+  String? get audioUrl {
+    return _audioUrl;
   }
   
   amplify_core.TemporalDateTime? get createdAt {
@@ -94,16 +99,17 @@ class Review extends amplify_core.Model {
     return _updatedAt;
   }
   
-  const Review._internal({required this.id, user, required sessionId, tutor, required rating, comment, createdAt, updatedAt}): _user = user, _sessionId = sessionId, _tutor = tutor, _rating = rating, _comment = comment, _createdAt = createdAt, _updatedAt = updatedAt;
+  const ChatMessage._internal({required this.id, required sessionId, required senderId, senderName, text, isVoice, audioUrl, createdAt, updatedAt}): _sessionId = sessionId, _senderId = senderId, _senderName = senderName, _text = text, _isVoice = isVoice, _audioUrl = audioUrl, _createdAt = createdAt, _updatedAt = updatedAt;
   
-  factory Review({String? id, User? user, required String sessionId, Tutor? tutor, required double rating, String? comment, amplify_core.TemporalDateTime? createdAt}) {
-    return Review._internal(
+  factory ChatMessage({String? id, required String sessionId, required String senderId, String? senderName, String? text, bool? isVoice, String? audioUrl, amplify_core.TemporalDateTime? createdAt}) {
+    return ChatMessage._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
-      user: user,
       sessionId: sessionId,
-      tutor: tutor,
-      rating: rating,
-      comment: comment,
+      senderId: senderId,
+      senderName: senderName,
+      text: text,
+      isVoice: isVoice,
+      audioUrl: audioUrl,
       createdAt: createdAt);
   }
   
@@ -114,13 +120,14 @@ class Review extends amplify_core.Model {
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
-    return other is Review &&
+    return other is ChatMessage &&
       id == other.id &&
-      _user == other._user &&
       _sessionId == other._sessionId &&
-      _tutor == other._tutor &&
-      _rating == other._rating &&
-      _comment == other._comment &&
+      _senderId == other._senderId &&
+      _senderName == other._senderName &&
+      _text == other._text &&
+      _isVoice == other._isVoice &&
+      _audioUrl == other._audioUrl &&
       _createdAt == other._createdAt;
   }
   
@@ -131,13 +138,14 @@ class Review extends amplify_core.Model {
   String toString() {
     var buffer = new StringBuffer();
     
-    buffer.write("Review {");
+    buffer.write("ChatMessage {");
     buffer.write("id=" + "$id" + ", ");
-    buffer.write("user=" + (_user != null ? _user!.toString() : "null") + ", ");
     buffer.write("sessionId=" + "$_sessionId" + ", ");
-    buffer.write("tutor=" + (_tutor != null ? _tutor!.toString() : "null") + ", ");
-    buffer.write("rating=" + (_rating != null ? _rating!.toString() : "null") + ", ");
-    buffer.write("comment=" + "$_comment" + ", ");
+    buffer.write("senderId=" + "$_senderId" + ", ");
+    buffer.write("senderName=" + "$_senderName" + ", ");
+    buffer.write("text=" + "$_text" + ", ");
+    buffer.write("isVoice=" + (_isVoice != null ? _isVoice!.toString() : "null") + ", ");
+    buffer.write("audioUrl=" + "$_audioUrl" + ", ");
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
     buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
     buffer.write("}");
@@ -145,84 +153,78 @@ class Review extends amplify_core.Model {
     return buffer.toString();
   }
   
-  Review copyWith({User? user, String? sessionId, Tutor? tutor, double? rating, String? comment, amplify_core.TemporalDateTime? createdAt}) {
-    return Review._internal(
+  ChatMessage copyWith({String? sessionId, String? senderId, String? senderName, String? text, bool? isVoice, String? audioUrl, amplify_core.TemporalDateTime? createdAt}) {
+    return ChatMessage._internal(
       id: id,
-      user: user ?? this.user,
       sessionId: sessionId ?? this.sessionId,
-      tutor: tutor ?? this.tutor,
-      rating: rating ?? this.rating,
-      comment: comment ?? this.comment,
+      senderId: senderId ?? this.senderId,
+      senderName: senderName ?? this.senderName,
+      text: text ?? this.text,
+      isVoice: isVoice ?? this.isVoice,
+      audioUrl: audioUrl ?? this.audioUrl,
       createdAt: createdAt ?? this.createdAt);
   }
   
-  Review copyWithModelFieldValues({
-    ModelFieldValue<User?>? user,
+  ChatMessage copyWithModelFieldValues({
     ModelFieldValue<String>? sessionId,
-    ModelFieldValue<Tutor?>? tutor,
-    ModelFieldValue<double>? rating,
-    ModelFieldValue<String?>? comment,
+    ModelFieldValue<String>? senderId,
+    ModelFieldValue<String?>? senderName,
+    ModelFieldValue<String?>? text,
+    ModelFieldValue<bool?>? isVoice,
+    ModelFieldValue<String?>? audioUrl,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt
   }) {
-    return Review._internal(
+    return ChatMessage._internal(
       id: id,
-      user: user == null ? this.user : user.value,
       sessionId: sessionId == null ? this.sessionId : sessionId.value,
-      tutor: tutor == null ? this.tutor : tutor.value,
-      rating: rating == null ? this.rating : rating.value,
-      comment: comment == null ? this.comment : comment.value,
+      senderId: senderId == null ? this.senderId : senderId.value,
+      senderName: senderName == null ? this.senderName : senderName.value,
+      text: text == null ? this.text : text.value,
+      isVoice: isVoice == null ? this.isVoice : isVoice.value,
+      audioUrl: audioUrl == null ? this.audioUrl : audioUrl.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value
     );
   }
   
-  Review.fromJson(Map<String, dynamic> json)  
+  ChatMessage.fromJson(Map<String, dynamic> json)  
     : id = json['id'],
-      _user = json['user'] != null
-        ? json['user']['serializedData'] != null
-          ? User.fromJson(new Map<String, dynamic>.from(json['user']['serializedData']))
-          : User.fromJson(new Map<String, dynamic>.from(json['user']))
-        : null,
       _sessionId = json['sessionId'],
-      _tutor = json['tutor'] != null
-        ? json['tutor']['serializedData'] != null
-          ? Tutor.fromJson(new Map<String, dynamic>.from(json['tutor']['serializedData']))
-          : Tutor.fromJson(new Map<String, dynamic>.from(json['tutor']))
-        : null,
-      _rating = (json['rating'] as num?)?.toDouble(),
-      _comment = json['comment'],
+      _senderId = json['senderId'],
+      _senderName = json['senderName'],
+      _text = json['text'],
+      _isVoice = json['isVoice'],
+      _audioUrl = json['audioUrl'],
       _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
       _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
   
   Map<String, dynamic> toJson() => {
-    'id': id, 'user': _user?.toJson(), 'sessionId': _sessionId, 'tutor': _tutor?.toJson(), 'rating': _rating, 'comment': _comment, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
+    'id': id, 'sessionId': _sessionId, 'senderId': _senderId, 'senderName': _senderName, 'text': _text, 'isVoice': _isVoice, 'audioUrl': _audioUrl, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
   
   Map<String, Object?> toMap() => {
     'id': id,
-    'user': _user,
     'sessionId': _sessionId,
-    'tutor': _tutor,
-    'rating': _rating,
-    'comment': _comment,
+    'senderId': _senderId,
+    'senderName': _senderName,
+    'text': _text,
+    'isVoice': _isVoice,
+    'audioUrl': _audioUrl,
     'createdAt': _createdAt,
     'updatedAt': _updatedAt
   };
 
-  static final amplify_core.QueryModelIdentifier<ReviewModelIdentifier> MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<ReviewModelIdentifier>();
+  static final amplify_core.QueryModelIdentifier<ChatMessageModelIdentifier> MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<ChatMessageModelIdentifier>();
   static final ID = amplify_core.QueryField(fieldName: "id");
-  static final USER = amplify_core.QueryField(
-    fieldName: "user",
-    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'User'));
   static final SESSIONID = amplify_core.QueryField(fieldName: "sessionId");
-  static final TUTOR = amplify_core.QueryField(
-    fieldName: "tutor",
-    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'Tutor'));
-  static final RATING = amplify_core.QueryField(fieldName: "rating");
-  static final COMMENT = amplify_core.QueryField(fieldName: "comment");
+  static final SENDERID = amplify_core.QueryField(fieldName: "senderId");
+  static final SENDERNAME = amplify_core.QueryField(fieldName: "senderName");
+  static final TEXT = amplify_core.QueryField(fieldName: "text");
+  static final ISVOICE = amplify_core.QueryField(fieldName: "isVoice");
+  static final AUDIOURL = amplify_core.QueryField(fieldName: "audioUrl");
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
   static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
-    modelSchemaDefinition.name = "Review";
-    modelSchemaDefinition.pluralName = "Reviews";
+    modelSchemaDefinition.name = "ChatMessage";
+    modelSchemaDefinition.pluralName = "ChatMessages";
     
     modelSchemaDefinition.authRules = [
       amplify_core.AuthRule(
@@ -232,9 +234,7 @@ class Review extends amplify_core.Model {
         provider: amplify_core.AuthRuleProvider.USERPOOLS,
         operations: const [
           amplify_core.ModelOperation.CREATE,
-          amplify_core.ModelOperation.READ,
-          amplify_core.ModelOperation.UPDATE,
-          amplify_core.ModelOperation.DELETE
+          amplify_core.ModelOperation.READ
         ]),
       amplify_core.AuthRule(
         authStrategy: amplify_core.AuthStrategy.PUBLIC,
@@ -243,48 +243,46 @@ class Review extends amplify_core.Model {
         ])
     ];
     
-    modelSchemaDefinition.indexes = [
-      amplify_core.ModelIndex(fields: const ["userId"], name: "byUser"),
-      amplify_core.ModelIndex(fields: const ["sessionId"], name: "bySession"),
-      amplify_core.ModelIndex(fields: const ["tutorId"], name: "byTutor")
-    ];
-    
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
     
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.belongsTo(
-      key: Review.USER,
-      isRequired: false,
-      targetNames: ['userId'],
-      ofModelName: 'User'
-    ));
-    
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: Review.SESSIONID,
+      key: ChatMessage.SESSIONID,
       isRequired: true,
       ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
     ));
     
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.belongsTo(
-      key: Review.TUTOR,
-      isRequired: false,
-      targetNames: ['tutorId'],
-      ofModelName: 'Tutor'
-    ));
-    
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: Review.RATING,
+      key: ChatMessage.SENDERID,
       isRequired: true,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.double)
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
     ));
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: Review.COMMENT,
+      key: ChatMessage.SENDERNAME,
       isRequired: false,
       ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
     ));
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: Review.CREATEDAT,
+      key: ChatMessage.TEXT,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: ChatMessage.ISVOICE,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: ChatMessage.AUDIOURL,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: ChatMessage.CREATEDAT,
       isRequired: false,
       ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
     ));
@@ -298,29 +296,29 @@ class Review extends amplify_core.Model {
   });
 }
 
-class _ReviewModelType extends amplify_core.ModelType<Review> {
-  const _ReviewModelType();
+class _ChatMessageModelType extends amplify_core.ModelType<ChatMessage> {
+  const _ChatMessageModelType();
   
   @override
-  Review fromJson(Map<String, dynamic> jsonData) {
-    return Review.fromJson(jsonData);
+  ChatMessage fromJson(Map<String, dynamic> jsonData) {
+    return ChatMessage.fromJson(jsonData);
   }
   
   @override
   String modelName() {
-    return 'Review';
+    return 'ChatMessage';
   }
 }
 
 /**
  * This is an auto generated class representing the model identifier
- * of [Review] in your schema.
+ * of [ChatMessage] in your schema.
  */
-class ReviewModelIdentifier implements amplify_core.ModelIdentifier<Review> {
+class ChatMessageModelIdentifier implements amplify_core.ModelIdentifier<ChatMessage> {
   final String id;
 
-  /** Create an instance of ReviewModelIdentifier using [id] the primary key. */
-  const ReviewModelIdentifier({
+  /** Create an instance of ChatMessageModelIdentifier using [id] the primary key. */
+  const ChatMessageModelIdentifier({
     required this.id});
   
   @override
@@ -338,7 +336,7 @@ class ReviewModelIdentifier implements amplify_core.ModelIdentifier<Review> {
   String serializeAsString() => serializeAsMap().values.join('#');
   
   @override
-  String toString() => 'ReviewModelIdentifier(id: $id)';
+  String toString() => 'ChatMessageModelIdentifier(id: $id)';
   
   @override
   bool operator ==(Object other) {
@@ -346,7 +344,7 @@ class ReviewModelIdentifier implements amplify_core.ModelIdentifier<Review> {
       return true;
     }
     
-    return other is ReviewModelIdentifier &&
+    return other is ChatMessageModelIdentifier &&
       id == other.id;
   }
   

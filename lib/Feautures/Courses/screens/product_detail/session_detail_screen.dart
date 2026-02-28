@@ -10,6 +10,7 @@ import '../../../../common/widgets/texts/section_heading.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/device/device_utility.dart';
+import '../../../Booking/controllers/booking_controller.dart';
 import '../../controllers/session_creation_controller.dart';
 import '../../controllers/tutoring_controller.dart';
 import '../../../Courses/screens/product_detail/widgets/rating_share_widget.dart';
@@ -18,6 +19,7 @@ import '../../../Courses/screens/product_detail/widgets/t_session_attributes.dar
 import '../../../Courses/screens/product_detail/widgets/t_session_image_slider.dart';
 import '../../../../models/ModelProvider.dart';
 import 'chat.dart';
+import 't_session_review.dart';
 import 'tutor_profile.dart';
 
 class SessionDetailScreen extends StatefulWidget {
@@ -38,15 +40,17 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   late final TutoringController _tutoringController;
   late final SessionCreationController _creationController;
 
+  List<Review> _reviews = [];
+  bool _loadingReviews = true;
+
   @override
   void initState() {
     super.initState();
-
-    // Initialize controllers with per-screen tag
     _tutoringController = Get.put(TutoringController(), tag: widget.tag);
     _creationController = Get.put(SessionCreationController(), tag: widget.tag);
 
     _initializeAttributes(widget.session);
+    _fetchReviews();
   }
 
   @override
@@ -60,19 +64,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     super.dispose();
   }
 
+  /// Initialize session attributes for selection
   void _initializeAttributes(TutoringSession session) {
     final sessionAttrs = <String, List<String>>{};
-    final variations = session.sessionVariations ?? [];
-
-    for (final variation in variations) {
-      final attrs = variation.sessionAttributes ?? [];
-      for (final attr in attrs) {
-        if (attr.values != null && attr.values!.isNotEmpty) {
-          sessionAttrs.putIfAbsent(attr.name, () => []);
-          for (final val in attr.values!) {
-            if (!sessionAttrs[attr.name]!.contains(val)) {
-              sessionAttrs[attr.name]!.add(val);
-            }
+    final attributes = session.sessionAttributes ?? [];
+    for (final attr in attributes) {
+      if (attr.values != null && attr.values!.isNotEmpty) {
+        sessionAttrs.putIfAbsent(attr.name, () => []);
+        for (final val in attr.values!) {
+          if (!sessionAttrs[attr.name]!.contains(val)) {
+            sessionAttrs[attr.name]!.add(val);
           }
         }
       }
@@ -88,12 +89,33 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _creationController.initializeAttributesForSession(merged);
   }
 
+  /// Fetch reviews for this session
+  Future<void> _fetchReviews() async {
+    setState(() => _loadingReviews = true);
+    try {
+      final reviews = await _tutoringController.fetchReviews(widget.session.id);
+      setState(() {
+        _reviews = reviews;
+        _loadingReviews = false;
+      });
+    } catch (e) {
+      Get.snackbar(
+        "Error",
+        "Failed to fetch reviews",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
+      setState(() => _loadingReviews = false);
+    }
+  }
+
+  /// Fetch tutor if not already included in session
   Future<Tutor?> _getTutorOrFetch(TutoringSession session) async {
     try {
       if (session.tutor != null) return session.tutor;
 
-      final tutorId = (session.tutor != null) ? session.tutor!.id : null;
-
+      final tutorId = session.tutor?.id;
       if (tutorId != null && tutorId.isNotEmpty) {
         final tutors = await Amplify.DataStore.query(
           Tutor.classType,
@@ -109,7 +131,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         backgroundColor: Colors.redAccent,
         colorText: Colors.white,
       );
-
       return null;
     } catch (e, st) {
       safePrint("❌ Failed to fetch tutor for session ${session.id}: $e\n$st");
@@ -120,128 +141,134 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
-    TDeviceUtils.getScreenWidth(context);
     const buttonHeight = 56.0;
+    TDeviceUtils.getScreenWidth(context);
 
-    // Wrap the entire reactive portion in a single Obx
     return Scaffold(
       body: Stack(
         children: [
-          Obx(() {
-            return SingleChildScrollView(
-              padding: EdgeInsets.only(
-                bottom: buttonHeight + TSizes.spaceBtwItems,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TSessionImageSlider(session: session),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: TSizes.defaultSpace,
-                      vertical: TSizes.defaultSpace / 4,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const TRatingAndShare(),
-                        const SizedBox(height: TSizes.spaceBtwItems / 2),
-
-                        // Pass normal Map, child handles price calculation
-                        TProductMetaData(
-                          session: session,
-                          selectedAttributes: Map<String, String>.from(
-                            _creationController.selectedAttributes,
-                          ), // convert RxMap -> normal Map here
-                        ),
-                        const SizedBox(height: TSizes.spaceBtwSections / 2),
-                        TSessionAttributes(session: session),
-                        const SizedBox(height: TSizes.spaceBtwSections / 2),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () async {
-                                  final tutor = await _getTutorOrFetch(session);
-                                  if (tutor != null) {
-                                    Get.to(
-                                      () => TutorProfileScreen(tutor: tutor),
-                                    );
-                                  }
-                                },
-                                style: _outlinedButtonStyle(),
-                                child: const Text(
-                                  "Tutor Profile",
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: TSizes.spaceBtwItems),
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () async {
-                                  final tutor = await _getTutorOrFetch(session);
-                                  if (tutor != null) {
-                                    Get.to(
-                                      () => ChatScreen(
-                                        tutor: tutor,
-                                        sessionId: session.id,
-                                      ),
-                                    );
-                                  }
-                                },
-                                style: _outlinedButtonStyle(),
-                                child: const Text(
-                                  "Chat",
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: TSizes.spaceBtwSections),
-                        const SizedBox(height: TSizes.spaceBtwSections / 2),
-
-                        const TSectionHeading(
-                          title: "Description",
-                          showActionButton: false,
-                        ),
-                        const SizedBox(height: TSizes.spaceBtwItems),
-                        ReadMoreText(
-                          session.description ?? "No description provided.",
-                          trimLines: 3,
-                          trimMode: TrimMode.Line,
-                          trimCollapsedText: " Show more",
-                          trimExpandedText: " Less",
-                          moreStyle: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          lessStyle: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: TSizes.spaceBtwSections / 2),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const TSectionHeading(
-                              title: "Reviews",
-                              showActionButton: false,
-                            ),
-                            IconButton(
-                              icon: const Icon(Iconsax.arrow_right_3, size: 18),
-                              onPressed: () {},
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+          SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: buttonHeight + TSizes.spaceBtwItems,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TSessionImageSlider(session: session),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TSizes.defaultSpace,
+                    vertical: TSizes.defaultSpace / 4,
                   ),
-                ],
-              ),
-            );
-          }),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TRatingAndShare(reviews: _reviews),
+                      const SizedBox(height: TSizes.spaceBtwItems / 2),
+                      TProductMetaData(session: session, tag: widget.tag),
+                      const SizedBox(height: TSizes.spaceBtwSections / 2),
+                      TSessionAttributes(session: session),
+                      const SizedBox(height: TSizes.spaceBtwSections / 2),
+
+                      /// Tutor Profile & Chat Buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                final tutor = await _getTutorOrFetch(session);
+                                if (tutor != null) {
+                                  Get.to(
+                                    () => TutorProfileScreen(tutor: tutor),
+                                  );
+                                }
+                              },
+                              style: _outlinedButtonStyle(),
+                              child: const Text(
+                                "Tutor Profile",
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: TSizes.spaceBtwItems),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                final tutor = await _getTutorOrFetch(session);
+                                if (tutor != null) {
+                                  Get.to(
+                                    () => ChatScreen(
+                                      tutor: tutor,
+                                      sessionId: session.id,
+                                    ),
+                                  );
+                                }
+                              },
+                              style: _outlinedButtonStyle(),
+                              child: const Text(
+                                "Chat",
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: TSizes.spaceBtwSections),
+
+                      /// Description
+                      const TSectionHeading(
+                        title: "Description",
+                        showActionButton: false,
+                      ),
+                      const SizedBox(height: TSizes.spaceBtwItems),
+                      ReadMoreText(
+                        session.description ?? "No description provided.",
+                        trimLines: 3,
+                        trimMode: TrimMode.Line,
+                        trimCollapsedText: " Show more",
+                        trimExpandedText: " Less",
+                        moreStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        lessStyle: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: TSizes.spaceBtwSections / 2),
+
+                      /// Reviews Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const TSectionHeading(
+                            title: "Reviews",
+                            showActionButton: false,
+                          ),
+                          IconButton(
+                            icon: const Icon(Iconsax.arrow_right_3, size: 18),
+                            onPressed: () async {
+                              final updated = await Get.to(
+                                () => SessionReviewScreen(session: session),
+                              );
+                              if (updated == true) _fetchReviews();
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: TSizes.spaceBtwItems),
+
+                      _loadingReviews
+                          ? const Center(child: CircularProgressIndicator())
+                          : _reviews.isEmpty
+                          ? const Text("No reviews yet.")
+                          : Column(
+                            children:
+                                _reviews
+                                    .map((r) => _buildReviewCard(r))
+                                    .toList(),
+                          ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
 
           /// Book Session Button
           Positioned(
@@ -281,18 +308,92 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     );
   }
 
-  void _bookSession(TutoringSession session) {
-    _tutoringController.addSessionToBooking(
-      session,
-      selectedAttributes: Map<String, String>.from(
-        _creationController.selectedAttributes,
-      ),
-    );
+  Future<void> _bookSession(TutoringSession session) async {
+    try {
+      // Use the shared TutoringController for this session
+      final tutoringController = Get.find<TutoringController>(tag: widget.tag);
 
-    Get.snackbar(
-      "Added to Booking",
-      "Session added with your selected options",
-      snackPosition: SnackPosition.BOTTOM,
+      // Add session to booking using current selected attributes
+      await tutoringController.addSessionToBooking(
+        session,
+        selectedAttributes: Map<String, String>.from(
+          tutoringController.selectedAttributes,
+        ),
+        quantity: 1,
+      );
+
+      // Success handling removed (no snackbar)
+    } catch (e) {
+      // Error handling removed (no snackbar)
+    }
+  }
+
+  Widget _buildReviewCard(Review r) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: TSizes.spaceBtwItems / 2),
+      child: Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(TSizes.defaultSpace),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundImage:
+                        r.user?.profilePicture != null &&
+                                r.user!.profilePicture!.isNotEmpty
+                            ? NetworkImage(r.user!.profilePicture!)
+                            : null,
+                    backgroundColor: TColors.primary,
+                    child:
+                        (r.user?.profilePicture == null ||
+                                r.user!.profilePicture!.isEmpty)
+                            ? Text(
+                              r.user?.username[0].toUpperCase() ?? "?",
+                              style: const TextStyle(color: Colors.white),
+                            )
+                            : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      r.user?.username ?? "Anonymous",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Row(
+                    children: List.generate(
+                      5,
+                      (index) => Icon(
+                        Icons.star,
+                        size: 16,
+                        color:
+                            index < (r.rating ?? 0)
+                                ? Colors.amber
+                                : Colors.grey.shade300,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(r.comment ?? ''),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  r.createdAt!.getDateTimeInUtc().toLocal().toString().split(
+                    " ",
+                  )[0],
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

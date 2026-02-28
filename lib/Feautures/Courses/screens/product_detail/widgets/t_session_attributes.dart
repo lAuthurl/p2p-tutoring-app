@@ -9,16 +9,16 @@ import '../../../../../models/ModelProvider.dart';
 
 class TSessionAttributes extends StatelessWidget {
   final TutoringSession session;
+  final String? tag; // optional tag for controller
 
-  /// Use a unique tag based on session ID
-  final String tag;
-
-  TSessionAttributes({super.key, required this.session}) : tag = session.id;
+  const TSessionAttributes({super.key, required this.session, this.tag});
 
   @override
   Widget build(BuildContext context) {
-    // Use Get.find with the tag to safely get the controller
-    final controller = Get.find<SessionCreationController>(tag: tag);
+    final controllerTag = tag ?? session.id;
+
+    // Safely get the controller with the provided tag
+    final controller = Get.find<SessionCreationController>(tag: controllerTag);
 
     return Obx(() {
       final attrs = controller.sessionAttributes;
@@ -34,7 +34,7 @@ class TSessionAttributes extends StatelessWidget {
 
               if (values.isEmpty) return const SizedBox.shrink();
 
-              // Ensure a selected value exists
+              // Ensure there’s always a selected value
               controller.selectedAttributes.putIfAbsent(
                 name,
                 () => values.first,

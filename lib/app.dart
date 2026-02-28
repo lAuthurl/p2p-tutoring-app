@@ -11,20 +11,17 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      /// -- README(Docs[3]) -- Bindings
       title: "Starter Template",
       initialBinding: GeneralBindings(),
       initialRoute: TRoutes.splash,
-      // Respect the system theme preference (allow light mode)
+
+      // Force dark mode
       themeMode: ThemeMode.dark,
-      theme: TAppTheme.lightTheme,
-      darkTheme: TAppTheme.darkTheme,
+      theme: TAppTheme.darkTheme, // Only use darkTheme
+      darkTheme: TAppTheme.darkTheme, // Same dark theme
       debugShowCheckedModeBanner: false,
       getPages: AppRoutes.pages,
 
-      /// -- README(Docs[4]) -- To use Screen Transitions here
-      /// -- README(Docs[5]) -- Home Screen or Progress Indicator
-      // `initialRoute` is set to splash so `home` shows a brief loader.
       home: const Scaffold(body: Center(child: CircularProgressIndicator())),
     );
   }

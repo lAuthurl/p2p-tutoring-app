@@ -1,9 +1,12 @@
 // ignore_for_file: avoid_print, unnecessary_null_comparison
 
+import 'dart:io';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
+import 'package:path/path.dart' as p;
 import '../../Booking/controllers/booking_controller.dart';
 import '../../../../models/ModelProvider.dart';
+import 'session_creation_controller.dart';
 
 class TutoringController extends GetxController {
   // ---------------- Singleton ----------------
@@ -12,37 +15,28 @@ class TutoringController extends GetxController {
     return Get.put(TutoringController());
   }
 
-  int? calculateSalePercentage(double originalPrice, double? salePrice) {
-    if (salePrice == null || salePrice >= originalPrice || originalPrice == 0) {
+  // ---------------- Auth User ----------------
+  Future<String?> get authUserId async {
+    try {
+      final user = await Amplify.Auth.getCurrentUser();
+      return user.userId;
+    } catch (_) {
       return null;
     }
-    final percent = ((originalPrice - salePrice) / originalPrice * 100).round();
-    return percent > 0 ? percent : null;
   }
 
   // ---------------- Reactive State ----------------
   final sessions = <TutoringSession>[].obs;
-  final RxList<TutoringSession> featuredSessions = <TutoringSession>[].obs;
-  final RxList<TutoringSession> popularSessions = <TutoringSession>[].obs;
+  final featuredSessions = <TutoringSession>[].obs;
+  final popularSessions = <TutoringSession>[].obs;
 
-  RxInt selectedQuantity = 0.obs;
-  RxMap<String, String> selectedAttributes = <String, String>{}.obs;
-
-  Rx<SessionVariation> selectedVariation =
-      SessionVariation(
-        availableSeats: 0,
-        pricePerSession: 0,
-        lectureTime: TemporalDateTime(DateTime.now()),
-        sessionAttributes: null,
-        id: '',
-        tutorId: '',
-      ).obs;
-
-  RxString variationStockStatus = ''.obs;
-  RxString selectedSessionImage = ''.obs;
+  final selectedAttributes = <String, String>{}.obs;
+  final selectedSessionImage = ''.obs;
 
   final favorites = <String, RxBool>{}.obs;
-  RxBool isSynced = false.obs;
+  final isSynced = false.obs;
+
+  final sessionMessages = <String, List<ChatMessage>>{}.obs;
 
   // ---------------- Lifecycle ----------------
   @override
@@ -107,26 +101,18 @@ class TutoringController extends GetxController {
     TutoringSession session,
     Map<String, String>? attributes,
   ) {
-    double price = session.pricePerSession ?? 0;
+    double price = session.pricePerSession ?? 0.0;
 
-    final variation = selectedVariation.value;
-    if ((session.sessionVariations?.isNotEmpty ?? false) &&
-        variation.id.isNotEmpty) {
-      final v = session.sessionVariations!.firstWhere(
-        (v) => v.id == variation.id,
-        orElse: () => variation,
-      );
-      price = v.pricePerSession ?? price;
-    }
-
-    final duration = (attributes?['Duration'] ?? '').toLowerCase();
+    // Adjust price for Duration
+    final duration = attributes?['Duration']?.toLowerCase() ?? '';
     if (duration.contains('2hr') ||
         duration.contains('2 h') ||
         duration.contains('2h')) {
       price *= 2;
     }
 
-    final mode = (attributes?['Mode'] ?? '').toLowerCase();
+    // Adjust price for Mode
+    final mode = attributes?['Mode']?.toLowerCase() ?? '';
     if (mode.contains('in-person') ||
         mode.contains('offline') ||
         mode.contains('physical')) {
@@ -141,78 +127,74 @@ class TutoringController extends GetxController {
     return price % 1 == 0 ? price.toStringAsFixed(0) : price.toStringAsFixed(2);
   }
 
-  void initializeAlreadySelectedQuantity(TutoringSession session) {
+  void initializeSelectedAttributes(TutoringSession session) {
     selectedAttributes.clear();
-
-    selectedVariation.value = SessionVariation(
-      availableSeats: 0,
-      pricePerSession: 0,
-      lectureTime: TemporalDateTime(DateTime.now()),
-      sessionAttributes: null,
-      id: '',
-      tutorId: session.tutor?.id ?? '',
-    );
+    if (session.sessionAttributes?.isNotEmpty ?? false) {
+      for (var attr in session.sessionAttributes!) {
+        if (attr.values?.isNotEmpty ?? false) {
+          selectedAttributes[attr.name] = attr.values!.first;
+        }
+      }
+    }
+    selectedAttributes.putIfAbsent('Duration', () => '1hr');
+    selectedAttributes.putIfAbsent('Mode', () => 'Online');
 
     selectedSessionImage.value =
-        (session.images?.isNotEmpty ?? false)
+        session.images?.isNotEmpty == true
             ? session.images!.first
             : session.thumbnail ?? '';
-
-    initializeDefaultAttributes(session);
   }
 
-  /// ---------------- Core: Book Session ----------------
+  // ---------------- Reactive Booking Helper ----------------
   Future<void> addSessionToBooking(
     TutoringSession session, {
     Map<String, String>? selectedAttributes,
+    int quantity = 1,
+    String? controllerTag, // optional tag to find the SessionCreationController
   }) async {
-    if (!await _canSync()) {
-      Get.snackbar('Error', 'Cannot book session: not signed in.');
-      return;
+    // If we can't sync, just return
+    if (!await _canSync()) return;
+
+    final bookingController = BookingController.instance;
+
+    // Ensure a booking exists
+    Booking booking;
+    if (bookingController.bookings.isNotEmpty) {
+      booking = bookingController.bookings.first;
+    } else {
+      final created = await bookingController.createBooking(session: session);
+      if (created == null) return;
+      booking = created;
     }
 
-    final variation = selectedVariation.value;
-
-    // Ensure a variation is selected if the session has variations
-    if ((session.sessionVariations?.isNotEmpty ?? false) &&
-        variation.id.isEmpty) {
-      Get.snackbar(
-        'Selection required',
-        'Please select a variation before booking.',
-      );
-      return;
-    }
-
-    // Resolve image
-    String serviceImage = '';
-    if ((session.images?.isNotEmpty ?? false)) {
-      serviceImage = session.images!.first;
-    } else if ((session.thumbnail?.isNotEmpty ?? false)) {
-      serviceImage = session.thumbnail!;
-    } else if ((variation.image?.isNotEmpty ?? false)) {
-      serviceImage = variation.image!;
-    }
-
-    // Compute price with selected attributes
-    final adjustedPrice = _computeAdjustedPrice(session, selectedAttributes);
-
-    // Add booking item
-    BookingController.instance.addBookingItem(
-      sessionId: session.id,
-      tutorId: session.tutor?.id ?? '',
-      bookingDate:
-          variation.lectureTime?.getDateTimeInUtc().toLocal() ?? DateTime.now(),
-      timeSlot: variation.id,
-      price: adjustedPrice,
-      serviceTitle: session.title,
-      serviceImage: serviceImage,
-      tutorName: session.tutor?.name ?? '',
-      tutorImage: session.tutor?.image ?? '',
-      session: session,
-      selectedAttributes: selectedAttributes,
+    // Find the SessionCreationController to get dynamic price
+    final tagToUse = controllerTag ?? session.id;
+    final sessionController = Get.find<SessionCreationController>(
+      tag: tagToUse,
     );
 
+    // Calculate final dynamic price ONCE
+    final double finalPrice = sessionController.calculateDynamicPrice(session);
+
+    // Add booking item with the final price
+    await bookingController.createBookingItem(
+      booking: booking,
+      sessionId: session.id,
+      tutorId: session.tutor?.id,
+      price: finalPrice, // <-- use finalPrice here
+      quantity: quantity,
+      serviceTitle: session.title ?? '',
+      serviceImage: session.images?.first ?? session.thumbnail ?? '',
+      providerName: session.tutor?.name ?? '',
+      providerImage: session.tutor?.image ?? '',
+      selectedAttributes: selectedAttributes,
+      bookingDate: TemporalDateTime.now(),
+    );
+
+    // Close current screen
     Get.back();
+
+    // Show confirmation
     Get.snackbar(
       "Added to Booking",
       "Session added with your selected options",
@@ -220,6 +202,7 @@ class TutoringController extends GetxController {
     );
   }
 
+  // ---------------- Favorites ----------------
   bool isFavourite(String sessionId) => favorites[sessionId]?.value ?? false;
 
   void toggleFavoriteSession(String sessionId) {
@@ -233,107 +216,203 @@ class TutoringController extends GetxController {
   List<TutoringSession> favoriteSessions() =>
       sessions.where((s) => isFavourite(s.id)).toList();
 
-  List<String> getAttributesAvailabilityInVariation(
-    List<SessionVariation> variations,
-    String attributeName,
-  ) {
-    final lowerAttr = attributeName.toLowerCase();
-    final values = <String>{};
-
-    for (final v in variations) {
-      final attrs = v.sessionAttributes;
-      if (attrs != null) {
-        for (final attr in attrs) {
-          if (attr.name.toLowerCase() == lowerAttr &&
-              (attr.values?.isNotEmpty ?? false)) {
-            values.addAll(attr.values!);
-          }
-        }
-      }
-    }
-
-    return values.toList();
-  }
-
-  void onAttributeSelected(String attributeName, String value) {
-    selectedAttributes[attributeName] = value;
-    update();
-  }
-
   List<String> getAllSessionImages(TutoringSession session) {
     final List<String> images = [];
-    if ((session.thumbnail?.isNotEmpty ?? false)) {
+    if ((session.thumbnail?.isNotEmpty ?? false))
       images.add(session.thumbnail!);
-    }
     if ((session.images?.isNotEmpty ?? false)) images.addAll(session.images!);
     return images;
   }
-}
 
-/// ---------------- Extension ----------------
-extension TutoringControllerExtensions on TutoringController {
-  /// Initialize default attributes for a given session
-  void initializeDefaultAttributes(TutoringSession session) {
-    selectedAttributes.clear();
-
-    final variations = session.sessionVariations ?? [];
-    if (variations.isNotEmpty) {
-      final firstVariation = variations.first;
-
-      if (firstVariation.sessionAttributes != null) {
-        for (var attr in firstVariation.sessionAttributes!) {
-          if (attr.values?.isNotEmpty ?? false) {
-            selectedAttributes[attr.name] = attr.values!.first;
-          }
-        }
+  List<Map<String, String>> generateCombinationsForUI(TutoringSession session) {
+    List<Map<String, String>> combos = [{}];
+    session.sessionAttributes?.forEach((attr) {
+      final values = attr.values ?? [];
+      List<Map<String, String>> newList = [];
+      for (var combo in combos) {
+        for (var val in values) newList.add({...combo, attr.name: val});
       }
+      combos = newList;
+    });
+    return combos;
+  }
 
-      selectedAttributes.putIfAbsent('Duration', () {
-        final durationAttr =
-            firstVariation.sessionAttributes
-                ?.firstWhere(
-                  (a) =>
-                      a.name.toLowerCase() == 'duration' &&
-                      (a.values?.isNotEmpty ?? false),
-                  orElse:
-                      () => SessionAttribute(
-                        tutorId: session.tutor?.id ?? '',
-                        name: 'Duration',
-                        values: ['1hr'],
-                        session: session,
-                        id: '',
-                      ),
-                )
-                .values
-                ?.first;
-        return durationAttr ?? '1hr';
-      });
+  // ---------------- Sale Calculation ----------------
+  int calculateSalePercentage(double originalPrice, double? discountedPrice) {
+    if (discountedPrice == null || discountedPrice >= originalPrice) return 0;
+    return ((1 - (discountedPrice / originalPrice)) * 100).round();
+  }
 
-      selectedAttributes.putIfAbsent('Mode', () {
-        final modeAttr =
-            firstVariation.sessionAttributes
-                ?.firstWhere(
-                  (a) =>
-                      a.name.toLowerCase() == 'mode' &&
-                      (a.values?.isNotEmpty ?? false),
-                  orElse:
-                      () => SessionAttribute(
-                        tutorId: session.tutor?.id ?? '',
-                        name: 'Mode',
-                        values: ['Online'],
-                        session: session,
-                        id: '',
-                      ),
-                )
-                .values
-                ?.first;
-        return modeAttr ?? 'Online';
-      });
-    } else {
-      selectedAttributes['Duration'] = '1hr';
-      selectedAttributes['Mode'] = 'Online';
+  // ---------------- Compute Price Based on Selected Attributes ----------------
+  double computeSelectedAttributesPrice() {
+    // Use the currently selected session
+    if (sessions.isEmpty) return 0.0;
+
+    // Pick session based on selectedSessionImage or fallback to first
+    final session = sessions.firstWhere(
+      (s) => s.id == selectedSessionImage.value,
+      orElse: () => sessions.first,
+    );
+
+    return _computeAdjustedPrice(session, selectedAttributes);
+  }
+
+  // ---------------- Reviews ----------------
+  Future<Review> addReview({
+    required TutoringSession session,
+    required double rating,
+    required String comment,
+  }) async {
+    if (!await _canSync()) throw Exception("User not signed in");
+    try {
+      final authUser = await Amplify.Auth.getCurrentUser();
+      final userList = await Amplify.DataStore.query(
+        User.classType,
+        where: User.ID.eq(authUser.userId),
+      );
+      final currentUser = userList.first;
+
+      final tutorList = await Amplify.DataStore.query(
+        Tutor.classType,
+        where: Tutor.ID.eq(session.tutor!.id),
+      );
+      final currentTutor = tutorList.first;
+
+      final review = Review(
+        user: currentUser,
+        sessionId: session.id,
+        tutor: currentTutor,
+        rating: rating,
+        comment: comment,
+        createdAt: TemporalDateTime.now(),
+      );
+
+      await Amplify.DataStore.save(review);
+      return review;
+    } catch (e) {
+      print('❌ Error adding review for session ${session.id}: $e');
+      rethrow;
     }
+  }
 
-    update();
+  Future<List<Review>> fetchReviews(String sessionId) async {
+    if (!await _canSync()) return [];
+    try {
+      final reviews = await Amplify.DataStore.query(
+        Review.classType,
+        where: Review.SESSIONID.eq(sessionId),
+      );
+      return reviews.where((r) => r.createdAt != null).toList();
+    } catch (e) {
+      print('❌ Error fetching reviews for session $sessionId: $e');
+      return [];
+    }
+  }
+
+  Future<List<Review>> addReviewAndFetch({
+    required TutoringSession session,
+    required double rating,
+    required String comment,
+  }) async {
+    final newReview = await addReview(
+      session: session,
+      rating: rating,
+      comment: comment,
+    );
+    print(
+      '✅ Review created at (UTC): ${newReview.createdAt!.getDateTimeInUtc()}',
+    );
+    return await fetchReviews(session.id);
+  }
+
+  Future<List<Review>> fetchReviewsByTutor(String tutorId) async {
+    try {
+      final reviews = await Amplify.DataStore.query(
+        Review.classType,
+        where: Review.TUTOR.eq(tutorId),
+      );
+      return reviews;
+    } catch (e) {
+      print("❌ Error fetching reviews for tutor $tutorId: $e");
+      return [];
+    }
+  }
+
+  // ---------------- Chat ----------------
+  Future<void> sendMessage(String sessionId, String text) async {
+    if (!await _canSync()) return;
+
+    final authUser = await Amplify.Auth.getCurrentUser();
+    final userId = authUser.userId;
+    if (userId == null) return;
+
+    final message = ChatMessage(
+      sessionId: sessionId,
+      senderId: userId,
+      text: text,
+      isVoice: false,
+      createdAt: TemporalDateTime.now(),
+    );
+
+    await Amplify.DataStore.save(message);
+  }
+
+  Future<void> sendVoiceMessage(String sessionId, File audioFile) async {
+    if (!await _canSync()) return;
+
+    final authUser = await Amplify.Auth.getCurrentUser();
+    final userId = authUser.userId;
+    if (userId == null) return;
+
+    final key =
+        'chat/$sessionId/${DateTime.now().millisecondsSinceEpoch}${p.extension(audioFile.path)}';
+
+    try {
+      final uploadResult =
+          await Amplify.Storage.uploadFile(
+            localFile: AWSFile.fromPath(audioFile.path),
+            path: StoragePath.fromString(key),
+          ).result;
+
+      final urlResult =
+          await Amplify.Storage.getUrl(
+            path: StoragePath.fromString(uploadResult.uploadedItem.path),
+          ).result;
+      final presignedUrl = urlResult.url.toString();
+
+      final message = ChatMessage(
+        sessionId: sessionId,
+        senderId: userId,
+        text: null,
+        audioUrl: presignedUrl,
+        isVoice: true,
+        createdAt: TemporalDateTime.now(),
+      );
+
+      await Amplify.DataStore.save(message);
+
+      sessionMessages.update(
+        sessionId,
+        (list) => list..add(message),
+        ifAbsent: () => [message],
+      );
+    } on StorageException catch (e) {
+      print('❌ S3 Upload or URL failed: ${e.message}');
+    }
+  }
+
+  void observeChat(String sessionId) {
+    Amplify.DataStore.observeQuery(
+      ChatMessage.classType,
+      where: ChatMessage.SESSIONID.eq(sessionId),
+    ).listen((snapshot) {
+      final msgs = snapshot.items.whereType<ChatMessage>().toList();
+      msgs.sort(
+        (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now()).compareTo(
+          b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
+        ),
+      );
+      sessionMessages[sessionId] = msgs;
+    });
   }
 }

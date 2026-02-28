@@ -31,6 +31,7 @@ class Booking extends amplify_core.Model {
   final User? _user;
   final String? _sessionId;
   final List<BookingItem>? _bookingItems;
+  final String? _selectedOptions;
   final double? _totalPrice;
   final String? _status;
   final amplify_core.TemporalDateTime? _createdAt;
@@ -70,6 +71,10 @@ class Booking extends amplify_core.Model {
     return _bookingItems;
   }
   
+  String? get selectedOptions {
+    return _selectedOptions;
+  }
+  
   double? get totalPrice {
     return _totalPrice;
   }
@@ -86,14 +91,15 @@ class Booking extends amplify_core.Model {
     return _updatedAt;
   }
   
-  const Booking._internal({required this.id, user, required sessionId, bookingItems, totalPrice, status, createdAt, updatedAt}): _user = user, _sessionId = sessionId, _bookingItems = bookingItems, _totalPrice = totalPrice, _status = status, _createdAt = createdAt, _updatedAt = updatedAt;
+  const Booking._internal({required this.id, user, required sessionId, bookingItems, selectedOptions, totalPrice, status, createdAt, updatedAt}): _user = user, _sessionId = sessionId, _bookingItems = bookingItems, _selectedOptions = selectedOptions, _totalPrice = totalPrice, _status = status, _createdAt = createdAt, _updatedAt = updatedAt;
   
-  factory Booking({String? id, User? user, required String sessionId, List<BookingItem>? bookingItems, double? totalPrice, String? status, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+  factory Booking({String? id, User? user, required String sessionId, List<BookingItem>? bookingItems, String? selectedOptions, double? totalPrice, String? status, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return Booking._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       user: user,
       sessionId: sessionId,
       bookingItems: bookingItems != null ? List<BookingItem>.unmodifiable(bookingItems) : bookingItems,
+      selectedOptions: selectedOptions,
       totalPrice: totalPrice,
       status: status,
       createdAt: createdAt,
@@ -112,6 +118,7 @@ class Booking extends amplify_core.Model {
       _user == other._user &&
       _sessionId == other._sessionId &&
       DeepCollectionEquality().equals(_bookingItems, other._bookingItems) &&
+      _selectedOptions == other._selectedOptions &&
       _totalPrice == other._totalPrice &&
       _status == other._status &&
       _createdAt == other._createdAt &&
@@ -129,6 +136,7 @@ class Booking extends amplify_core.Model {
     buffer.write("id=" + "$id" + ", ");
     buffer.write("user=" + (_user != null ? _user!.toString() : "null") + ", ");
     buffer.write("sessionId=" + "$_sessionId" + ", ");
+    buffer.write("selectedOptions=" + "$_selectedOptions" + ", ");
     buffer.write("totalPrice=" + (_totalPrice != null ? _totalPrice!.toString() : "null") + ", ");
     buffer.write("status=" + "$_status" + ", ");
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
@@ -138,12 +146,13 @@ class Booking extends amplify_core.Model {
     return buffer.toString();
   }
   
-  Booking copyWith({User? user, String? sessionId, List<BookingItem>? bookingItems, double? totalPrice, String? status, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+  Booking copyWith({User? user, String? sessionId, List<BookingItem>? bookingItems, String? selectedOptions, double? totalPrice, String? status, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return Booking._internal(
       id: id,
       user: user ?? this.user,
       sessionId: sessionId ?? this.sessionId,
       bookingItems: bookingItems ?? this.bookingItems,
+      selectedOptions: selectedOptions ?? this.selectedOptions,
       totalPrice: totalPrice ?? this.totalPrice,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
@@ -154,6 +163,7 @@ class Booking extends amplify_core.Model {
     ModelFieldValue<User?>? user,
     ModelFieldValue<String>? sessionId,
     ModelFieldValue<List<BookingItem>?>? bookingItems,
+    ModelFieldValue<String?>? selectedOptions,
     ModelFieldValue<double?>? totalPrice,
     ModelFieldValue<String?>? status,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
@@ -164,6 +174,7 @@ class Booking extends amplify_core.Model {
       user: user == null ? this.user : user.value,
       sessionId: sessionId == null ? this.sessionId : sessionId.value,
       bookingItems: bookingItems == null ? this.bookingItems : bookingItems.value,
+      selectedOptions: selectedOptions == null ? this.selectedOptions : selectedOptions.value,
       totalPrice: totalPrice == null ? this.totalPrice : totalPrice.value,
       status: status == null ? this.status : status.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
@@ -192,13 +203,14 @@ class Booking extends amplify_core.Model {
               .map((e) => BookingItem.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
               .toList()
           : null),
+      _selectedOptions = json['selectedOptions'],
       _totalPrice = (json['totalPrice'] as num?)?.toDouble(),
       _status = json['status'],
       _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
       _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
   
   Map<String, dynamic> toJson() => {
-    'id': id, 'user': _user?.toJson(), 'sessionId': _sessionId, 'bookingItems': _bookingItems?.map((BookingItem? e) => e?.toJson()).toList(), 'totalPrice': _totalPrice, 'status': _status, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
+    'id': id, 'user': _user?.toJson(), 'sessionId': _sessionId, 'bookingItems': _bookingItems?.map((BookingItem? e) => e?.toJson()).toList(), 'selectedOptions': _selectedOptions, 'totalPrice': _totalPrice, 'status': _status, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
   
   Map<String, Object?> toMap() => {
@@ -206,6 +218,7 @@ class Booking extends amplify_core.Model {
     'user': _user,
     'sessionId': _sessionId,
     'bookingItems': _bookingItems,
+    'selectedOptions': _selectedOptions,
     'totalPrice': _totalPrice,
     'status': _status,
     'createdAt': _createdAt,
@@ -221,6 +234,7 @@ class Booking extends amplify_core.Model {
   static final BOOKINGITEMS = amplify_core.QueryField(
     fieldName: "bookingItems",
     fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'BookingItem'));
+  static final SELECTEDOPTIONS = amplify_core.QueryField(fieldName: "selectedOptions");
   static final TOTALPRICE = amplify_core.QueryField(fieldName: "totalPrice");
   static final STATUS = amplify_core.QueryField(fieldName: "status");
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
@@ -273,6 +287,12 @@ class Booking extends amplify_core.Model {
       isRequired: false,
       ofModelName: 'BookingItem',
       associatedKey: BookingItem.BOOKING
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: Booking.SELECTEDOPTIONS,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
     ));
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(

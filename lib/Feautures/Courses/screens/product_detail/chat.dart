@@ -1,61 +1,23 @@
-// ignore_for_file: public_member_api_docs, use_build_context_synchronously
+// ignore_for_file: public_member_api_docs
 
 import 'dart:async';
+import 'dart:io';
+
+import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
+import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:get_storage/get_storage.dart';
 
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../models/ModelProvider.dart';
+import '../../controllers/tutoring_controller.dart';
 
-/// -----------------------------
-/// Message Model
-/// -----------------------------
-class ChatMessage {
-  final String id;
-  final String? text;
-  final bool isMe;
-  final DateTime timestamp;
-  final bool isVoice;
-  final String? audioPath;
-
-  ChatMessage({
-    required this.id,
-    this.text,
-    required this.isMe,
-    required this.timestamp,
-    this.isVoice = false,
-    this.audioPath,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'text': text,
-    'isMe': isMe,
-    'timestamp': timestamp.toIso8601String(),
-    'isVoice': isVoice,
-    'audioPath': audioPath,
-  };
-
-  factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-    id: json['id'],
-    text: json['text'],
-    isMe: json['isMe'],
-    timestamp: DateTime.parse(json['timestamp']),
-    isVoice: json['isVoice'] ?? false,
-    audioPath: json['audioPath'],
-  );
-}
-
-/// -----------------------------
-/// Chat Screen (unique per session)
-/// -----------------------------
 class ChatScreen extends StatefulWidget {
   final Tutor tutor;
-  final String sessionId; // unique per session
+  final String sessionId;
 
   const ChatScreen({super.key, required this.tutor, required this.sessionId});
 
@@ -64,138 +26,154 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final TextEditingController _controller = TextEditingController();
+  final TutoringController controller = Get.find<TutoringController>();
+
+  final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<ChatMessage> _messages = [];
 
   FlutterSoundRecorder? _recorder;
   FlutterSoundPlayer? _player;
 
+  StreamSubscription? _playerSub;
+
   bool _isRecording = false;
-  bool _isTextEmpty = true;
   String? _currentlyPlayingId;
   double _playbackProgress = 0.0;
+  String? _currentUserId;
 
-  final GetStorage _storage = GetStorage();
+  // =========================================================
+  // INIT
+  // =========================================================
 
   @override
   void initState() {
     super.initState();
-    _recorder = FlutterSoundRecorder();
-    _player = FlutterSoundPlayer();
     _initAudio();
-    _loadSavedMessages();
+    _fetchCurrentUser();
+    controller.observeChat(widget.sessionId);
 
-    _controller.addListener(() {
-      setState(() => _isTextEmpty = _controller.text.trim().isEmpty);
+    _textController.addListener(() {
+      setState(() {});
     });
   }
 
-  /// Initialize recorder and player
-  Future<void> _initAudio() async {
-    await _recorder!.openRecorder();
-    await _player!.openPlayer();
+  Future<void> _fetchCurrentUser() async {
+    try {
+      final user = await Amplify.Auth.getCurrentUser();
+      if (!mounted) return;
+      setState(() => _currentUserId = user.userId);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _currentUserId = null);
+    }
   }
+
+  Future<void> _initAudio() async {
+    _recorder = FlutterSoundRecorder();
+    _player = FlutterSoundPlayer();
+
+    await _recorder?.openRecorder();
+    await _player?.openPlayer();
+  }
+
+  // =========================================================
+  // DISPOSE
+  // =========================================================
 
   @override
   void dispose() {
+    _playerSub?.cancel();
     _recorder?.closeRecorder();
     _player?.closePlayer();
-    _controller.dispose();
+    _textController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  /// Load messages from storage (unique per session)
-  void _loadSavedMessages() {
-    final stored = _storage.read<List>('chat_${widget.sessionId}') ?? [];
-    _messages.addAll(
-      stored.map((e) => ChatMessage.fromJson(Map<String, dynamic>.from(e))),
-    );
-    setState(() {});
+  // =========================================================
+  // TEXT MESSAGE
+  // =========================================================
+
+  Future<void> _sendText() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty || _currentUserId == null) return;
+
+    await controller.sendMessage(widget.sessionId, text);
+
+    _textController.clear();
     _scrollToBottom();
   }
 
-  /// Save messages to storage
-  void _saveMessages() {
-    final toStore = _messages.map((e) => e.toJson()).toList();
-    _storage.write('chat_${widget.sessionId}', toStore);
-  }
+  // =========================================================
+  // VOICE RECORDING
+  // =========================================================
 
-  /// Send text message
-  void _sendMessage() {
-    if (_controller.text.trim().isEmpty) return;
-
-    final msg = ChatMessage(
-      id: DateTime.now().toString(),
-      text: _controller.text.trim(),
-      isMe: true,
-      timestamp: DateTime.now(),
-    );
-
-    setState(() => _messages.add(msg));
-    _controller.clear();
-    _scrollToBottom();
-    _saveMessages();
-  }
-
-  /// Toggle voice recording
   Future<void> _toggleRecording() async {
     if (!_isRecording) {
-      final status = await Permission.microphone.request();
-      if (!status.isGranted) return;
+      final permission = await Permission.microphone.request();
+      if (!permission.isGranted) return;
 
-      final tempDir = await getTemporaryDirectory();
+      final dir = await getTemporaryDirectory();
       final path =
-          '${tempDir.path}/${widget.sessionId}_${DateTime.now().millisecondsSinceEpoch}.aac';
+          '${dir.path}/${widget.sessionId}_${DateTime.now().millisecondsSinceEpoch}.aac';
 
-      await _recorder!.startRecorder(toFile: path, codec: Codec.aacADTS);
+      await _recorder?.startRecorder(toFile: path, codec: Codec.aacADTS);
+
       setState(() => _isRecording = true);
     } else {
-      final path = await _recorder!.stopRecorder();
+      final path = await _recorder?.stopRecorder();
       setState(() => _isRecording = false);
 
-      if (path != null) {
-        final msg = ChatMessage(
-          id: DateTime.now().toString(),
-          isMe: true,
-          isVoice: true,
-          audioPath: path,
-          timestamp: DateTime.now(),
-        );
-        setState(() => _messages.add(msg));
-        _scrollToBottom();
-        _saveMessages();
+      if (path != null && _currentUserId != null) {
+        await controller.sendVoiceMessage(widget.sessionId, File(path));
       }
     }
   }
 
-  /// Play recorded voice
+  // =========================================================
+  // VOICE PLAYBACK
+  // =========================================================
+
   Future<void> _playVoice(ChatMessage msg) async {
+    if (msg.audioUrl == null) return;
+
+    // Stop if same message tapped
     if (_currentlyPlayingId == msg.id) {
-      await _player!.stopPlayer();
+      await _player?.stopPlayer();
       setState(() => _currentlyPlayingId = null);
       return;
     }
 
-    await _player!.startPlayer(
-      fromURI: msg.audioPath,
-      whenFinished: () => setState(() => _currentlyPlayingId = null),
+    await _player?.startPlayer(
+      fromURI: msg.audioUrl,
+      whenFinished: () {
+        if (!mounted) return;
+        setState(() => _currentlyPlayingId = null);
+      },
     );
 
-    _player!.onProgress!.listen((e) {
+    _playerSub?.cancel();
+    _playerSub = _player?.onProgress?.listen((event) {
+      if (!mounted) return;
+
+      final duration = event.duration.inMilliseconds;
+      final position = event.position.inMilliseconds;
+
       setState(() {
         _currentlyPlayingId = msg.id;
-        _playbackProgress =
-            e.duration.inMilliseconds == 0
-                ? 0
-                : e.position.inMilliseconds / e.duration.inMilliseconds;
+        _playbackProgress = duration == 0 ? 0 : position / duration;
       });
     });
   }
 
-  /// Scroll chat to bottom
+  // =========================================================
+  // SCROLL
+  // =========================================================
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 300),
@@ -204,101 +182,94 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  /// Build UI
+  // =========================================================
+  // BUILD
+  // =========================================================
+
   @override
   Widget build(BuildContext context) {
+    final isTextEmpty = _textController.text.trim().isEmpty;
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.tutor.name)),
       body: Column(
         children: [
-          /// Messages
+          // =======================
+          // MESSAGES
+          // =======================
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(TSizes.defaultSpace),
-              itemCount: _messages.length,
-              itemBuilder: (_, index) {
-                final msg = _messages[index];
-                final isPlaying = _currentlyPlayingId == msg.id;
+            child: Obx(() {
+              final messages =
+                  controller.sessionMessages[widget.sessionId] ??
+                  <ChatMessage>[];
 
-                return Align(
-                  alignment:
-                      msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(TSizes.sm),
-                    decoration: BoxDecoration(
-                      color: msg.isMe ? TColors.primary : Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child:
-                        msg.isVoice
-                            ? Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GestureDetector(
-                                  onTap: () => _playVoice(msg),
-                                  child: Icon(
-                                    isPlaying ? Icons.pause : Icons.play_arrow,
-                                    color:
-                                        msg.isMe ? Colors.white : Colors.black,
-                                  ),
+              return ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(TSizes.defaultSpace),
+                itemCount: messages.length,
+                itemBuilder: (_, index) {
+                  final msg = messages[index];
+
+                  final isMe =
+                      _currentUserId != null && msg.senderId == _currentUserId;
+
+                  final isPlaying = _currentlyPlayingId == msg.id;
+
+                  return Align(
+                    alignment:
+                        isMe ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(TSizes.sm),
+                      decoration: BoxDecoration(
+                        color: isMe ? TColors.primary : Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child:
+                          (msg.isVoice ?? false)
+                              ? _buildVoiceBubble(msg, isMe, isPlaying)
+                              : Text(
+                                msg.text ?? '',
+                                style: TextStyle(
+                                  color: isMe ? Colors.white : Colors.black,
                                 ),
-                                const SizedBox(width: 8),
-                                SizedBox(
-                                  width: 100,
-                                  child: LinearProgressIndicator(
-                                    value: isPlaying ? _playbackProgress : 0,
-                                    backgroundColor: Colors.white24,
-                                  ),
-                                ),
-                              ],
-                            )
-                            : Text(
-                              msg.text ?? '',
-                              style: TextStyle(
-                                color: msg.isMe ? Colors.white : Colors.black,
                               ),
-                            ),
-                  ),
-                );
-              },
-            ),
+                    ),
+                  );
+                },
+              );
+            }),
           ),
 
-          /// Input
-          Container(
+          // =======================
+          // INPUT BAR
+          // =======================
+          Padding(
             padding: const EdgeInsets.all(TSizes.defaultSpace),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _controller,
+                    controller: _textController,
                     decoration: const InputDecoration(
                       hintText: "Type a message...",
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-
-                /// Mic / Send Button
-                GestureDetector(
-                  onLongPress: _toggleRecording,
-                  onLongPressUp: _toggleRecording,
-                  child: ElevatedButton(
-                    onPressed: _isTextEmpty ? null : _sendMessage,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: TColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                ElevatedButton(
+                  onPressed: isTextEmpty ? _toggleRecording : _sendText,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: TColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(
-                      _isTextEmpty
-                          ? (_isRecording ? Icons.stop : Icons.mic)
-                          : Icons.send,
-                      color: Colors.white,
-                    ),
+                  ),
+                  child: Icon(
+                    isTextEmpty
+                        ? (_isRecording ? Icons.stop : Icons.mic)
+                        : Icons.send,
+                    color: Colors.white,
                   ),
                 ),
               ],
@@ -306,6 +277,33 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // =========================================================
+  // VOICE BUBBLE WIDGET
+  // =========================================================
+
+  Widget _buildVoiceBubble(ChatMessage msg, bool isMe, bool isPlaying) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: () => _playVoice(msg),
+          child: Icon(
+            isPlaying ? Icons.pause : Icons.play_arrow,
+            color: isMe ? Colors.white : Colors.black,
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 100,
+          child: LinearProgressIndicator(
+            value: isPlaying ? _playbackProgress : 0,
+            backgroundColor: isMe ? Colors.white24 : Colors.black12,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -13,7 +13,6 @@ import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/constants/text_strings.dart';
 import '../../../../../utils/constants/image_strings.dart';
-import '../../../personalization/controllers/theme_controller.dart';
 import '../../../personalization/controllers/user_controller.dart';
 import '../../../routes/routes.dart';
 import '../../../../bindings/general_bindings.dart';
@@ -25,7 +24,6 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeController = ThemeController.instance;
     final userController = UserController.instance;
 
     if (!Get.isRegistered<SubjectController>()) {
@@ -42,18 +40,8 @@ class ProfileScreen extends StatelessWidget {
           TTexts.tProfile,
           style: Theme.of(context).textTheme.headlineMedium,
         ),
-        actions: [
-          Obx(
-            () => IconButton(
-              icon: Icon(
-                themeController.isDark.value
-                    ? LineAwesomeIcons.sun
-                    : LineAwesomeIcons.moon,
-              ),
-              onPressed: () => themeController.toggleTheme(),
-            ),
-          ),
-        ],
+        // Removed the theme switch icon here
+        actions: [],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(TSizes.defaultSpace),

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-import '../../../../../common/widgets/texts/t_product_price_text.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../controllers/booking_controller.dart';
 import '../booking_item_style_01.dart';
@@ -11,46 +9,26 @@ class TBookingItems extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bookingController = Get.put(BookingController());
+    final bookingController = Get.find<BookingController>();
 
     return Obx(() {
       final bookingItems = bookingController.bookingItemsForUI;
 
+      if (bookingItems.isEmpty) {
+        return const Center(child: Text("No bookings yet."));
+      }
+
       return ListView.separated(
         shrinkWrap: true,
-        itemCount: bookingItems.length,
         physics: const NeverScrollableScrollPhysics(),
-        separatorBuilder:
-            (context, index) => const SizedBox(height: TSizes.spaceBtwSections),
+        itemCount: bookingItems.length,
+        // Minimal space between items
+        separatorBuilder: (_, __) => const SizedBox(height: TSizes.sm),
         itemBuilder: (context, index) {
           final item = bookingItems[index];
 
-          final itemTotal = bookingController.itemTotal(item);
-
-          return Column(
-            children: [
-              /// -- Booking Item Style
-              BookingItemStyle01(item: item),
-
-              const SizedBox(height: TSizes.spaceBtwItems),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  /// Total price
-                  TProductPriceText(price: itemTotal.toString()),
-
-                  /// Remove button
-                  IconButton(
-                    onPressed: () => bookingController.removeBooking(item),
-                    icon: const Icon(Icons.delete, size: 20),
-                    color: Theme.of(context).colorScheme.error,
-                    tooltip: 'Remove',
-                  ),
-                ],
-              ),
-            ],
-          );
+          // Only the item widget, no extra container
+          return BookingItemStyle01(item: item);
         },
       );
     });

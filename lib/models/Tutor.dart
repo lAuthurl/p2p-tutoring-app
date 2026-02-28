@@ -31,7 +31,10 @@ class Tutor extends amplify_core.Model {
   final String? _name;
   final String? _email;
   final String? _image;
+  final List<String>? _skills;
+  final String? _about;
   final List<TutoringSession>? _tutoringSessions;
+  final List<Review>? _reviews;
   final amplify_core.TemporalDateTime? _createdAt;
   final amplify_core.TemporalDateTime? _updatedAt;
 
@@ -78,8 +81,20 @@ class Tutor extends amplify_core.Model {
     return _image;
   }
   
+  List<String>? get skills {
+    return _skills;
+  }
+  
+  String? get about {
+    return _about;
+  }
+  
   List<TutoringSession>? get tutoringSessions {
     return _tutoringSessions;
+  }
+  
+  List<Review>? get reviews {
+    return _reviews;
   }
   
   amplify_core.TemporalDateTime? get createdAt {
@@ -90,15 +105,18 @@ class Tutor extends amplify_core.Model {
     return _updatedAt;
   }
   
-  const Tutor._internal({required this.id, required name, required email, image, tutoringSessions, createdAt, updatedAt}): _name = name, _email = email, _image = image, _tutoringSessions = tutoringSessions, _createdAt = createdAt, _updatedAt = updatedAt;
+  const Tutor._internal({required this.id, required name, required email, image, skills, about, tutoringSessions, reviews, createdAt, updatedAt}): _name = name, _email = email, _image = image, _skills = skills, _about = about, _tutoringSessions = tutoringSessions, _reviews = reviews, _createdAt = createdAt, _updatedAt = updatedAt;
   
-  factory Tutor({String? id, required String name, required String email, String? image, List<TutoringSession>? tutoringSessions}) {
+  factory Tutor({String? id, required String name, required String email, String? image, List<String>? skills, String? about, List<TutoringSession>? tutoringSessions, List<Review>? reviews}) {
     return Tutor._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       name: name,
       email: email,
       image: image,
-      tutoringSessions: tutoringSessions != null ? List<TutoringSession>.unmodifiable(tutoringSessions) : tutoringSessions);
+      skills: skills != null ? List<String>.unmodifiable(skills) : skills,
+      about: about,
+      tutoringSessions: tutoringSessions != null ? List<TutoringSession>.unmodifiable(tutoringSessions) : tutoringSessions,
+      reviews: reviews != null ? List<Review>.unmodifiable(reviews) : reviews);
   }
   
   bool equals(Object other) {
@@ -113,7 +131,10 @@ class Tutor extends amplify_core.Model {
       _name == other._name &&
       _email == other._email &&
       _image == other._image &&
-      DeepCollectionEquality().equals(_tutoringSessions, other._tutoringSessions);
+      DeepCollectionEquality().equals(_skills, other._skills) &&
+      _about == other._about &&
+      DeepCollectionEquality().equals(_tutoringSessions, other._tutoringSessions) &&
+      DeepCollectionEquality().equals(_reviews, other._reviews);
   }
   
   @override
@@ -128,6 +149,8 @@ class Tutor extends amplify_core.Model {
     buffer.write("name=" + "$_name" + ", ");
     buffer.write("email=" + "$_email" + ", ");
     buffer.write("image=" + "$_image" + ", ");
+    buffer.write("skills=" + (_skills != null ? _skills!.toString() : "null") + ", ");
+    buffer.write("about=" + "$_about" + ", ");
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
     buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
     buffer.write("}");
@@ -135,27 +158,36 @@ class Tutor extends amplify_core.Model {
     return buffer.toString();
   }
   
-  Tutor copyWith({String? name, String? email, String? image, List<TutoringSession>? tutoringSessions}) {
+  Tutor copyWith({String? name, String? email, String? image, List<String>? skills, String? about, List<TutoringSession>? tutoringSessions, List<Review>? reviews}) {
     return Tutor._internal(
       id: id,
       name: name ?? this.name,
       email: email ?? this.email,
       image: image ?? this.image,
-      tutoringSessions: tutoringSessions ?? this.tutoringSessions);
+      skills: skills ?? this.skills,
+      about: about ?? this.about,
+      tutoringSessions: tutoringSessions ?? this.tutoringSessions,
+      reviews: reviews ?? this.reviews);
   }
   
   Tutor copyWithModelFieldValues({
     ModelFieldValue<String>? name,
     ModelFieldValue<String>? email,
     ModelFieldValue<String?>? image,
-    ModelFieldValue<List<TutoringSession>?>? tutoringSessions
+    ModelFieldValue<List<String>?>? skills,
+    ModelFieldValue<String?>? about,
+    ModelFieldValue<List<TutoringSession>?>? tutoringSessions,
+    ModelFieldValue<List<Review>?>? reviews
   }) {
     return Tutor._internal(
       id: id,
       name: name == null ? this.name : name.value,
       email: email == null ? this.email : email.value,
       image: image == null ? this.image : image.value,
-      tutoringSessions: tutoringSessions == null ? this.tutoringSessions : tutoringSessions.value
+      skills: skills == null ? this.skills : skills.value,
+      about: about == null ? this.about : about.value,
+      tutoringSessions: tutoringSessions == null ? this.tutoringSessions : tutoringSessions.value,
+      reviews: reviews == null ? this.reviews : reviews.value
     );
   }
   
@@ -164,6 +196,8 @@ class Tutor extends amplify_core.Model {
       _name = json['name'],
       _email = json['email'],
       _image = json['image'],
+      _skills = json['skills']?.cast<String>(),
+      _about = json['about'],
       _tutoringSessions = json['tutoringSessions']  is Map
         ? (json['tutoringSessions']['items'] is List
           ? (json['tutoringSessions']['items'] as List)
@@ -177,11 +211,24 @@ class Tutor extends amplify_core.Model {
               .map((e) => TutoringSession.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
               .toList()
           : null),
+      _reviews = json['reviews']  is Map
+        ? (json['reviews']['items'] is List
+          ? (json['reviews']['items'] as List)
+              .where((e) => e != null)
+              .map((e) => Review.fromJson(new Map<String, dynamic>.from(e)))
+              .toList()
+          : null)
+        : (json['reviews'] is List
+          ? (json['reviews'] as List)
+              .where((e) => e?['serializedData'] != null)
+              .map((e) => Review.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
+              .toList()
+          : null),
       _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
       _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
   
   Map<String, dynamic> toJson() => {
-    'id': id, 'name': _name, 'email': _email, 'image': _image, 'tutoringSessions': _tutoringSessions?.map((TutoringSession? e) => e?.toJson()).toList(), 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
+    'id': id, 'name': _name, 'email': _email, 'image': _image, 'skills': _skills, 'about': _about, 'tutoringSessions': _tutoringSessions?.map((TutoringSession? e) => e?.toJson()).toList(), 'reviews': _reviews?.map((Review? e) => e?.toJson()).toList(), 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
   
   Map<String, Object?> toMap() => {
@@ -189,7 +236,10 @@ class Tutor extends amplify_core.Model {
     'name': _name,
     'email': _email,
     'image': _image,
+    'skills': _skills,
+    'about': _about,
     'tutoringSessions': _tutoringSessions,
+    'reviews': _reviews,
     'createdAt': _createdAt,
     'updatedAt': _updatedAt
   };
@@ -199,9 +249,14 @@ class Tutor extends amplify_core.Model {
   static final NAME = amplify_core.QueryField(fieldName: "name");
   static final EMAIL = amplify_core.QueryField(fieldName: "email");
   static final IMAGE = amplify_core.QueryField(fieldName: "image");
+  static final SKILLS = amplify_core.QueryField(fieldName: "skills");
+  static final ABOUT = amplify_core.QueryField(fieldName: "about");
   static final TUTORINGSESSIONS = amplify_core.QueryField(
     fieldName: "tutoringSessions",
     fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'TutoringSession'));
+  static final REVIEWS = amplify_core.QueryField(
+    fieldName: "reviews",
+    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'Review'));
   static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
     modelSchemaDefinition.name = "Tutor";
     modelSchemaDefinition.pluralName = "Tutors";
@@ -245,11 +300,31 @@ class Tutor extends amplify_core.Model {
       ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
     ));
     
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: Tutor.SKILLS,
+      isRequired: false,
+      isArray: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.collection, ofModelName: amplify_core.ModelFieldTypeEnum.string.name)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: Tutor.ABOUT,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
       key: Tutor.TUTORINGSESSIONS,
       isRequired: false,
       ofModelName: 'TutoringSession',
       associatedKey: TutoringSession.TUTOR
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
+      key: Tutor.REVIEWS,
+      isRequired: false,
+      ofModelName: 'Review',
+      associatedKey: Review.TUTOR
     ));
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.nonQueryField(

@@ -5,27 +5,41 @@ import '../controllers/booking_controller.dart';
 import 'widgets/booking_items.dart';
 import '../../checkout/screens/checkout.dart';
 
-class BookingScreen extends StatelessWidget {
+class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final controller = BookingController.instance;
+  State<BookingScreen> createState() => _BookingScreenState();
+}
 
+class _BookingScreenState extends State<BookingScreen> {
+  late final BookingController controller;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Use the existing BookingController instance
+    controller = Get.find<BookingController>();
+
+    // Fetch bookings from DataStore
+    controller.fetchBookings();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
           'Bookings',
-          style: TextStyle(
-            fontSize: 18, // bigger header text
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16), // consistent with CheckoutScreen
-        child: const TBookingItems(),
+        padding: const EdgeInsets.all(16),
+        // Remove const so it rebuilds reactively
+        child: TBookingItems(),
       ),
       bottomNavigationBar: SafeArea(
         top: false,

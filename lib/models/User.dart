@@ -39,8 +39,11 @@ class User extends amplify_core.Model {
   final String? _verificationStatus;
   final amplify_core.TemporalDateTime? _createdAt;
   final amplify_core.TemporalDateTime? _updatedAt;
+  final List<String>? _skills;
+  final String? _about;
   final List<Booking>? _bookings;
   final List<BookingItem>? _bookingItems;
+  final List<Review>? _reviews;
 
   @override
   getInstanceType() => classType;
@@ -117,6 +120,14 @@ class User extends amplify_core.Model {
     return _updatedAt;
   }
   
+  List<String>? get skills {
+    return _skills;
+  }
+  
+  String? get about {
+    return _about;
+  }
+  
   List<Booking>? get bookings {
     return _bookings;
   }
@@ -125,9 +136,13 @@ class User extends amplify_core.Model {
     return _bookingItems;
   }
   
-  const User._internal({required this.id, required username, required email, phoneNumber, profilePicture, deviceToken, isEmailVerified, isProfileActive, role, verificationStatus, createdAt, updatedAt, bookings, bookingItems}): _username = username, _email = email, _phoneNumber = phoneNumber, _profilePicture = profilePicture, _deviceToken = deviceToken, _isEmailVerified = isEmailVerified, _isProfileActive = isProfileActive, _role = role, _verificationStatus = verificationStatus, _createdAt = createdAt, _updatedAt = updatedAt, _bookings = bookings, _bookingItems = bookingItems;
+  List<Review>? get reviews {
+    return _reviews;
+  }
   
-  factory User({String? id, required String username, required String email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<Booking>? bookings, List<BookingItem>? bookingItems}) {
+  const User._internal({required this.id, required username, required email, phoneNumber, profilePicture, deviceToken, isEmailVerified, isProfileActive, role, verificationStatus, createdAt, updatedAt, skills, about, bookings, bookingItems, reviews}): _username = username, _email = email, _phoneNumber = phoneNumber, _profilePicture = profilePicture, _deviceToken = deviceToken, _isEmailVerified = isEmailVerified, _isProfileActive = isProfileActive, _role = role, _verificationStatus = verificationStatus, _createdAt = createdAt, _updatedAt = updatedAt, _skills = skills, _about = about, _bookings = bookings, _bookingItems = bookingItems, _reviews = reviews;
+  
+  factory User({String? id, required String username, required String email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<String>? skills, String? about, List<Booking>? bookings, List<BookingItem>? bookingItems, List<Review>? reviews}) {
     return User._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       username: username,
@@ -141,8 +156,11 @@ class User extends amplify_core.Model {
       verificationStatus: verificationStatus,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      skills: skills != null ? List<String>.unmodifiable(skills) : skills,
+      about: about,
       bookings: bookings != null ? List<Booking>.unmodifiable(bookings) : bookings,
-      bookingItems: bookingItems != null ? List<BookingItem>.unmodifiable(bookingItems) : bookingItems);
+      bookingItems: bookingItems != null ? List<BookingItem>.unmodifiable(bookingItems) : bookingItems,
+      reviews: reviews != null ? List<Review>.unmodifiable(reviews) : reviews);
   }
   
   bool equals(Object other) {
@@ -165,8 +183,11 @@ class User extends amplify_core.Model {
       _verificationStatus == other._verificationStatus &&
       _createdAt == other._createdAt &&
       _updatedAt == other._updatedAt &&
+      DeepCollectionEquality().equals(_skills, other._skills) &&
+      _about == other._about &&
       DeepCollectionEquality().equals(_bookings, other._bookings) &&
-      DeepCollectionEquality().equals(_bookingItems, other._bookingItems);
+      DeepCollectionEquality().equals(_bookingItems, other._bookingItems) &&
+      DeepCollectionEquality().equals(_reviews, other._reviews);
   }
   
   @override
@@ -188,13 +209,15 @@ class User extends amplify_core.Model {
     buffer.write("role=" + "$_role" + ", ");
     buffer.write("verificationStatus=" + "$_verificationStatus" + ", ");
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
-    buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
+    buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null") + ", ");
+    buffer.write("skills=" + (_skills != null ? _skills!.toString() : "null") + ", ");
+    buffer.write("about=" + "$_about");
     buffer.write("}");
     
     return buffer.toString();
   }
   
-  User copyWith({String? username, String? email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<Booking>? bookings, List<BookingItem>? bookingItems}) {
+  User copyWith({String? username, String? email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<String>? skills, String? about, List<Booking>? bookings, List<BookingItem>? bookingItems, List<Review>? reviews}) {
     return User._internal(
       id: id,
       username: username ?? this.username,
@@ -208,8 +231,11 @@ class User extends amplify_core.Model {
       verificationStatus: verificationStatus ?? this.verificationStatus,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      skills: skills ?? this.skills,
+      about: about ?? this.about,
       bookings: bookings ?? this.bookings,
-      bookingItems: bookingItems ?? this.bookingItems);
+      bookingItems: bookingItems ?? this.bookingItems,
+      reviews: reviews ?? this.reviews);
   }
   
   User copyWithModelFieldValues({
@@ -224,8 +250,11 @@ class User extends amplify_core.Model {
     ModelFieldValue<String?>? verificationStatus,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
     ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt,
+    ModelFieldValue<List<String>?>? skills,
+    ModelFieldValue<String?>? about,
     ModelFieldValue<List<Booking>?>? bookings,
-    ModelFieldValue<List<BookingItem>?>? bookingItems
+    ModelFieldValue<List<BookingItem>?>? bookingItems,
+    ModelFieldValue<List<Review>?>? reviews
   }) {
     return User._internal(
       id: id,
@@ -240,8 +269,11 @@ class User extends amplify_core.Model {
       verificationStatus: verificationStatus == null ? this.verificationStatus : verificationStatus.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
       updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value,
+      skills: skills == null ? this.skills : skills.value,
+      about: about == null ? this.about : about.value,
       bookings: bookings == null ? this.bookings : bookings.value,
-      bookingItems: bookingItems == null ? this.bookingItems : bookingItems.value
+      bookingItems: bookingItems == null ? this.bookingItems : bookingItems.value,
+      reviews: reviews == null ? this.reviews : reviews.value
     );
   }
   
@@ -258,6 +290,8 @@ class User extends amplify_core.Model {
       _verificationStatus = json['verificationStatus'],
       _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
       _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null,
+      _skills = json['skills']?.cast<String>(),
+      _about = json['about'],
       _bookings = json['bookings']  is Map
         ? (json['bookings']['items'] is List
           ? (json['bookings']['items'] as List)
@@ -283,10 +317,23 @@ class User extends amplify_core.Model {
               .where((e) => e?['serializedData'] != null)
               .map((e) => BookingItem.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
               .toList()
+          : null),
+      _reviews = json['reviews']  is Map
+        ? (json['reviews']['items'] is List
+          ? (json['reviews']['items'] as List)
+              .where((e) => e != null)
+              .map((e) => Review.fromJson(new Map<String, dynamic>.from(e)))
+              .toList()
+          : null)
+        : (json['reviews'] is List
+          ? (json['reviews'] as List)
+              .where((e) => e?['serializedData'] != null)
+              .map((e) => Review.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
+              .toList()
           : null);
   
   Map<String, dynamic> toJson() => {
-    'id': id, 'username': _username, 'email': _email, 'phoneNumber': _phoneNumber, 'profilePicture': _profilePicture, 'deviceToken': _deviceToken, 'isEmailVerified': _isEmailVerified, 'isProfileActive': _isProfileActive, 'role': _role, 'verificationStatus': _verificationStatus, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format(), 'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(), 'bookingItems': _bookingItems?.map((BookingItem? e) => e?.toJson()).toList()
+    'id': id, 'username': _username, 'email': _email, 'phoneNumber': _phoneNumber, 'profilePicture': _profilePicture, 'deviceToken': _deviceToken, 'isEmailVerified': _isEmailVerified, 'isProfileActive': _isProfileActive, 'role': _role, 'verificationStatus': _verificationStatus, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format(), 'skills': _skills, 'about': _about, 'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(), 'bookingItems': _bookingItems?.map((BookingItem? e) => e?.toJson()).toList(), 'reviews': _reviews?.map((Review? e) => e?.toJson()).toList()
   };
   
   Map<String, Object?> toMap() => {
@@ -302,8 +349,11 @@ class User extends amplify_core.Model {
     'verificationStatus': _verificationStatus,
     'createdAt': _createdAt,
     'updatedAt': _updatedAt,
+    'skills': _skills,
+    'about': _about,
     'bookings': _bookings,
-    'bookingItems': _bookingItems
+    'bookingItems': _bookingItems,
+    'reviews': _reviews
   };
 
   static final amplify_core.QueryModelIdentifier<UserModelIdentifier> MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<UserModelIdentifier>();
@@ -319,12 +369,17 @@ class User extends amplify_core.Model {
   static final VERIFICATIONSTATUS = amplify_core.QueryField(fieldName: "verificationStatus");
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
   static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
+  static final SKILLS = amplify_core.QueryField(fieldName: "skills");
+  static final ABOUT = amplify_core.QueryField(fieldName: "about");
   static final BOOKINGS = amplify_core.QueryField(
     fieldName: "bookings",
     fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'Booking'));
   static final BOOKINGITEMS = amplify_core.QueryField(
     fieldName: "bookingItems",
     fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'BookingItem'));
+  static final REVIEWS = amplify_core.QueryField(
+    fieldName: "reviews",
+    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'Review'));
   static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
     modelSchemaDefinition.name = "User";
     modelSchemaDefinition.pluralName = "Users";
@@ -416,6 +471,19 @@ class User extends amplify_core.Model {
       ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
     ));
     
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: User.SKILLS,
+      isRequired: false,
+      isArray: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.collection, ofModelName: amplify_core.ModelFieldTypeEnum.string.name)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: User.ABOUT,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
       key: User.BOOKINGS,
       isRequired: false,
@@ -428,6 +496,13 @@ class User extends amplify_core.Model {
       isRequired: false,
       ofModelName: 'BookingItem',
       associatedKey: BookingItem.USER
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
+      key: User.REVIEWS,
+      isRequired: false,
+      ofModelName: 'Review',
+      associatedKey: Review.USER
     ));
   });
 }

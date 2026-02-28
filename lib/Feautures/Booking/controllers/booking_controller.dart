@@ -10,8 +10,7 @@ class BookingController extends GetxController {
   static BookingController get instance => Get.find();
 
   // ---------------- Current User ----------------
-  final User? currentUser;
-  BookingController({this.currentUser}); // ✅ added named parameter
+  final Rx<User?> currentUser = Rx<User?>(null);
 
   // ---------------- Reactive State ----------------
   final RxList<Booking> bookings = <Booking>[].obs;
@@ -27,6 +26,9 @@ class BookingController extends GetxController {
   void onInit() {
     super.onInit();
 
+    // Fetch current user automatically
+    _initCurrentUser();
+
     // Rebuild flat list & totals when map changes
     ever(bookingItemsMap, (_) {
       _syncFlatBookingItems();
@@ -37,9 +39,32 @@ class BookingController extends GetxController {
     ever(bookings, (_) => _recalculateTotals());
   }
 
+  // ---------------- Initialize Current User ----------------
+  Future<void> _initCurrentUser() async {
+    try {
+      final authUser = await Amplify.Auth.getCurrentUser();
+      if (authUser != null) {
+        // Fetch full User object from DataStore
+        final users = await Amplify.DataStore.query(
+          User.classType,
+          where: User.ID.eq(authUser.userId),
+        );
+
+        if (users.isNotEmpty) {
+          currentUser.value = users.first;
+
+          // Automatically fetch bookings for this user
+          await fetchBookings();
+        }
+      }
+    } catch (e) {
+      print('⚠️ Failed to initialize current user: $e');
+    }
+  }
+
   // ---------------- Helper: Check if user can sync ----------------
   Future<bool> _canSync() async {
-    if (currentUser == null) {
+    if (currentUser.value == null) {
       print('⚠️ BookingController: No user set yet');
       return false;
     }
@@ -96,7 +121,7 @@ class BookingController extends GetxController {
     if (!await _canSync()) return;
 
     try {
-      final userId = currentUser!.id;
+      final userId = currentUser.value!.id;
       final result = await Amplify.DataStore.query(
         Booking.classType,
         where: Booking.USER.eq(userId),
@@ -109,7 +134,6 @@ class BookingController extends GetxController {
           BookingItem.classType,
           where: BookingItem.BOOKING.eq(booking.id),
         );
-
         bookingItemsMap[booking.id] = items;
       }
 
@@ -130,7 +154,7 @@ class BookingController extends GetxController {
 
     try {
       final booking = Booking(
-        user: currentUser,
+        user: currentUser.value,
         bookingItems: items,
         totalPrice: totalPrice,
         status: status,
@@ -166,14 +190,14 @@ class BookingController extends GetxController {
     String providerImage = '',
     String timeSlot = '',
     TemporalDateTime? bookingDate,
-    Map<String, String>? selectedAttributes, // ✅ new parameter
+    Map<String, String>? selectedAttributes,
   }) async {
     if (!await _canSync()) return null;
 
     try {
       final item = BookingItem(
         booking: booking,
-        user: currentUser,
+        user: currentUser.value,
         sessionId: sessionId,
         tutorId: tutorId,
         price: price,
@@ -185,9 +209,7 @@ class BookingController extends GetxController {
         bookingDate: bookingDate ?? TemporalDateTime.now(),
         timeSlot: timeSlot,
         selectedAttributes:
-            selectedAttributes != null
-                ? jsonEncode(selectedAttributes) // ✅ encode as JSON
-                : null,
+            selectedAttributes != null ? jsonEncode(selectedAttributes) : null,
       );
 
       await Amplify.DataStore.save(item);
@@ -216,11 +238,10 @@ class BookingController extends GetxController {
     String? tutorName,
     String? tutorImage,
     int quantity = 1,
-    Map<String, String>? selectedAttributes, // ✅ new parameter
+    Map<String, String>? selectedAttributes,
   }) async {
     if (!await _canSync()) return;
 
-    // Use existing booking or create a new one
     Booking booking;
     if (bookings.isNotEmpty) {
       booking = bookings.first;
@@ -245,7 +266,7 @@ class BookingController extends GetxController {
       serviceImage: serviceImage ?? '',
       providerName: tutorName ?? '',
       providerImage: tutorImage ?? '',
-      selectedAttributes: selectedAttributes, // ✅ pass through
+      selectedAttributes: selectedAttributes,
     );
   }
 

@@ -220,7 +220,7 @@ class LoginController extends GetxController {
     }
 
     if (!Get.isRegistered<BookingController>()) {
-      Get.put(BookingController(currentUser: user), permanent: true);
+      Get.put(BookingController(), permanent: true);
     }
 
     UserController.instance.currentUser.value = user;

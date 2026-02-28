@@ -22,6 +22,7 @@ class TSessionCardVertical extends StatelessWidget {
     final double price = session.pricePerSession ?? 0.0;
     final salePercentage = controller.calculateSalePercentage(price, null);
 
+    // Determine main image
     String mainImage() {
       if (session.images != null && session.images!.isNotEmpty) {
         final img = session.images!.first;
@@ -30,14 +31,10 @@ class TSessionCardVertical extends StatelessWidget {
       if (session.thumbnail != null && session.thumbnail!.isNotEmpty) {
         return session.thumbnail!;
       }
-      if (session.sessionVariations != null &&
-          session.sessionVariations!.isNotEmpty) {
-        final v = session.sessionVariations!.first;
-        if (v.image != null && v.image!.isNotEmpty) return v.image!;
-      }
       return '';
     }
 
+    // Build image widget with fallback
     Widget buildImage(String src, {BoxFit fit = BoxFit.cover}) {
       final fallback = TImages.tutorPromo1;
       if (src.isEmpty) return Image.asset(fallback, fit: fit);
@@ -51,6 +48,7 @@ class TSessionCardVertical extends StatelessWidget {
       return Image.asset(src, fit: fit);
     }
 
+    // Tutor avatar
     final tutorIcon =
         session.tutor?.image?.isNotEmpty == true
             ? session.tutor!.image!
@@ -60,6 +58,7 @@ class TSessionCardVertical extends StatelessWidget {
       onTap: () {
         final tag = session.id;
 
+        // Register controllers per session if not yet registered
         if (!Get.isRegistered<TutoringController>(tag: tag)) {
           Get.put(TutoringController(), tag: tag, permanent: false);
         }
@@ -118,7 +117,7 @@ class TSessionCardVertical extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (salePercentage != null && salePercentage > 0)
+                  if (salePercentage > 0)
                     Positioned(
                       top: 8,
                       left: 8,
@@ -145,13 +144,12 @@ class TSessionCardVertical extends StatelessWidget {
             ),
             const SizedBox(height: TSizes.spaceBtwItems / 2),
 
-            // ✅ Detailed Column with Tutor Name & Session Info
+            // Tutor name + session title & price
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: TSizes.sm),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Tutor Name + Verified Icon
                   if (session.tutor != null) ...[
                     Row(
                       children: [

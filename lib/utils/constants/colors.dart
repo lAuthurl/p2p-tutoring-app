@@ -70,6 +70,9 @@ class TColors {
   static const Color borderLight = Color(0xFFD1D5DB);
   static const Color borderDark = Color(0xFF9CA3AF);
 
+  /// ✅ Added default border color
+  static const Color border = borderLight;
+
   // Error and validation colors
   static const Color error = Color(0xFFD32F2F);
   static const Color success = Color(0xFF388E3C);

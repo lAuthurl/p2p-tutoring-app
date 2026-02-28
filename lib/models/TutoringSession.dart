@@ -31,8 +31,8 @@ class TutoringSession extends amplify_core.Model {
   final Tutor? _tutor;
   final Subject? _subject;
   final List<SessionAttribute>? _sessionAttributes;
-  final List<SessionVariation>? _sessionVariations;
   final List<Booking>? _bookings;
+  final List<Review>? _reviews;
   final String? _title;
   final String? _description;
   final String? _thumbnail;
@@ -67,12 +67,12 @@ class TutoringSession extends amplify_core.Model {
     return _sessionAttributes;
   }
   
-  List<SessionVariation>? get sessionVariations {
-    return _sessionVariations;
-  }
-  
   List<Booking>? get bookings {
     return _bookings;
+  }
+  
+  List<Review>? get reviews {
+    return _reviews;
   }
   
   String get title {
@@ -116,16 +116,16 @@ class TutoringSession extends amplify_core.Model {
     return _updatedAt;
   }
   
-  const TutoringSession._internal({required this.id, tutor, subject, sessionAttributes, sessionVariations, bookings, required title, description, thumbnail, images, pricePerSession, isFeatured, createdAt, updatedAt}): _tutor = tutor, _subject = subject, _sessionAttributes = sessionAttributes, _sessionVariations = sessionVariations, _bookings = bookings, _title = title, _description = description, _thumbnail = thumbnail, _images = images, _pricePerSession = pricePerSession, _isFeatured = isFeatured, _createdAt = createdAt, _updatedAt = updatedAt;
+  const TutoringSession._internal({required this.id, tutor, subject, sessionAttributes, bookings, reviews, required title, description, thumbnail, images, pricePerSession, isFeatured, createdAt, updatedAt}): _tutor = tutor, _subject = subject, _sessionAttributes = sessionAttributes, _bookings = bookings, _reviews = reviews, _title = title, _description = description, _thumbnail = thumbnail, _images = images, _pricePerSession = pricePerSession, _isFeatured = isFeatured, _createdAt = createdAt, _updatedAt = updatedAt;
   
-  factory TutoringSession({String? id, Tutor? tutor, Subject? subject, List<SessionAttribute>? sessionAttributes, List<SessionVariation>? sessionVariations, List<Booking>? bookings, required String title, String? description, String? thumbnail, List<String>? images, double? pricePerSession, bool? isFeatured, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+  factory TutoringSession({String? id, Tutor? tutor, Subject? subject, List<SessionAttribute>? sessionAttributes, List<Booking>? bookings, List<Review>? reviews, required String title, String? description, String? thumbnail, List<String>? images, double? pricePerSession, bool? isFeatured, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return TutoringSession._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       tutor: tutor,
       subject: subject,
       sessionAttributes: sessionAttributes != null ? List<SessionAttribute>.unmodifiable(sessionAttributes) : sessionAttributes,
-      sessionVariations: sessionVariations != null ? List<SessionVariation>.unmodifiable(sessionVariations) : sessionVariations,
       bookings: bookings != null ? List<Booking>.unmodifiable(bookings) : bookings,
+      reviews: reviews != null ? List<Review>.unmodifiable(reviews) : reviews,
       title: title,
       description: description,
       thumbnail: thumbnail,
@@ -148,8 +148,8 @@ class TutoringSession extends amplify_core.Model {
       _tutor == other._tutor &&
       _subject == other._subject &&
       DeepCollectionEquality().equals(_sessionAttributes, other._sessionAttributes) &&
-      DeepCollectionEquality().equals(_sessionVariations, other._sessionVariations) &&
       DeepCollectionEquality().equals(_bookings, other._bookings) &&
+      DeepCollectionEquality().equals(_reviews, other._reviews) &&
       _title == other._title &&
       _description == other._description &&
       _thumbnail == other._thumbnail &&
@@ -184,14 +184,14 @@ class TutoringSession extends amplify_core.Model {
     return buffer.toString();
   }
   
-  TutoringSession copyWith({Tutor? tutor, Subject? subject, List<SessionAttribute>? sessionAttributes, List<SessionVariation>? sessionVariations, List<Booking>? bookings, String? title, String? description, String? thumbnail, List<String>? images, double? pricePerSession, bool? isFeatured, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+  TutoringSession copyWith({Tutor? tutor, Subject? subject, List<SessionAttribute>? sessionAttributes, List<Booking>? bookings, List<Review>? reviews, String? title, String? description, String? thumbnail, List<String>? images, double? pricePerSession, bool? isFeatured, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return TutoringSession._internal(
       id: id,
       tutor: tutor ?? this.tutor,
       subject: subject ?? this.subject,
       sessionAttributes: sessionAttributes ?? this.sessionAttributes,
-      sessionVariations: sessionVariations ?? this.sessionVariations,
       bookings: bookings ?? this.bookings,
+      reviews: reviews ?? this.reviews,
       title: title ?? this.title,
       description: description ?? this.description,
       thumbnail: thumbnail ?? this.thumbnail,
@@ -206,8 +206,8 @@ class TutoringSession extends amplify_core.Model {
     ModelFieldValue<Tutor?>? tutor,
     ModelFieldValue<Subject?>? subject,
     ModelFieldValue<List<SessionAttribute>?>? sessionAttributes,
-    ModelFieldValue<List<SessionVariation>?>? sessionVariations,
     ModelFieldValue<List<Booking>?>? bookings,
+    ModelFieldValue<List<Review>?>? reviews,
     ModelFieldValue<String>? title,
     ModelFieldValue<String?>? description,
     ModelFieldValue<String?>? thumbnail,
@@ -222,8 +222,8 @@ class TutoringSession extends amplify_core.Model {
       tutor: tutor == null ? this.tutor : tutor.value,
       subject: subject == null ? this.subject : subject.value,
       sessionAttributes: sessionAttributes == null ? this.sessionAttributes : sessionAttributes.value,
-      sessionVariations: sessionVariations == null ? this.sessionVariations : sessionVariations.value,
       bookings: bookings == null ? this.bookings : bookings.value,
+      reviews: reviews == null ? this.reviews : reviews.value,
       title: title == null ? this.title : title.value,
       description: description == null ? this.description : description.value,
       thumbnail: thumbnail == null ? this.thumbnail : thumbnail.value,
@@ -260,19 +260,6 @@ class TutoringSession extends amplify_core.Model {
               .map((e) => SessionAttribute.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
               .toList()
           : null),
-      _sessionVariations = json['sessionVariations']  is Map
-        ? (json['sessionVariations']['items'] is List
-          ? (json['sessionVariations']['items'] as List)
-              .where((e) => e != null)
-              .map((e) => SessionVariation.fromJson(new Map<String, dynamic>.from(e)))
-              .toList()
-          : null)
-        : (json['sessionVariations'] is List
-          ? (json['sessionVariations'] as List)
-              .where((e) => e?['serializedData'] != null)
-              .map((e) => SessionVariation.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
-              .toList()
-          : null),
       _bookings = json['bookings']  is Map
         ? (json['bookings']['items'] is List
           ? (json['bookings']['items'] as List)
@@ -286,6 +273,19 @@ class TutoringSession extends amplify_core.Model {
               .map((e) => Booking.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
               .toList()
           : null),
+      _reviews = json['reviews']  is Map
+        ? (json['reviews']['items'] is List
+          ? (json['reviews']['items'] as List)
+              .where((e) => e != null)
+              .map((e) => Review.fromJson(new Map<String, dynamic>.from(e)))
+              .toList()
+          : null)
+        : (json['reviews'] is List
+          ? (json['reviews'] as List)
+              .where((e) => e?['serializedData'] != null)
+              .map((e) => Review.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
+              .toList()
+          : null),
       _title = json['title'],
       _description = json['description'],
       _thumbnail = json['thumbnail'],
@@ -296,7 +296,7 @@ class TutoringSession extends amplify_core.Model {
       _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
   
   Map<String, dynamic> toJson() => {
-    'id': id, 'tutor': _tutor?.toJson(), 'subject': _subject?.toJson(), 'sessionAttributes': _sessionAttributes?.map((SessionAttribute? e) => e?.toJson()).toList(), 'sessionVariations': _sessionVariations?.map((SessionVariation? e) => e?.toJson()).toList(), 'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(), 'title': _title, 'description': _description, 'thumbnail': _thumbnail, 'images': _images, 'pricePerSession': _pricePerSession, 'isFeatured': _isFeatured, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
+    'id': id, 'tutor': _tutor?.toJson(), 'subject': _subject?.toJson(), 'sessionAttributes': _sessionAttributes?.map((SessionAttribute? e) => e?.toJson()).toList(), 'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(), 'reviews': _reviews?.map((Review? e) => e?.toJson()).toList(), 'title': _title, 'description': _description, 'thumbnail': _thumbnail, 'images': _images, 'pricePerSession': _pricePerSession, 'isFeatured': _isFeatured, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
   
   Map<String, Object?> toMap() => {
@@ -304,8 +304,8 @@ class TutoringSession extends amplify_core.Model {
     'tutor': _tutor,
     'subject': _subject,
     'sessionAttributes': _sessionAttributes,
-    'sessionVariations': _sessionVariations,
     'bookings': _bookings,
+    'reviews': _reviews,
     'title': _title,
     'description': _description,
     'thumbnail': _thumbnail,
@@ -327,12 +327,12 @@ class TutoringSession extends amplify_core.Model {
   static final SESSIONATTRIBUTES = amplify_core.QueryField(
     fieldName: "sessionAttributes",
     fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'SessionAttribute'));
-  static final SESSIONVARIATIONS = amplify_core.QueryField(
-    fieldName: "sessionVariations",
-    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'SessionVariation'));
   static final BOOKINGS = amplify_core.QueryField(
     fieldName: "bookings",
     fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'Booking'));
+  static final REVIEWS = amplify_core.QueryField(
+    fieldName: "reviews",
+    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'Review'));
   static final TITLE = amplify_core.QueryField(fieldName: "title");
   static final DESCRIPTION = amplify_core.QueryField(fieldName: "description");
   static final THUMBNAIL = amplify_core.QueryField(fieldName: "thumbnail");
@@ -365,6 +365,7 @@ class TutoringSession extends amplify_core.Model {
     ];
     
     modelSchemaDefinition.indexes = [
+      amplify_core.ModelIndex(fields: const ["tutorId"], name: "byTutor"),
       amplify_core.ModelIndex(fields: const ["subjectId"], name: "bySubject")
     ];
     
@@ -392,17 +393,17 @@ class TutoringSession extends amplify_core.Model {
     ));
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
-      key: TutoringSession.SESSIONVARIATIONS,
-      isRequired: false,
-      ofModelName: 'SessionVariation',
-      associatedKey: SessionVariation.SESSION
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
       key: TutoringSession.BOOKINGS,
       isRequired: false,
       ofModelName: 'Booking',
       associatedKey: Booking.SESSIONID
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
+      key: TutoringSession.REVIEWS,
+      isRequired: false,
+      ofModelName: 'Review',
+      associatedKey: Review.SESSIONID
     ));
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(

@@ -19,10 +19,13 @@ type User @model
   verificationStatus: String
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
+  skills: [String]
+  about: String
 
   # Relationships
-  bookings: [Booking] @hasMany(fields: ["id"])
-  bookingItems: [BookingItem] @hasMany(fields: ["id"])
+  bookings: [Booking] @hasMany(indexName: "byUser", fields: ["id"])
+  bookingItems: [BookingItem] @hasMany(indexName: "byUser", fields: ["id"])
+  reviews: [Review] @hasMany(indexName: "byUser", fields: ["id"]) 
 }
 
 # -------------------------------
@@ -38,9 +41,12 @@ type Tutor @model
   name: String!
   email: String!
   image: String              # needed for providerImage
+  skills: [String]
+  about: String
 
   # Relationships
-  tutoringSessions: [TutoringSession] @hasMany(fields: ["id"])
+  tutoringSessions: [TutoringSession] @hasMany(indexName: "byTutor", fields: ["id"])
+  reviews: [Review] @hasMany(indexName: "byTutor", fields: ["id"])
 }
 
 # -------------------------------
@@ -74,15 +80,15 @@ type TutoringSession @model
 {
   id: ID!
 
-  tutorId: ID!
+  tutorId: ID! @index(name: "byTutor")  # needed for Tutor → TutoringSession
   subjectId: ID! @index(name: "bySubject")   # index for Subject → TutoringSession
 
   # Relationships
   tutor: Tutor @belongsTo(fields: ["tutorId"])
   subject: Subject @belongsTo(fields: ["subjectId"])
-  sessionAttributes: [SessionAttribute] @hasMany(fields: ["id"])
-  sessionVariations: [SessionVariation] @hasMany(fields: ["id"])
+  sessionAttributes: [SessionAttribute] @hasMany(indexName: "bySession", fields: ["id"])
   bookings: [Booking] @hasMany(indexName: "bySession", fields: ["id"])
+  reviews: [Review] @hasMany(indexName: "bySession", fields: ["id"])
 
   # Session details
   title: String!
@@ -91,6 +97,8 @@ type TutoringSession @model
   images: [String]
   pricePerSession: Float
   isFeatured: Boolean
+  hasPaid: Boolean @default(value: false) 
+
 
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
@@ -115,6 +123,8 @@ type Booking @model
 
   # BookingItems relationship
   bookingItems: [BookingItem] @hasMany(indexName: "byBooking", fields: ["id"])
+
+  selectedOptions: AWSJSON   # {"Duration":"2hr","Mode":"Online"}
 
   totalPrice: Float
   status: String
@@ -157,6 +167,8 @@ type BookingItem @model
 
   selectedAttributes: AWSJSON
 
+  hasPaid: Boolean @default(value: false) 
+
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
 }
@@ -184,9 +196,9 @@ type SessionAttribute @model
 }
 
 # -------------------------------
-# SessionVariation
+# Review
 # -------------------------------
-type SessionVariation @model
+type Review @model
   @auth(rules: [
     { allow: owner, operations: [create, read, update, delete] },
     { allow: public, operations: [read] }
@@ -194,18 +206,38 @@ type SessionVariation @model
 {
   id: ID!
 
-  tutorId: ID!
-  sessionId: ID! @index(name: "bySession")   # index for TutoringSession → SessionVariation
+  # Who wrote it
+  userId: ID! @index(name: "byUser")
+  user: User @belongsTo(fields: ["userId"])
 
-  availableSeats: Int
-  pricePerSession: Float
-  lectureTime: AWSDateTime
-  image: String
-  metadata: String
+  # Session reviewed
+  sessionId: ID! @index(name: "bySession")
 
-  sessionAttributes: [SessionAttribute] @hasMany(fields: ["id"])
-  session: TutoringSession @belongsTo(fields: ["sessionId"])
+  # Tutor reviewed (same tutor who owns session)
+  tutorId: ID! @index(name: "byTutor")
+  tutor: Tutor @belongsTo(fields: ["tutorId"])
+
+  rating: Float!
+  comment: String
 
   createdAt: AWSDateTime
-  updatedAt: AWSDateTime
+}
+
+# -------------------------------
+# Chat Message
+# -------------------------------
+type ChatMessage @model
+  @auth(rules: [
+    { allow: owner, operations: [create, read] },   # sender can create/read
+    { allow: public, operations: [read] }           # other users can read
+  ])
+{
+  id: ID!
+  sessionId: ID!         # TutoringSession.id
+  senderId: ID!          # User.id of the sender
+  senderName: String
+  text: String
+  isVoice: Boolean
+  audioUrl: String       # S3 URL if voice message
+  createdAt: AWSDateTime
 }
