@@ -145,7 +145,7 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
                               rating:
                                   _reviews.fold<double>(
                                     0,
-                                    (sum, r) => sum + (r.rating ?? 0),
+                                    (sum, r) => sum + (r.rating),
                                   ) /
                                   _reviews.length,
                               itemBuilder:
@@ -275,7 +275,7 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
                 Row(
                   children: List.generate(5, (index) {
                     final iconColor =
-                        index < (review.rating ?? 0).round()
+                        index < (review.rating).round()
                             ? Colors.amber
                             : Colors.grey.shade300;
                     return Icon(Icons.star, color: iconColor, size: 16);

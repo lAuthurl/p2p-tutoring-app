@@ -183,7 +183,7 @@ class TutoringController extends GetxController {
       tutorId: session.tutor?.id,
       price: finalPrice, // <-- use finalPrice here
       quantity: quantity,
-      serviceTitle: session.title ?? '',
+      serviceTitle: session.title,
       serviceImage: session.images?.first ?? session.thumbnail ?? '',
       providerName: session.tutor?.name ?? '',
       providerImage: session.tutor?.image ?? '',
@@ -218,8 +218,9 @@ class TutoringController extends GetxController {
 
   List<String> getAllSessionImages(TutoringSession session) {
     final List<String> images = [];
-    if ((session.thumbnail?.isNotEmpty ?? false))
+    if ((session.thumbnail?.isNotEmpty ?? false)) {
       images.add(session.thumbnail!);
+    }
     if ((session.images?.isNotEmpty ?? false)) images.addAll(session.images!);
     return images;
   }
@@ -230,7 +231,9 @@ class TutoringController extends GetxController {
       final values = attr.values ?? [];
       List<Map<String, String>> newList = [];
       for (var combo in combos) {
-        for (var val in values) newList.add({...combo, attr.name: val});
+        for (var val in values) {
+          newList.add({...combo, attr.name: val});
+        }
       }
       combos = newList;
     });

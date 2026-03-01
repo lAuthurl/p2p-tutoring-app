@@ -10,7 +10,6 @@ import '../../../../common/widgets/texts/section_heading.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/device/device_utility.dart';
-import '../../../Booking/controllers/booking_controller.dart';
 import '../../controllers/session_creation_controller.dart';
 import '../../controllers/tutoring_controller.dart';
 import '../../../Courses/screens/product_detail/widgets/rating_share_widget.dart';
@@ -371,7 +370,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                         Icons.star,
                         size: 16,
                         color:
-                            index < (r.rating ?? 0)
+                            index < (r.rating)
                                 ? Colors.amber
                                 : Colors.grey.shade300,
                       ),
@@ -400,7 +399,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   ButtonStyle _outlinedButtonStyle() => OutlinedButton.styleFrom(
     padding: const EdgeInsets.symmetric(vertical: TSizes.md),
     foregroundColor: TColors.primary,
-    side: BorderSide(color: TColors.primary.withOpacity(0.4)),
+    side: BorderSide(color: TColors.primary.withValues(alpha: 0.4)),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
   );
 }

@@ -48,7 +48,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
 
   double get averageRating {
     if (_reviews.isEmpty) return 0;
-    final total = _reviews.fold<double>(0, (sum, r) => sum + (r.rating ?? 0));
+    final total = _reviews.fold<double>(0, (sum, r) => sum + (r.rating));
     return total / _reviews.length;
   }
 
@@ -75,7 +75,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
             Container(
               padding: const EdgeInsets.all(TSizes.defaultSpace),
               decoration: BoxDecoration(
-                color: TColors.primary.withOpacity(0.05),
+                color: TColors.primary.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -251,7 +251,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                                     Row(
                                       children: List.generate(5, (index) {
                                         final iconColor =
-                                            index < (review.rating ?? 0).round()
+                                            index < (review.rating).round()
                                                 ? Colors.amber
                                                 : Colors.grey.shade300;
                                         return Icon(

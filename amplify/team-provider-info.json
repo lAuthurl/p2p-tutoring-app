@@ -115,5 +115,35 @@
         "assets": {}
       }
     }
+  },
+  "ptutoring": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-p2ptutoringapp-ptutoring-58e3c-authRole",
+      "UnauthRoleArn": "arn:aws:iam::575960430498:role/amplify-p2ptutoringapp-ptutoring-58e3c-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::575960430498:role/amplify-p2ptutoringapp-ptutoring-58e3c-authRole",
+      "Region": "eu-west-3",
+      "DeploymentBucketName": "amplify-p2ptutoringapp-ptutoring-58e3c-deployment",
+      "UnauthRoleName": "amplify-p2ptutoringapp-ptutoring-58e3c-unauthRole",
+      "StackName": "amplify-p2ptutoringapp-ptutoring-58e3c",
+      "StackId": "arn:aws:cloudformation:eu-west-3:575960430498:stack/amplify-p2ptutoringapp-ptutoring-58e3c/1e8b1210-159f-11f1-b001-06b1c15126d7",
+      "AmplifyAppId": "ds64rvn4oni3e"
+    },
+    "categories": {
+      "auth": {
+        "p2ptutoringappd8ba34ec": {}
+      },
+      "function": {
+        "S3Trigger716d2200": {
+          "deploymentBucketName": "amplify-p2ptutoringapp-ptutoring-58e3c-deployment",
+          "s3Key": "amplify-builds/S3Trigger716d2200-7436654f3568327a4d55-build.zip"
+        }
+      },
+      "api": {
+        "p2ptutoringapp": {}
+      },
+      "storage": {
+        "assets": {}
+      }
+    }
   }
 }

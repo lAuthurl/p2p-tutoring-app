@@ -42,10 +42,11 @@ class HomeController extends GetxController {
 
     // React to user login state
     ever<User?>(userController.currentUser, (user) {
-      if (user != null)
+      if (user != null) {
         _startAppFlow();
-      else
+      } else {
         _resetState();
+      }
     });
 
     // React to subject selection to filter sessions
@@ -139,7 +140,7 @@ class HomeController extends GetxController {
 
           final matchesSearch =
               query.isEmpty ||
-              (s.title?.toLowerCase().contains(query) ?? false) ||
+              (s.title.toLowerCase().contains(query)) ||
               (s.tutor?.name.toLowerCase().contains(query) ?? false);
 
           return matchesSubject && matchesSearch;

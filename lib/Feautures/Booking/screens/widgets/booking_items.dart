@@ -23,7 +23,7 @@ class TBookingItems extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         itemCount: bookingItems.length,
         // Minimal space between items
-        separatorBuilder: (_, __) => const SizedBox(height: TSizes.sm),
+        separatorBuilder: (_, _) => const SizedBox(height: TSizes.sm),
         itemBuilder: (context, index) {
           final item = bookingItems[index];
 

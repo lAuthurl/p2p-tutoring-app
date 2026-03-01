@@ -86,7 +86,7 @@ class CreateTutoringSessionScreen extends StatelessWidget {
 
               Obx(
                 () => DropdownButtonFormField<String>(
-                  value:
+                  initialValue:
                       controller.subjectId.value.isEmpty
                           ? null
                           : controller.subjectId.value,

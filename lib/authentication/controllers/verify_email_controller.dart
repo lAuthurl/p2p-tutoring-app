@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'package:get/get.dart';
 import '../../../data/repository/authentication_repository/authentication_repository.dart';

@@ -30,7 +30,7 @@ class BookingItemStyle01 extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(TSizes.sm),
       decoration: BoxDecoration(
-        color: TColors.primary.withOpacity(0.05),
+        color: TColors.primary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -111,7 +111,7 @@ class BookingItemStyle01 extends StatelessWidget {
                         vertical: TSizes.xs,
                       ),
                       decoration: BoxDecoration(
-                        color: TColors.primary.withOpacity(0.15),
+                        color: TColors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(TSizes.sm),
                       ),
                       child: TProductPriceText(
@@ -128,7 +128,7 @@ class BookingItemStyle01 extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(TSizes.xs),
                         decoration: BoxDecoration(
-                          color: TColors.primary.withOpacity(0.2),
+                          color: TColors.primary.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
