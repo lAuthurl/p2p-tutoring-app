@@ -42,23 +42,72 @@ class TSessionCardVertical extends StatelessWidget {
         return Image.network(
           src,
           fit: fit,
-          errorBuilder: (_, __, ___) => Image.asset(fallback, fit: fit),
+          errorBuilder: (_, _, _) => Image.asset(fallback, fit: fit),
         );
       }
       return Image.asset(src, fit: fit);
     }
 
-    // Tutor avatar
-    final tutorIcon =
-        session.tutor?.image?.isNotEmpty == true
-            ? session.tutor!.image!
-            : TImages.tdefaultpfp;
+    // Tutor avatar with initials fallback
+    Widget buildTutorAvatar(Tutor? tutor) {
+      if (tutor == null) {
+        return CircleAvatar(
+          radius: 16,
+          backgroundColor: TColors.primary,
+          child: const Text(
+            '?',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        );
+      }
+
+      if (tutor.image != null && tutor.image!.isNotEmpty) {
+        return CircleAvatar(
+          radius: 16,
+          backgroundColor: TColors.textWhite,
+          child: ClipOval(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child:
+                  tutor.image!.startsWith('http')
+                      ? Image.network(tutor.image!, fit: BoxFit.cover)
+                      : Image.asset(tutor.image!, fit: BoxFit.cover),
+            ),
+          ),
+        );
+      } else {
+        final initials =
+            tutor.name
+                .trim()
+                .split(' ')
+                .map((e) => e[0])
+                .take(2)
+                .join()
+                .toUpperCase();
+        return CircleAvatar(
+          radius: 16,
+          backgroundColor: TColors.primary,
+          child: Text(
+            initials,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        );
+      }
+    }
 
     return GestureDetector(
       onTap: () {
         final tag = session.id;
 
-        // Register controllers per session if not yet registered
         if (!Get.isRegistered<TutoringController>(tag: tag)) {
           Get.put(TutoringController(), tag: tag, permanent: false);
         }
@@ -102,20 +151,7 @@ class TSessionCardVertical extends StatelessWidget {
                   Positioned(
                     left: 8,
                     bottom: 8,
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: TColors.textWhite,
-                      child: ClipOval(
-                        child: SizedBox(
-                          width: 28,
-                          height: 28,
-                          child:
-                              tutorIcon.startsWith('http')
-                                  ? Image.network(tutorIcon, fit: BoxFit.cover)
-                                  : Image.asset(tutorIcon, fit: BoxFit.cover),
-                        ),
-                      ),
-                    ),
+                    child: buildTutorAvatar(session.tutor),
                   ),
                   if (salePercentage > 0)
                     Positioned(
@@ -153,7 +189,7 @@ class TSessionCardVertical extends StatelessWidget {
                   if (session.tutor != null) ...[
                     Row(
                       children: [
-                        const SizedBox(width: 0), // optional spacing
+                        const SizedBox(width: 0),
                         TBrandTitleWithVerifiedIcon(
                           title: session.tutor!.name,
                           brandTextSize: TextSizes.medium,

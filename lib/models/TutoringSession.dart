@@ -39,6 +39,7 @@ class TutoringSession extends amplify_core.Model {
   final List<String>? _images;
   final double? _pricePerSession;
   final bool? _isFeatured;
+  final bool? _hasPaid;
   final amplify_core.TemporalDateTime? _createdAt;
   final amplify_core.TemporalDateTime? _updatedAt;
 
@@ -108,6 +109,10 @@ class TutoringSession extends amplify_core.Model {
     return _isFeatured;
   }
   
+  bool? get hasPaid {
+    return _hasPaid;
+  }
+  
   amplify_core.TemporalDateTime? get createdAt {
     return _createdAt;
   }
@@ -116,9 +121,9 @@ class TutoringSession extends amplify_core.Model {
     return _updatedAt;
   }
   
-  const TutoringSession._internal({required this.id, tutor, subject, sessionAttributes, bookings, reviews, required title, description, thumbnail, images, pricePerSession, isFeatured, createdAt, updatedAt}): _tutor = tutor, _subject = subject, _sessionAttributes = sessionAttributes, _bookings = bookings, _reviews = reviews, _title = title, _description = description, _thumbnail = thumbnail, _images = images, _pricePerSession = pricePerSession, _isFeatured = isFeatured, _createdAt = createdAt, _updatedAt = updatedAt;
+  const TutoringSession._internal({required this.id, tutor, subject, sessionAttributes, bookings, reviews, required title, description, thumbnail, images, pricePerSession, isFeatured, hasPaid, createdAt, updatedAt}): _tutor = tutor, _subject = subject, _sessionAttributes = sessionAttributes, _bookings = bookings, _reviews = reviews, _title = title, _description = description, _thumbnail = thumbnail, _images = images, _pricePerSession = pricePerSession, _isFeatured = isFeatured, _hasPaid = hasPaid, _createdAt = createdAt, _updatedAt = updatedAt;
   
-  factory TutoringSession({String? id, Tutor? tutor, Subject? subject, List<SessionAttribute>? sessionAttributes, List<Booking>? bookings, List<Review>? reviews, required String title, String? description, String? thumbnail, List<String>? images, double? pricePerSession, bool? isFeatured, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+  factory TutoringSession({String? id, Tutor? tutor, Subject? subject, List<SessionAttribute>? sessionAttributes, List<Booking>? bookings, List<Review>? reviews, required String title, String? description, String? thumbnail, List<String>? images, double? pricePerSession, bool? isFeatured, bool? hasPaid, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return TutoringSession._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       tutor: tutor,
@@ -132,6 +137,7 @@ class TutoringSession extends amplify_core.Model {
       images: images != null ? List<String>.unmodifiable(images) : images,
       pricePerSession: pricePerSession,
       isFeatured: isFeatured,
+      hasPaid: hasPaid,
       createdAt: createdAt,
       updatedAt: updatedAt);
   }
@@ -156,6 +162,7 @@ class TutoringSession extends amplify_core.Model {
       DeepCollectionEquality().equals(_images, other._images) &&
       _pricePerSession == other._pricePerSession &&
       _isFeatured == other._isFeatured &&
+      _hasPaid == other._hasPaid &&
       _createdAt == other._createdAt &&
       _updatedAt == other._updatedAt;
   }
@@ -177,6 +184,7 @@ class TutoringSession extends amplify_core.Model {
     buffer.write("images=" + (_images != null ? _images!.toString() : "null") + ", ");
     buffer.write("pricePerSession=" + (_pricePerSession != null ? _pricePerSession!.toString() : "null") + ", ");
     buffer.write("isFeatured=" + (_isFeatured != null ? _isFeatured!.toString() : "null") + ", ");
+    buffer.write("hasPaid=" + (_hasPaid != null ? _hasPaid!.toString() : "null") + ", ");
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
     buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
     buffer.write("}");
@@ -184,7 +192,7 @@ class TutoringSession extends amplify_core.Model {
     return buffer.toString();
   }
   
-  TutoringSession copyWith({Tutor? tutor, Subject? subject, List<SessionAttribute>? sessionAttributes, List<Booking>? bookings, List<Review>? reviews, String? title, String? description, String? thumbnail, List<String>? images, double? pricePerSession, bool? isFeatured, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+  TutoringSession copyWith({Tutor? tutor, Subject? subject, List<SessionAttribute>? sessionAttributes, List<Booking>? bookings, List<Review>? reviews, String? title, String? description, String? thumbnail, List<String>? images, double? pricePerSession, bool? isFeatured, bool? hasPaid, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return TutoringSession._internal(
       id: id,
       tutor: tutor ?? this.tutor,
@@ -198,6 +206,7 @@ class TutoringSession extends amplify_core.Model {
       images: images ?? this.images,
       pricePerSession: pricePerSession ?? this.pricePerSession,
       isFeatured: isFeatured ?? this.isFeatured,
+      hasPaid: hasPaid ?? this.hasPaid,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt);
   }
@@ -214,6 +223,7 @@ class TutoringSession extends amplify_core.Model {
     ModelFieldValue<List<String>?>? images,
     ModelFieldValue<double?>? pricePerSession,
     ModelFieldValue<bool?>? isFeatured,
+    ModelFieldValue<bool?>? hasPaid,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
     ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt
   }) {
@@ -230,6 +240,7 @@ class TutoringSession extends amplify_core.Model {
       images: images == null ? this.images : images.value,
       pricePerSession: pricePerSession == null ? this.pricePerSession : pricePerSession.value,
       isFeatured: isFeatured == null ? this.isFeatured : isFeatured.value,
+      hasPaid: hasPaid == null ? this.hasPaid : hasPaid.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
       updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value
     );
@@ -292,11 +303,12 @@ class TutoringSession extends amplify_core.Model {
       _images = json['images']?.cast<String>(),
       _pricePerSession = (json['pricePerSession'] as num?)?.toDouble(),
       _isFeatured = json['isFeatured'],
+      _hasPaid = json['hasPaid'],
       _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
       _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
   
   Map<String, dynamic> toJson() => {
-    'id': id, 'tutor': _tutor?.toJson(), 'subject': _subject?.toJson(), 'sessionAttributes': _sessionAttributes?.map((SessionAttribute? e) => e?.toJson()).toList(), 'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(), 'reviews': _reviews?.map((Review? e) => e?.toJson()).toList(), 'title': _title, 'description': _description, 'thumbnail': _thumbnail, 'images': _images, 'pricePerSession': _pricePerSession, 'isFeatured': _isFeatured, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
+    'id': id, 'tutor': _tutor?.toJson(), 'subject': _subject?.toJson(), 'sessionAttributes': _sessionAttributes?.map((SessionAttribute? e) => e?.toJson()).toList(), 'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(), 'reviews': _reviews?.map((Review? e) => e?.toJson()).toList(), 'title': _title, 'description': _description, 'thumbnail': _thumbnail, 'images': _images, 'pricePerSession': _pricePerSession, 'isFeatured': _isFeatured, 'hasPaid': _hasPaid, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
   
   Map<String, Object?> toMap() => {
@@ -312,6 +324,7 @@ class TutoringSession extends amplify_core.Model {
     'images': _images,
     'pricePerSession': _pricePerSession,
     'isFeatured': _isFeatured,
+    'hasPaid': _hasPaid,
     'createdAt': _createdAt,
     'updatedAt': _updatedAt
   };
@@ -339,6 +352,7 @@ class TutoringSession extends amplify_core.Model {
   static final IMAGES = amplify_core.QueryField(fieldName: "images");
   static final PRICEPERSESSION = amplify_core.QueryField(fieldName: "pricePerSession");
   static final ISFEATURED = amplify_core.QueryField(fieldName: "isFeatured");
+  static final HASPAID = amplify_core.QueryField(fieldName: "hasPaid");
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
   static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
   static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
@@ -439,6 +453,12 @@ class TutoringSession extends amplify_core.Model {
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
       key: TutoringSession.ISFEATURED,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: TutoringSession.HASPAID,
       isRequired: false,
       ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
     ));

@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: avoid_print, unnecessary_null_comparison
 
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
@@ -11,10 +11,67 @@ class SubjectController extends GetxController {
   // ---------------- Reactive State ----------------
   final RxList<Subject> subjects = <Subject>[].obs;
 
-  // 🔹 Track if subjects have finished loading
+  // Currently selected subject (nullable)
+  final Rxn<Subject> selectedSubject = Rxn<Subject>();
+
+  // Filtered sessions based on selected subject
+  final RxList<TutoringSession> filteredSessions = <TutoringSession>[].obs;
+
+  // Featured subjects (reactive)
+  final RxList<Subject> featuredSubjects = <Subject>[].obs;
+
+  // Reactive filtered subjects for search
+  final RxList<Subject> filteredSubjects = <Subject>[].obs;
+
+  // Track loading state
   final RxBool isLoaded = false.obs;
 
-  // ---------------- Helper: Check if user can sync ----------------
+  @override
+  void onInit() {
+    super.onInit();
+
+    // Recompute filtered sessions whenever selection changes
+    ever(selectedSubject, (_) => _updateFilteredSessions());
+
+    // Update filtered sessions and featured subjects whenever subjects list changes
+    ever(subjects, (_) {
+      _updateFilteredSessions();
+      _updateFeaturedSubjects();
+    });
+
+    // Update filtered subjects whenever featuredSubjects changes
+    ever(featuredSubjects, (_) {
+      filteredSubjects.assignAll(featuredSubjects);
+    });
+
+    // Initial fetch
+    fetchSubjects();
+  }
+
+  // ---------------- Fetch all subjects ----------------
+  Future<void> fetchSubjects() async {
+    if (!await _canSync()) return;
+
+    try {
+      final allSubjects = await Amplify.DataStore.query(Subject.classType);
+
+      if (allSubjects.isEmpty) {
+        print('📦 No subjects found. Seeding defaults...');
+        await _seedDefaultSubjects();
+      }
+
+      final updatedSubjects = await Amplify.DataStore.query(Subject.classType);
+      subjects.assignAll(updatedSubjects);
+      isLoaded.value = true;
+
+      print('✅ Subjects loaded: total=${subjects.length}');
+    } catch (e) {
+      print('❌ Error fetching subjects: $e');
+      isLoaded.value = true;
+    }
+  }
+
+  // ---------------- Check if user can sync ----------------
   Future<bool> _canSync() async {
     try {
       await Amplify.Auth.getCurrentUser();
@@ -25,33 +82,7 @@ class SubjectController extends GetxController {
     }
   }
 
-  // ---------------- Fetch all subjects ----------------
-  Future<void> fetchSubjects() async {
-    if (!await _canSync()) return;
-
-    try {
-      final allSubjects = await Amplify.DataStore.query(Subject.classType);
-
-      // 🔥 AUTO SEED IF EMPTY
-      if (allSubjects.isEmpty) {
-        print('📦 No subjects found. Seeding defaults...');
-        await _seedDefaultSubjects();
-      }
-
-      final updatedSubjects = await Amplify.DataStore.query(Subject.classType);
-
-      subjects.assignAll(updatedSubjects);
-      isLoaded.value = true; // ✅ Mark as loaded
-
-      print('✅ Subjects loaded: total=${subjects.length}');
-    } catch (e) {
-      print('❌ Error fetching subjects: $e');
-      isLoaded.value =
-          true; // even on error, mark loaded to avoid infinite loader
-    }
-  }
-
-  // ---------------- Seed Default Subjects ----------------
+  // ---------------- Seed default subjects ----------------
   Future<void> _seedDefaultSubjects() async {
     final defaultSubjects = [
       Subject(
@@ -153,19 +184,49 @@ class SubjectController extends GetxController {
     print('🚀 Default subjects seeded successfully');
   }
 
-  // ---------------- Getters ----------------
-  List<Subject> getAllSubjects() => subjects.toList();
-
-  List<Subject> getFeaturedSubjects({int limit = 10}) {
-    final featured = subjects.where((s) => s.isFeatured ?? false).toList();
-    return featured.length <= limit ? featured : featured.sublist(0, limit);
+  // ---------------- Reactive Updates ----------------
+  void _updateFilteredSessions() {
+    if (selectedSubject.value == null) {
+      filteredSessions.value =
+          subjects
+              .expand<TutoringSession>(
+                (s) => s.tutoringSessions ?? <TutoringSession>[],
+              )
+              .toList();
+    } else {
+      filteredSessions.value =
+          selectedSubject.value!.tutoringSessions ?? <TutoringSession>[];
+    }
   }
 
-  List<TutoringSession> getTutoringSessionsForSubject(String subjectId) {
-    final subject = subjects.firstWhere(
-      (s) => s.id == subjectId,
-      orElse: () => Subject(id: '', name: 'Unknown'),
-    );
-    return subject.tutoringSessions ?? [];
+  void _updateFeaturedSubjects({int limit = 10}) {
+    final featured = subjects.where((s) => s.isFeatured ?? false).toList();
+    featuredSubjects.value =
+        featured.length <= limit ? featured : featured.sublist(0, limit);
+
+    // Reset filteredSubjects for search
+    filteredSubjects.assignAll(featuredSubjects);
+  }
+
+  // ---------------- Select / Deselect Subject ----------------
+  void selectSubject(Subject subject) {
+    if (selectedSubject.value?.id == subject.id) {
+      selectedSubject.value = null;
+    } else {
+      selectedSubject.value = subject;
+    }
+  }
+
+  // ---------------- Search Filter ----------------
+  void filterSubjects(String query) {
+    if (query.isEmpty) {
+      filteredSubjects.assignAll(featuredSubjects);
+    } else {
+      filteredSubjects.assignAll(
+        featuredSubjects
+            .where((s) => s.name.toLowerCase().contains(query.toLowerCase()))
+            .toList(),
+      );
+    }
   }
 }

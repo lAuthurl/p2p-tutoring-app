@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -19,43 +21,15 @@ import '../../../../../utils/constants/image_strings.dart';
 import '../../../../Courses/screens/product_cards/t_session_card_vertical.dart';
 import '../../../../../models/ModelProvider.dart';
 
-/// HomeScreen with lazy SubjectController initialization
+/// HomeScreen with reactive session filtering and search
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Lazy initialize HomeController if not registered
-    if (!Get.isRegistered<HomeController>()) {
-      Get.put(HomeController());
-    }
-    final homeController = Get.find<HomeController>();
-
-    // Lazy initialize SubjectController if not registered
-    if (!Get.isRegistered<SubjectController>()) {
-      Get.lazyPut(() => SubjectController());
-    }
-
-    return Obx(() {
-      if (homeController.isLoading.value) {
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      }
-      return const _HomeContent();
-    });
-  }
-}
-
-/// Core UI content of HomeScreen
-class _HomeContent extends StatelessWidget {
-  const _HomeContent();
-
-  @override
-  Widget build(BuildContext context) {
     final homeController = Get.find<HomeController>();
     final subjectController = Get.find<SubjectController>();
-
-    // Load all subjects (formerly "featured")
-    final allSubjects = subjectController.getFeaturedSubjects(limit: 20);
+    final searchController = TextEditingController();
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
@@ -74,18 +48,28 @@ class _HomeContent extends StatelessWidget {
                 children: [
                   const THomeAppBar(),
                   const SizedBox(height: TSizes.spaceBtwSections),
-                  const TSearchContainer(
-                    text: 'Search for Lectures or Tutors',
+                  // ---------------- Search Container ----------------
+                  TSearchContainer(
+                    controller: searchController,
+                    hintText: 'Search for Lectures or Tutors',
                     showBorder: false,
+                    onChanged: (value) {
+                      homeController.updateSearch(
+                        value,
+                      ); // Filter sessions reactively
+                    },
                   ),
                   const SizedBox(height: TSizes.spaceBtwSections),
-                  if (allSubjects.isNotEmpty)
-                    THeaderSubjects(controller: homeController)
-                  else
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('No subjects available'),
-                    ),
+                  // ---------------- Subjects ----------------
+                  Obx(() {
+                    final featuredSubjects = subjectController.featuredSubjects;
+                    return featuredSubjects.isNotEmpty
+                        ? THeaderSubjects(controller: homeController)
+                        : const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text('No subjects found'),
+                        );
+                  }),
                   const SizedBox(height: TSizes.spaceBtwSections * 2),
                 ],
               ),
@@ -129,7 +113,7 @@ class _HomeContent extends StatelessWidget {
   }
 }
 
-/// Featured Lectures Section (2 Random Popular + 2 Random Recent, changes daily)
+/// Featured Lectures Section (2 Random Popular + 2 Random Recent, daily shuffle)
 class _FeaturedSection extends StatelessWidget {
   const _FeaturedSection();
 
@@ -140,7 +124,6 @@ class _FeaturedSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Removed onPressed: () {} to hide "View All" button
         TSectionHeading(title: 'Featured Lectures'),
         const SizedBox(height: TSizes.spaceBtwItems),
         Obx(() {
@@ -204,27 +187,17 @@ class _PopularSection extends StatelessWidget {
         TSectionHeading(
           title: 'All Lectures',
           onPressed: () {
-            final allSessions = [
-              ...controller.featuredSessions,
-              ...controller.popularSessions,
-              ...controller.recentSessions,
-            ];
+            final allSessions = controller.filteredSessions.toList();
 
             final uniqueSessions =
                 {for (var s in allSessions) s.id: s}.values.toList();
 
-            // Sort by createdAt descending
-            uniqueSessions.sort((a, b) {
-              final aTime =
-                  a.createdAt?.getDateTimeInUtc() ??
-                  DateTime.fromMillisecondsSinceEpoch(0);
-              final bTime =
-                  b.createdAt?.getDateTimeInUtc() ??
-                  DateTime.fromMillisecondsSinceEpoch(0);
-              return bTime.compareTo(aTime);
-            });
+            // Sort newest first
+            uniqueSessions.sort(
+              (a, b) => (b.createdAt?.getDateTimeInUtc() ?? DateTime(0))
+                  .compareTo(a.createdAt?.getDateTimeInUtc() ?? DateTime(0)),
+            );
 
-            // NO limit here because All Lectures screen should show all
             Get.to(
               () => AllLecturesScreen(
                 title: 'All Lectures',
@@ -235,27 +208,17 @@ class _PopularSection extends StatelessWidget {
         ),
         const SizedBox(height: TSizes.spaceBtwItems),
         Obx(() {
-          final allSessions = [
-            ...controller.featuredSessions,
-            ...controller.popularSessions,
-            ...controller.recentSessions,
-          ];
+          final allSessions = controller.filteredSessions.toList();
 
           final uniqueSessions =
               {for (var s in allSessions) s.id: s}.values.toList();
 
-          // Sort by createdAt descending
-          uniqueSessions.sort((a, b) {
-            final aTime =
-                a.createdAt?.getDateTimeInUtc() ??
-                DateTime.fromMillisecondsSinceEpoch(0);
-            final bTime =
-                b.createdAt?.getDateTimeInUtc() ??
-                DateTime.fromMillisecondsSinceEpoch(0);
-            return bTime.compareTo(aTime);
-          });
+          // Sort newest first
+          uniqueSessions.sort(
+            (a, b) => (b.createdAt?.getDateTimeInUtc() ?? DateTime(0))
+                .compareTo(a.createdAt?.getDateTimeInUtc() ?? DateTime(0)),
+          );
 
-          // **LIMIT to 6 only for HomeScreen**
           final limitedSessions = uniqueSessions.take(6).toList();
 
           if (limitedSessions.isEmpty) {

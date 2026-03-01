@@ -43,6 +43,7 @@ class BookingItem extends amplify_core.Model {
   final String? _providerName;
   final String? _providerImage;
   final String? _selectedAttributes;
+  final bool? _hasPaid;
   final amplify_core.TemporalDateTime? _createdAt;
   final amplify_core.TemporalDateTime? _updatedAt;
 
@@ -123,6 +124,10 @@ class BookingItem extends amplify_core.Model {
     return _selectedAttributes;
   }
   
+  bool? get hasPaid {
+    return _hasPaid;
+  }
+  
   amplify_core.TemporalDateTime? get createdAt {
     return _createdAt;
   }
@@ -131,9 +136,9 @@ class BookingItem extends amplify_core.Model {
     return _updatedAt;
   }
   
-  const BookingItem._internal({required this.id, user, booking, sessionId, tutorId, bookingDate, timeSlot, price, quantity, negotiatedPrice, applyDiscount, isPhysical, serviceTitle, serviceImage, providerName, providerImage, selectedAttributes, createdAt, updatedAt}): _user = user, _booking = booking, _sessionId = sessionId, _tutorId = tutorId, _bookingDate = bookingDate, _timeSlot = timeSlot, _price = price, _quantity = quantity, _negotiatedPrice = negotiatedPrice, _applyDiscount = applyDiscount, _isPhysical = isPhysical, _serviceTitle = serviceTitle, _serviceImage = serviceImage, _providerName = providerName, _providerImage = providerImage, _selectedAttributes = selectedAttributes, _createdAt = createdAt, _updatedAt = updatedAt;
+  const BookingItem._internal({required this.id, user, booking, sessionId, tutorId, bookingDate, timeSlot, price, quantity, negotiatedPrice, applyDiscount, isPhysical, serviceTitle, serviceImage, providerName, providerImage, selectedAttributes, hasPaid, createdAt, updatedAt}): _user = user, _booking = booking, _sessionId = sessionId, _tutorId = tutorId, _bookingDate = bookingDate, _timeSlot = timeSlot, _price = price, _quantity = quantity, _negotiatedPrice = negotiatedPrice, _applyDiscount = applyDiscount, _isPhysical = isPhysical, _serviceTitle = serviceTitle, _serviceImage = serviceImage, _providerName = providerName, _providerImage = providerImage, _selectedAttributes = selectedAttributes, _hasPaid = hasPaid, _createdAt = createdAt, _updatedAt = updatedAt;
   
-  factory BookingItem({String? id, User? user, Booking? booking, String? sessionId, String? tutorId, amplify_core.TemporalDateTime? bookingDate, String? timeSlot, double? price, int? quantity, double? negotiatedPrice, bool? applyDiscount, bool? isPhysical, String? serviceTitle, String? serviceImage, String? providerName, String? providerImage, String? selectedAttributes, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+  factory BookingItem({String? id, User? user, Booking? booking, String? sessionId, String? tutorId, amplify_core.TemporalDateTime? bookingDate, String? timeSlot, double? price, int? quantity, double? negotiatedPrice, bool? applyDiscount, bool? isPhysical, String? serviceTitle, String? serviceImage, String? providerName, String? providerImage, String? selectedAttributes, bool? hasPaid, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return BookingItem._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       user: user,
@@ -152,6 +157,7 @@ class BookingItem extends amplify_core.Model {
       providerName: providerName,
       providerImage: providerImage,
       selectedAttributes: selectedAttributes,
+      hasPaid: hasPaid,
       createdAt: createdAt,
       updatedAt: updatedAt);
   }
@@ -181,6 +187,7 @@ class BookingItem extends amplify_core.Model {
       _providerName == other._providerName &&
       _providerImage == other._providerImage &&
       _selectedAttributes == other._selectedAttributes &&
+      _hasPaid == other._hasPaid &&
       _createdAt == other._createdAt &&
       _updatedAt == other._updatedAt;
   }
@@ -210,6 +217,7 @@ class BookingItem extends amplify_core.Model {
     buffer.write("providerName=" + "$_providerName" + ", ");
     buffer.write("providerImage=" + "$_providerImage" + ", ");
     buffer.write("selectedAttributes=" + "$_selectedAttributes" + ", ");
+    buffer.write("hasPaid=" + (_hasPaid != null ? _hasPaid!.toString() : "null") + ", ");
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
     buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
     buffer.write("}");
@@ -217,7 +225,7 @@ class BookingItem extends amplify_core.Model {
     return buffer.toString();
   }
   
-  BookingItem copyWith({User? user, Booking? booking, String? sessionId, String? tutorId, amplify_core.TemporalDateTime? bookingDate, String? timeSlot, double? price, int? quantity, double? negotiatedPrice, bool? applyDiscount, bool? isPhysical, String? serviceTitle, String? serviceImage, String? providerName, String? providerImage, String? selectedAttributes, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+  BookingItem copyWith({User? user, Booking? booking, String? sessionId, String? tutorId, amplify_core.TemporalDateTime? bookingDate, String? timeSlot, double? price, int? quantity, double? negotiatedPrice, bool? applyDiscount, bool? isPhysical, String? serviceTitle, String? serviceImage, String? providerName, String? providerImage, String? selectedAttributes, bool? hasPaid, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return BookingItem._internal(
       id: id,
       user: user ?? this.user,
@@ -236,6 +244,7 @@ class BookingItem extends amplify_core.Model {
       providerName: providerName ?? this.providerName,
       providerImage: providerImage ?? this.providerImage,
       selectedAttributes: selectedAttributes ?? this.selectedAttributes,
+      hasPaid: hasPaid ?? this.hasPaid,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt);
   }
@@ -257,6 +266,7 @@ class BookingItem extends amplify_core.Model {
     ModelFieldValue<String?>? providerName,
     ModelFieldValue<String?>? providerImage,
     ModelFieldValue<String?>? selectedAttributes,
+    ModelFieldValue<bool?>? hasPaid,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
     ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt
   }) {
@@ -278,6 +288,7 @@ class BookingItem extends amplify_core.Model {
       providerName: providerName == null ? this.providerName : providerName.value,
       providerImage: providerImage == null ? this.providerImage : providerImage.value,
       selectedAttributes: selectedAttributes == null ? this.selectedAttributes : selectedAttributes.value,
+      hasPaid: hasPaid == null ? this.hasPaid : hasPaid.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
       updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value
     );
@@ -309,11 +320,12 @@ class BookingItem extends amplify_core.Model {
       _providerName = json['providerName'],
       _providerImage = json['providerImage'],
       _selectedAttributes = json['selectedAttributes'],
+      _hasPaid = json['hasPaid'],
       _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
       _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
   
   Map<String, dynamic> toJson() => {
-    'id': id, 'user': _user?.toJson(), 'booking': _booking?.toJson(), 'sessionId': _sessionId, 'tutorId': _tutorId, 'bookingDate': _bookingDate?.format(), 'timeSlot': _timeSlot, 'price': _price, 'quantity': _quantity, 'negotiatedPrice': _negotiatedPrice, 'applyDiscount': _applyDiscount, 'isPhysical': _isPhysical, 'serviceTitle': _serviceTitle, 'serviceImage': _serviceImage, 'providerName': _providerName, 'providerImage': _providerImage, 'selectedAttributes': _selectedAttributes, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
+    'id': id, 'user': _user?.toJson(), 'booking': _booking?.toJson(), 'sessionId': _sessionId, 'tutorId': _tutorId, 'bookingDate': _bookingDate?.format(), 'timeSlot': _timeSlot, 'price': _price, 'quantity': _quantity, 'negotiatedPrice': _negotiatedPrice, 'applyDiscount': _applyDiscount, 'isPhysical': _isPhysical, 'serviceTitle': _serviceTitle, 'serviceImage': _serviceImage, 'providerName': _providerName, 'providerImage': _providerImage, 'selectedAttributes': _selectedAttributes, 'hasPaid': _hasPaid, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
   
   Map<String, Object?> toMap() => {
@@ -334,6 +346,7 @@ class BookingItem extends amplify_core.Model {
     'providerName': _providerName,
     'providerImage': _providerImage,
     'selectedAttributes': _selectedAttributes,
+    'hasPaid': _hasPaid,
     'createdAt': _createdAt,
     'updatedAt': _updatedAt
   };
@@ -360,6 +373,7 @@ class BookingItem extends amplify_core.Model {
   static final PROVIDERNAME = amplify_core.QueryField(fieldName: "providerName");
   static final PROVIDERIMAGE = amplify_core.QueryField(fieldName: "providerImage");
   static final SELECTEDATTRIBUTES = amplify_core.QueryField(fieldName: "selectedAttributes");
+  static final HASPAID = amplify_core.QueryField(fieldName: "hasPaid");
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
   static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
   static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
@@ -488,6 +502,12 @@ class BookingItem extends amplify_core.Model {
       key: BookingItem.SELECTEDATTRIBUTES,
       isRequired: false,
       ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: BookingItem.HASPAID,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
     ));
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(

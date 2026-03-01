@@ -31,29 +31,7 @@ class ProfileFormScreen extends StatelessWidget {
                 prefixIcon: Icon(LineAwesomeIcons.user),
               ),
             ),
-            const SizedBox(height: TSizes.xl - 20),
-
-            /// ---------------- EMAIL ----------------
-            TextFormField(
-              enabled: controller.email.text.isEmpty,
-              controller: controller.email,
-              decoration: const InputDecoration(
-                label: Text(TTexts.tEmail),
-                prefixIcon: Icon(LineAwesomeIcons.envelope),
-              ),
-            ),
-            const SizedBox(height: TSizes.xl - 20),
-
-            /// ---------------- PHONE ----------------
-            TextFormField(
-              enabled: controller.phoneNo.text.isEmpty,
-              controller: controller.phoneNo,
-              decoration: const InputDecoration(
-                label: Text(TTexts.tPhoneNo),
-                prefixIcon: Icon(LineAwesomeIcons.phone_solid),
-              ),
-            ),
-            const SizedBox(height: TSizes.xl),
+            const SizedBox(height: TSizes.xl - 10),
 
             /// ---------------- SKILLS ----------------
             TextFormField(

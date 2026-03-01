@@ -1,3 +1,5 @@
+// ignore_for_file: public_member_api_docs, use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import '../../../../../common/widgets/appbar/appbar.dart';
 import '../../../../../common/widgets/custom_shapes/curved_edges/curved_edges_widget.dart';
@@ -22,13 +24,60 @@ class TSessionImageSlider extends StatelessWidget {
   final String? selectedImage;
   final void Function(String image)? onImageSelected;
 
-  String _tutorIconForName(String name) {
-    final n = name.toLowerCase();
-    if (n.contains('alice')) return TImages.tutorAlice;
-    if (n.contains('bob')) return TImages.tutorBob;
-    if (n.contains('carol')) return TImages.tutorCarol;
-    // Fallback
-    return TImages.tdefaultpfp;
+  /// Returns a widget for tutor avatar: image if available, otherwise initials
+  Widget _tutorIconWidget(Tutor? tutor) {
+    if (tutor == null) {
+      return CircleAvatar(
+        radius: 28,
+        backgroundColor: TColors.primary,
+        child: const Text(
+          '?',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+      );
+    }
+
+    if (tutor.image != null && tutor.image!.isNotEmpty) {
+      return CircleAvatar(
+        radius: 28,
+        backgroundColor: TColors.textWhite,
+        child: ClipOval(
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child:
+                tutor.image!.startsWith('http')
+                    ? Image.network(tutor.image!, fit: BoxFit.cover)
+                    : Image.asset(tutor.image!, fit: BoxFit.cover),
+          ),
+        ),
+      );
+    } else {
+      final initials =
+          tutor.name
+              .trim()
+              .split(' ')
+              .map((e) => e[0])
+              .take(2)
+              .join()
+              .toUpperCase();
+      return CircleAvatar(
+        radius: 28,
+        backgroundColor: TColors.primary,
+        child: Text(
+          initials,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -36,10 +85,11 @@ class TSessionImageSlider extends StatelessWidget {
     final controller = TutoringController.instance;
     final images = controller.getAllSessionImages(session);
 
-    final tutorName = session.tutor?.name ?? '';
-    final mappedIcon = _tutorIconForName(tutorName);
-
-    final filteredImages = images.where((img) => img != mappedIcon).toList();
+    final filteredImages =
+        images.where((img) {
+          // Filter out tutor image if it exists in images
+          return img != session.tutor?.image;
+        }).toList();
     final visibleImages =
         filteredImages.length > 1 ? filteredImages.sublist(1) : <String>[];
 
@@ -114,9 +164,10 @@ class TSessionImageSlider extends StatelessWidget {
               child: GestureDetector(
                 onTap: () {
                   if (onImageSelected != null) {
-                    onImageSelected!(mappedIcon);
+                    onImageSelected!(session.tutor?.image ?? '');
                   } else {
-                    controller.selectedSessionImage.value = mappedIcon;
+                    controller.selectedSessionImage.value =
+                        session.tutor?.image ?? '';
                   }
                 },
                 child: Container(
@@ -127,17 +178,7 @@ class TSessionImageSlider extends StatelessWidget {
                       BoxShadow(color: Colors.black26, blurRadius: 4),
                     ],
                   ),
-                  child: CircleAvatar(
-                    radius: 28,
-                    backgroundColor: TColors.textWhite,
-                    child: ClipOval(
-                      child: SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Image.asset(mappedIcon, fit: BoxFit.cover),
-                      ),
-                    ),
-                  ),
+                  child: _tutorIconWidget(session.tutor),
                 ),
               ),
             ),

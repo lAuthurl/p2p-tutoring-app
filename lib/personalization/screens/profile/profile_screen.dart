@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:line_awesome_flutter/line_awesome_flutter.dart';
 
-import '../../../../../common/widgets/images/t_rounded_image.dart';
 import '../../../../../common/widgets/buttons/primary_button.dart';
 import '../../../Feautures/dashboard/Home/controllers/subject_controller.dart';
 import '../../../common/widgets/shimmers/shimmer.dart';
@@ -12,7 +11,6 @@ import '../../../../../data/repository/authentication_repository/authentication_
 import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/constants/text_strings.dart';
-import '../../../../../utils/constants/image_strings.dart';
 import '../../../personalization/controllers/user_controller.dart';
 import '../../../routes/routes.dart';
 import '../../../../bindings/general_bindings.dart';
@@ -40,33 +38,42 @@ class ProfileScreen extends StatelessWidget {
           TTexts.tProfile,
           style: Theme.of(context).textTheme.headlineMedium,
         ),
-        // Removed the theme switch icon here
         actions: [],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(TSizes.defaultSpace),
         child: Column(
           children: [
-            // Profile Image
+            // Profile Image with initials
             Stack(
               children: [
                 Obx(() {
                   final user = userController.currentUser.value;
-                  final imageUrl =
-                      (user?.profilePicture?.isNotEmpty ?? false)
-                          ? user!.profilePicture!
-                          : TImages.tdefaultpfp;
+                  final imageUrl = user?.profilePicture;
 
                   return userController.imageUploading.value
                       ? const TShimmerEffect(width: 80, height: 80, radius: 100)
-                      : TRoundedImage(
-                        width: 80,
-                        height: 80,
-                        isNetworkImage:
-                            user?.profilePicture?.isNotEmpty ?? false,
-                        imageUrl: imageUrl,
-                        borderRadius: 50,
-                        fit: BoxFit.cover,
+                      : CircleAvatar(
+                        radius: 40,
+                        backgroundColor: TColors.primary,
+                        backgroundImage:
+                            (imageUrl != null && imageUrl.isNotEmpty)
+                                ? NetworkImage(imageUrl)
+                                : null,
+                        child:
+                            (imageUrl == null || imageUrl.isEmpty)
+                                ? Text(
+                                  (user?.username != null &&
+                                          user!.username.isNotEmpty)
+                                      ? user.username[0].toUpperCase()
+                                      : "?",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                )
+                                : null,
                       );
                 }),
                 Positioned(
@@ -83,11 +90,11 @@ class ProfileScreen extends StatelessWidget {
                         height: 25,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
-                          color: TColors.primary,
+                          color: Colors.white,
                         ),
                         child: const Icon(
                           LineAwesomeIcons.pencil_alt_solid,
-                          color: Colors.black,
+                          color: TColors.primary,
                           size: 18,
                         ),
                       ),
@@ -134,7 +141,7 @@ class ProfileScreen extends StatelessWidget {
 
             // Menu Options
             ProfileMenuWidget(
-              title: "Home Dashboard",
+              title: "Dashboard",
               icon: Icons.home,
               onPress: () => Get.toNamed(TRoutes.mainDashboard),
             ),
@@ -171,26 +178,21 @@ class ProfileScreen extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: 15.0),
         child: Text("Are you sure you want to logout?"),
       ),
-      confirm: TPrimaryButton(
-        onPressed: () async {
-          try {
-            // 1️⃣ Logout user
-            await AuthenticationRepository.instance.logout();
-
-            // 2️⃣ Remove all existing controllers
-            Get.deleteAll(force: true);
-
-            // 3️⃣ Re-initialize GeneralBindings
-            GeneralBindings().dependencies();
-
-            // 4️⃣ Navigate to Login/Onboarding
-            Get.offAllNamed(TRoutes.logIn);
-          } catch (e) {
-            print('❌ Logout failed: $e');
-          }
-        },
-        text: "Yes",
-        verticalPadding: 16,
+      confirm: SizedBox(
+        width: 120,
+        child: ElevatedButton(
+          onPressed: () async {
+            try {
+              await AuthenticationRepository.instance.logout();
+              Get.deleteAll(force: true);
+              GeneralBindings().dependencies();
+              Get.offAllNamed(TRoutes.logIn);
+            } catch (e) {
+              print('❌ Logout failed: $e');
+            }
+          },
+          child: const Text("Yes"),
+        ),
       ),
       cancel: SizedBox(
         width: 100,

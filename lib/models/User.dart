@@ -41,6 +41,7 @@ class User extends amplify_core.Model {
   final amplify_core.TemporalDateTime? _updatedAt;
   final List<String>? _skills;
   final String? _about;
+  final bool? _profileCompleted;
   final List<Booking>? _bookings;
   final List<BookingItem>? _bookingItems;
   final List<Review>? _reviews;
@@ -128,6 +129,10 @@ class User extends amplify_core.Model {
     return _about;
   }
   
+  bool? get profileCompleted {
+    return _profileCompleted;
+  }
+  
   List<Booking>? get bookings {
     return _bookings;
   }
@@ -140,9 +145,9 @@ class User extends amplify_core.Model {
     return _reviews;
   }
   
-  const User._internal({required this.id, required username, required email, phoneNumber, profilePicture, deviceToken, isEmailVerified, isProfileActive, role, verificationStatus, createdAt, updatedAt, skills, about, bookings, bookingItems, reviews}): _username = username, _email = email, _phoneNumber = phoneNumber, _profilePicture = profilePicture, _deviceToken = deviceToken, _isEmailVerified = isEmailVerified, _isProfileActive = isProfileActive, _role = role, _verificationStatus = verificationStatus, _createdAt = createdAt, _updatedAt = updatedAt, _skills = skills, _about = about, _bookings = bookings, _bookingItems = bookingItems, _reviews = reviews;
+  const User._internal({required this.id, required username, required email, phoneNumber, profilePicture, deviceToken, isEmailVerified, isProfileActive, role, verificationStatus, createdAt, updatedAt, skills, about, profileCompleted, bookings, bookingItems, reviews}): _username = username, _email = email, _phoneNumber = phoneNumber, _profilePicture = profilePicture, _deviceToken = deviceToken, _isEmailVerified = isEmailVerified, _isProfileActive = isProfileActive, _role = role, _verificationStatus = verificationStatus, _createdAt = createdAt, _updatedAt = updatedAt, _skills = skills, _about = about, _profileCompleted = profileCompleted, _bookings = bookings, _bookingItems = bookingItems, _reviews = reviews;
   
-  factory User({String? id, required String username, required String email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<String>? skills, String? about, List<Booking>? bookings, List<BookingItem>? bookingItems, List<Review>? reviews}) {
+  factory User({String? id, required String username, required String email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<String>? skills, String? about, bool? profileCompleted, List<Booking>? bookings, List<BookingItem>? bookingItems, List<Review>? reviews}) {
     return User._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       username: username,
@@ -158,6 +163,7 @@ class User extends amplify_core.Model {
       updatedAt: updatedAt,
       skills: skills != null ? List<String>.unmodifiable(skills) : skills,
       about: about,
+      profileCompleted: profileCompleted,
       bookings: bookings != null ? List<Booking>.unmodifiable(bookings) : bookings,
       bookingItems: bookingItems != null ? List<BookingItem>.unmodifiable(bookingItems) : bookingItems,
       reviews: reviews != null ? List<Review>.unmodifiable(reviews) : reviews);
@@ -185,6 +191,7 @@ class User extends amplify_core.Model {
       _updatedAt == other._updatedAt &&
       DeepCollectionEquality().equals(_skills, other._skills) &&
       _about == other._about &&
+      _profileCompleted == other._profileCompleted &&
       DeepCollectionEquality().equals(_bookings, other._bookings) &&
       DeepCollectionEquality().equals(_bookingItems, other._bookingItems) &&
       DeepCollectionEquality().equals(_reviews, other._reviews);
@@ -211,13 +218,14 @@ class User extends amplify_core.Model {
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
     buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null") + ", ");
     buffer.write("skills=" + (_skills != null ? _skills!.toString() : "null") + ", ");
-    buffer.write("about=" + "$_about");
+    buffer.write("about=" + "$_about" + ", ");
+    buffer.write("profileCompleted=" + (_profileCompleted != null ? _profileCompleted!.toString() : "null"));
     buffer.write("}");
     
     return buffer.toString();
   }
   
-  User copyWith({String? username, String? email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<String>? skills, String? about, List<Booking>? bookings, List<BookingItem>? bookingItems, List<Review>? reviews}) {
+  User copyWith({String? username, String? email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<String>? skills, String? about, bool? profileCompleted, List<Booking>? bookings, List<BookingItem>? bookingItems, List<Review>? reviews}) {
     return User._internal(
       id: id,
       username: username ?? this.username,
@@ -233,6 +241,7 @@ class User extends amplify_core.Model {
       updatedAt: updatedAt ?? this.updatedAt,
       skills: skills ?? this.skills,
       about: about ?? this.about,
+      profileCompleted: profileCompleted ?? this.profileCompleted,
       bookings: bookings ?? this.bookings,
       bookingItems: bookingItems ?? this.bookingItems,
       reviews: reviews ?? this.reviews);
@@ -252,6 +261,7 @@ class User extends amplify_core.Model {
     ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt,
     ModelFieldValue<List<String>?>? skills,
     ModelFieldValue<String?>? about,
+    ModelFieldValue<bool?>? profileCompleted,
     ModelFieldValue<List<Booking>?>? bookings,
     ModelFieldValue<List<BookingItem>?>? bookingItems,
     ModelFieldValue<List<Review>?>? reviews
@@ -271,6 +281,7 @@ class User extends amplify_core.Model {
       updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value,
       skills: skills == null ? this.skills : skills.value,
       about: about == null ? this.about : about.value,
+      profileCompleted: profileCompleted == null ? this.profileCompleted : profileCompleted.value,
       bookings: bookings == null ? this.bookings : bookings.value,
       bookingItems: bookingItems == null ? this.bookingItems : bookingItems.value,
       reviews: reviews == null ? this.reviews : reviews.value
@@ -292,6 +303,7 @@ class User extends amplify_core.Model {
       _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null,
       _skills = json['skills']?.cast<String>(),
       _about = json['about'],
+      _profileCompleted = json['profileCompleted'],
       _bookings = json['bookings']  is Map
         ? (json['bookings']['items'] is List
           ? (json['bookings']['items'] as List)
@@ -333,7 +345,7 @@ class User extends amplify_core.Model {
           : null);
   
   Map<String, dynamic> toJson() => {
-    'id': id, 'username': _username, 'email': _email, 'phoneNumber': _phoneNumber, 'profilePicture': _profilePicture, 'deviceToken': _deviceToken, 'isEmailVerified': _isEmailVerified, 'isProfileActive': _isProfileActive, 'role': _role, 'verificationStatus': _verificationStatus, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format(), 'skills': _skills, 'about': _about, 'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(), 'bookingItems': _bookingItems?.map((BookingItem? e) => e?.toJson()).toList(), 'reviews': _reviews?.map((Review? e) => e?.toJson()).toList()
+    'id': id, 'username': _username, 'email': _email, 'phoneNumber': _phoneNumber, 'profilePicture': _profilePicture, 'deviceToken': _deviceToken, 'isEmailVerified': _isEmailVerified, 'isProfileActive': _isProfileActive, 'role': _role, 'verificationStatus': _verificationStatus, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format(), 'skills': _skills, 'about': _about, 'profileCompleted': _profileCompleted, 'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(), 'bookingItems': _bookingItems?.map((BookingItem? e) => e?.toJson()).toList(), 'reviews': _reviews?.map((Review? e) => e?.toJson()).toList()
   };
   
   Map<String, Object?> toMap() => {
@@ -351,6 +363,7 @@ class User extends amplify_core.Model {
     'updatedAt': _updatedAt,
     'skills': _skills,
     'about': _about,
+    'profileCompleted': _profileCompleted,
     'bookings': _bookings,
     'bookingItems': _bookingItems,
     'reviews': _reviews
@@ -371,6 +384,7 @@ class User extends amplify_core.Model {
   static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
   static final SKILLS = amplify_core.QueryField(fieldName: "skills");
   static final ABOUT = amplify_core.QueryField(fieldName: "about");
+  static final PROFILECOMPLETED = amplify_core.QueryField(fieldName: "profileCompleted");
   static final BOOKINGS = amplify_core.QueryField(
     fieldName: "bookings",
     fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'Booking'));
@@ -482,6 +496,12 @@ class User extends amplify_core.Model {
       key: User.ABOUT,
       isRequired: false,
       ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: User.PROFILECOMPLETED,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
     ));
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(

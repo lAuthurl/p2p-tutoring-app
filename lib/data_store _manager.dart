@@ -1,5 +1,4 @@
 import 'package:amplify_flutter/amplify_flutter.dart';
-import 'dart:async';
 
 class DataStoreManager {
   static final DataStoreManager _instance = DataStoreManager._internal();
@@ -7,78 +6,63 @@ class DataStoreManager {
   DataStoreManager._internal();
 
   bool _isSyncing = false;
-  Timer? _retryTimer;
 
-  /// Listen to DataStore Hub events
   void init() {
-    Amplify.Hub.listen(HubChannel.DataStore, (HubEvent event) {
+    Amplify.Hub.listen(HubChannel.DataStore, (event) async {
       switch (event.eventName) {
-        case 'networkStatus':
-          final status = event.payload as NetworkStatusEvent;
-          if (status.active) _resumeSync();
-          break;
-
         case 'subscriptionsEstablished':
           _isSyncing = true;
-          _retryTimer?.cancel();
-          safePrint('[DataStore] Subscription established');
+          safePrint('[DataStore] Subscriptions established');
           break;
 
         case 'subscriptionError':
           _isSyncing = false;
-          safePrint('[DataStore] Subscription failed: ${event.payload}');
-          _scheduleRetry();
+          safePrint('[DataStore] Subscription error: ${event.payload}');
+          break;
+
+        case 'networkStatus':
+          final status = event.payload as NetworkStatusEvent;
+
+          if (status.active) {
+            await _tryResume();
+          }
           break;
 
         case 'ready':
-          safePrint('[DataStore] Sync engine ready');
+          safePrint('[DataStore] Sync ready');
           break;
 
         default:
-          safePrint('[DataStore] Event: ${event.eventName}');
+          break;
       }
     });
   }
 
-  /// Resume DataStore sync
-  void _resumeSync() async {
-    if (_isSyncing) return;
+  Future<void> _tryResume() async {
     try {
-      safePrint('[DataStore] Attempting to resume sync...');
+      final session = await Amplify.Auth.fetchAuthSession();
+
+      if (!session.isSignedIn) {
+        safePrint('[DataStore] Not signed in — will NOT resume');
+        return;
+      }
+
+      if (_isSyncing) return;
+
       await Amplify.DataStore.start();
       _isSyncing = true;
-      safePrint('[DataStore] Sync resumed successfully');
+      safePrint('[DataStore] Sync resumed');
     } catch (e) {
-      safePrint('[DataStore] Failed to resume sync: $e');
-      _scheduleRetry();
+      safePrint('[DataStore] Resume failed: $e');
     }
   }
 
-  /// Retry mechanism
-  void _scheduleRetry() {
-    _retryTimer?.cancel();
-    _retryTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!_isSyncing) {
-        safePrint('[DataStore] Retrying sync...');
-        _resumeSync();
-      } else {
-        _retryTimer?.cancel();
-      }
-    });
-  }
-
-  /// Dispose retry timer
-  void dispose() {
-    _retryTimer?.cancel();
-  }
-
-  /// Clear all local DataStore
   Future<void> clear() async {
     try {
+      await Amplify.DataStore.stop();
       await Amplify.DataStore.clear();
       _isSyncing = false;
-      _retryTimer?.cancel();
-      safePrint('✅ DataStore cleared successfully');
+      safePrint('✅ DataStore cleared');
     } catch (e) {
       safePrint('❌ Failed to clear DataStore: $e');
     }

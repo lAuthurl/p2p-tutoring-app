@@ -21,6 +21,7 @@ type User @model
   updatedAt: AWSDateTime
   skills: [String]
   about: String
+  profileCompleted: Boolean @default(value: "false")
 
   # Relationships
   bookings: [Booking] @hasMany(indexName: "byUser", fields: ["id"])
@@ -97,8 +98,7 @@ type TutoringSession @model
   images: [String]
   pricePerSession: Float
   isFeatured: Boolean
-  hasPaid: Boolean @default(value: false) 
-
+  hasPaid: Boolean @default(value: "false")
 
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
@@ -167,7 +167,7 @@ type BookingItem @model
 
   selectedAttributes: AWSJSON
 
-  hasPaid: Boolean @default(value: false) 
+  hasPaid: Boolean @default(value: "false")
 
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
