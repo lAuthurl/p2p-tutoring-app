@@ -11,7 +11,7 @@ import '../../../../../common/widgets/texts/section_heading.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/device/device_utility.dart';
 import '../../../../Courses/screens/create_tutoring_session_screen.dart';
-import 'view_all sessions.dart';
+import 'view_all_sessions.dart';
 import 'widgets/header_search_container.dart';
 import 'widgets/home_appbar.dart';
 import 'widgets/promo_slider.dart';

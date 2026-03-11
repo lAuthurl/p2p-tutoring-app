@@ -4,7 +4,7 @@ import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import 'package:amplify_api/amplify_api.dart';
 import 'package:amplify_datastore/amplify_datastore.dart';
 import 'amplifyconfiguration.dart';
-import 'data_store _manager.dart';
+import 'data_store_manager.dart';
 import 'models/ModelProvider.dart';
 
 class AmplifyInitializer {
