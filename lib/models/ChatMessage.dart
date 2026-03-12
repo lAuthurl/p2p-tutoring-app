@@ -22,7 +22,6 @@
 import 'ModelProvider.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 
-
 /** This is an auto generated class representing the ChatMessage type in your schema. */
 class ChatMessage extends amplify_core.Model {
   static const classType = const _ChatMessageModelType();
@@ -38,70 +37,104 @@ class ChatMessage extends amplify_core.Model {
 
   @override
   getInstanceType() => classType;
-  
-  @Deprecated('[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.')
+
+  @Deprecated(
+    '[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.',
+  )
   @override
   String getId() => id;
-  
+
   ChatMessageModelIdentifier get modelIdentifier {
-      return ChatMessageModelIdentifier(
-        id: id
-      );
+    return ChatMessageModelIdentifier(id: id);
   }
-  
+
   String get sessionId {
     try {
       return _sessionId!;
-    } catch(e) {
+    } catch (e) {
       throw amplify_core.AmplifyCodeGenModelException(
-          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
-          recoverySuggestion:
-            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
-          underlyingException: e.toString()
-          );
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
     }
   }
-  
+
   String get senderId {
     try {
       return _senderId!;
-    } catch(e) {
+    } catch (e) {
       throw amplify_core.AmplifyCodeGenModelException(
-          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
-          recoverySuggestion:
-            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
-          underlyingException: e.toString()
-          );
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
     }
   }
-  
+
   String? get senderName {
     return _senderName;
   }
-  
+
   String? get text {
     return _text;
   }
-  
+
   bool? get isVoice {
     return _isVoice;
   }
-  
+
   String? get audioUrl {
     return _audioUrl;
   }
-  
+
   amplify_core.TemporalDateTime? get createdAt {
     return _createdAt;
   }
-  
+
   amplify_core.TemporalDateTime? get updatedAt {
     return _updatedAt;
   }
-  
-  const ChatMessage._internal({required this.id, required sessionId, required senderId, senderName, text, isVoice, audioUrl, createdAt, updatedAt}): _sessionId = sessionId, _senderId = senderId, _senderName = senderName, _text = text, _isVoice = isVoice, _audioUrl = audioUrl, _createdAt = createdAt, _updatedAt = updatedAt;
-  
-  factory ChatMessage({String? id, required String sessionId, required String senderId, String? senderName, String? text, bool? isVoice, String? audioUrl, amplify_core.TemporalDateTime? createdAt}) {
+
+  const ChatMessage._internal({
+    required this.id,
+    required sessionId,
+    required senderId,
+    senderName,
+    text,
+    isVoice,
+    audioUrl,
+    createdAt,
+    updatedAt,
+  }) : _sessionId = sessionId,
+       _senderId = senderId,
+       _senderName = senderName,
+       _text = text,
+       _isVoice = isVoice,
+       _audioUrl = audioUrl,
+       _createdAt = createdAt,
+       _updatedAt = updatedAt;
+
+  factory ChatMessage({
+    String? id,
+    required String sessionId,
+    required String senderId,
+    String? senderName,
+    String? text,
+    bool? isVoice,
+    String? audioUrl,
+    amplify_core.TemporalDateTime? createdAt,
+  }) {
     return ChatMessage._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       sessionId: sessionId,
@@ -110,50 +143,65 @@ class ChatMessage extends amplify_core.Model {
       text: text,
       isVoice: isVoice,
       audioUrl: audioUrl,
-      createdAt: createdAt);
+      createdAt: createdAt,
+    );
   }
-  
+
   bool equals(Object other) {
     return this == other;
   }
-  
+
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
     return other is ChatMessage &&
-      id == other.id &&
-      _sessionId == other._sessionId &&
-      _senderId == other._senderId &&
-      _senderName == other._senderName &&
-      _text == other._text &&
-      _isVoice == other._isVoice &&
-      _audioUrl == other._audioUrl &&
-      _createdAt == other._createdAt;
+        id == other.id &&
+        _sessionId == other._sessionId &&
+        _senderId == other._senderId &&
+        _senderName == other._senderName &&
+        _text == other._text &&
+        _isVoice == other._isVoice &&
+        _audioUrl == other._audioUrl &&
+        _createdAt == other._createdAt;
   }
-  
+
   @override
   int get hashCode => toString().hashCode;
-  
+
   @override
   String toString() {
     var buffer = new StringBuffer();
-    
+
     buffer.write("ChatMessage {");
     buffer.write("id=" + "$id" + ", ");
     buffer.write("sessionId=" + "$_sessionId" + ", ");
     buffer.write("senderId=" + "$_senderId" + ", ");
     buffer.write("senderName=" + "$_senderName" + ", ");
     buffer.write("text=" + "$_text" + ", ");
-    buffer.write("isVoice=" + (_isVoice != null ? _isVoice!.toString() : "null") + ", ");
+    buffer.write(
+      "isVoice=" + (_isVoice != null ? _isVoice.toString() : "null") + ", ",
+    );
     buffer.write("audioUrl=" + "$_audioUrl" + ", ");
-    buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
-    buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
+    buffer.write(
+      "createdAt=" + (_createdAt != null ? _createdAt.format() : "null") + ", ",
+    );
+    buffer.write(
+      "updatedAt=" + (_updatedAt != null ? _updatedAt.format() : "null"),
+    );
     buffer.write("}");
-    
+
     return buffer.toString();
   }
-  
-  ChatMessage copyWith({String? sessionId, String? senderId, String? senderName, String? text, bool? isVoice, String? audioUrl, amplify_core.TemporalDateTime? createdAt}) {
+
+  ChatMessage copyWith({
+    String? sessionId,
+    String? senderId,
+    String? senderName,
+    String? text,
+    bool? isVoice,
+    String? audioUrl,
+    amplify_core.TemporalDateTime? createdAt,
+  }) {
     return ChatMessage._internal(
       id: id,
       sessionId: sessionId ?? this.sessionId,
@@ -162,9 +210,10 @@ class ChatMessage extends amplify_core.Model {
       text: text ?? this.text,
       isVoice: isVoice ?? this.isVoice,
       audioUrl: audioUrl ?? this.audioUrl,
-      createdAt: createdAt ?? this.createdAt);
+      createdAt: createdAt ?? this.createdAt,
+    );
   }
-  
+
   ChatMessage copyWithModelFieldValues({
     ModelFieldValue<String>? sessionId,
     ModelFieldValue<String>? senderId,
@@ -172,7 +221,7 @@ class ChatMessage extends amplify_core.Model {
     ModelFieldValue<String?>? text,
     ModelFieldValue<bool?>? isVoice,
     ModelFieldValue<String?>? audioUrl,
-    ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt
+    ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
   }) {
     return ChatMessage._internal(
       id: id,
@@ -182,11 +231,11 @@ class ChatMessage extends amplify_core.Model {
       text: text == null ? this.text : text.value,
       isVoice: isVoice == null ? this.isVoice : isVoice.value,
       audioUrl: audioUrl == null ? this.audioUrl : audioUrl.value,
-      createdAt: createdAt == null ? this.createdAt : createdAt.value
+      createdAt: createdAt == null ? this.createdAt : createdAt.value,
     );
   }
-  
-  ChatMessage.fromJson(Map<String, dynamic> json)  
+
+  ChatMessage.fromJson(Map<String, dynamic> json)
     : id = json['id'],
       _sessionId = json['sessionId'],
       _senderId = json['senderId'],
@@ -194,13 +243,27 @@ class ChatMessage extends amplify_core.Model {
       _text = json['text'],
       _isVoice = json['isVoice'],
       _audioUrl = json['audioUrl'],
-      _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
-      _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
-  
+      _createdAt =
+          json['createdAt'] != null
+              ? amplify_core.TemporalDateTime.fromString(json['createdAt'])
+              : null,
+      _updatedAt =
+          json['updatedAt'] != null
+              ? amplify_core.TemporalDateTime.fromString(json['updatedAt'])
+              : null;
+
   Map<String, dynamic> toJson() => {
-    'id': id, 'sessionId': _sessionId, 'senderId': _senderId, 'senderName': _senderName, 'text': _text, 'isVoice': _isVoice, 'audioUrl': _audioUrl, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
+    'id': id,
+    'sessionId': _sessionId,
+    'senderId': _senderId,
+    'senderName': _senderName,
+    'text': _text,
+    'isVoice': _isVoice,
+    'audioUrl': _audioUrl,
+    'createdAt': _createdAt?.format(),
+    'updatedAt': _updatedAt?.format(),
   };
-  
+
   Map<String, Object?> toMap() => {
     'id': id,
     'sessionId': _sessionId,
@@ -210,10 +273,12 @@ class ChatMessage extends amplify_core.Model {
     'isVoice': _isVoice,
     'audioUrl': _audioUrl,
     'createdAt': _createdAt,
-    'updatedAt': _updatedAt
+    'updatedAt': _updatedAt,
   };
 
-  static final amplify_core.QueryModelIdentifier<ChatMessageModelIdentifier> MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<ChatMessageModelIdentifier>();
+  static final amplify_core.QueryModelIdentifier<ChatMessageModelIdentifier>
+  MODEL_IDENTIFIER =
+      amplify_core.QueryModelIdentifier<ChatMessageModelIdentifier>();
   static final ID = amplify_core.QueryField(fieldName: "id");
   static final SESSIONID = amplify_core.QueryField(fieldName: "sessionId");
   static final SENDERID = amplify_core.QueryField(fieldName: "senderId");
@@ -222,88 +287,122 @@ class ChatMessage extends amplify_core.Model {
   static final ISVOICE = amplify_core.QueryField(fieldName: "isVoice");
   static final AUDIOURL = amplify_core.QueryField(fieldName: "audioUrl");
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
-  static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
-    modelSchemaDefinition.name = "ChatMessage";
-    modelSchemaDefinition.pluralName = "ChatMessages";
-    
-    modelSchemaDefinition.authRules = [
-      amplify_core.AuthRule(
-        authStrategy: amplify_core.AuthStrategy.OWNER,
-        ownerField: "owner",
-        identityClaim: "cognito:username",
-        provider: amplify_core.AuthRuleProvider.USERPOOLS,
-        operations: const [
-          amplify_core.ModelOperation.CREATE,
-          amplify_core.ModelOperation.READ
-        ]),
-      amplify_core.AuthRule(
-        authStrategy: amplify_core.AuthStrategy.PUBLIC,
-        operations: const [
-          amplify_core.ModelOperation.READ
-        ])
-    ];
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: ChatMessage.SESSIONID,
-      isRequired: true,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: ChatMessage.SENDERID,
-      isRequired: true,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: ChatMessage.SENDERNAME,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: ChatMessage.TEXT,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: ChatMessage.ISVOICE,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: ChatMessage.AUDIOURL,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: ChatMessage.CREATEDAT,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.nonQueryField(
-      fieldName: 'updatedAt',
-      isRequired: false,
-      isReadOnly: true,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
-    ));
-  });
+  static var schema = amplify_core.Model.defineSchema(
+    define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
+      modelSchemaDefinition.name = "ChatMessage";
+      modelSchemaDefinition.pluralName = "ChatMessages";
+
+      modelSchemaDefinition.authRules = [
+        amplify_core.AuthRule(
+          authStrategy: amplify_core.AuthStrategy.OWNER,
+          ownerField: "owner",
+          identityClaim: "cognito:username",
+          provider: amplify_core.AuthRuleProvider.USERPOOLS,
+          operations: const [
+            amplify_core.ModelOperation.CREATE,
+            amplify_core.ModelOperation.READ,
+          ],
+        ),
+        amplify_core.AuthRule(
+          authStrategy: amplify_core.AuthStrategy.PUBLIC,
+          operations: const [amplify_core.ModelOperation.READ],
+        ),
+      ];
+
+      modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: ChatMessage.SESSIONID,
+          isRequired: true,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: ChatMessage.SENDERID,
+          isRequired: true,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: ChatMessage.SENDERNAME,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: ChatMessage.TEXT,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: ChatMessage.ISVOICE,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.bool,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: ChatMessage.AUDIOURL,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: ChatMessage.CREATEDAT,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.dateTime,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.nonQueryField(
+          fieldName: 'updatedAt',
+          isRequired: false,
+          isReadOnly: true,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.dateTime,
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _ChatMessageModelType extends amplify_core.ModelType<ChatMessage> {
   const _ChatMessageModelType();
-  
+
   @override
   ChatMessage fromJson(Map<String, dynamic> jsonData) {
     return ChatMessage.fromJson(jsonData);
   }
-  
+
   @override
   String modelName() {
     return 'ChatMessage';
@@ -314,41 +413,37 @@ class _ChatMessageModelType extends amplify_core.ModelType<ChatMessage> {
  * This is an auto generated class representing the model identifier
  * of [ChatMessage] in your schema.
  */
-class ChatMessageModelIdentifier implements amplify_core.ModelIdentifier<ChatMessage> {
+class ChatMessageModelIdentifier
+    implements amplify_core.ModelIdentifier<ChatMessage> {
   final String id;
 
   /** Create an instance of ChatMessageModelIdentifier using [id] the primary key. */
-  const ChatMessageModelIdentifier({
-    required this.id});
-  
+  const ChatMessageModelIdentifier({required this.id});
+
   @override
-  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{
-    'id': id
-  });
-  
+  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{'id': id});
+
   @override
-  List<Map<String, dynamic>> serializeAsList() => serializeAsMap()
-    .entries
-    .map((entry) => (<String, dynamic>{ entry.key: entry.value }))
-    .toList();
-  
+  List<Map<String, dynamic>> serializeAsList() =>
+      serializeAsMap().entries
+          .map((entry) => (<String, dynamic>{entry.key: entry.value}))
+          .toList();
+
   @override
   String serializeAsString() => serializeAsMap().values.join('#');
-  
+
   @override
   String toString() => 'ChatMessageModelIdentifier(id: $id)';
-  
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) {
       return true;
     }
-    
-    return other is ChatMessageModelIdentifier &&
-      id == other.id;
+
+    return other is ChatMessageModelIdentifier && id == other.id;
   }
-  
+
   @override
-  int get hashCode =>
-    id.hashCode;
+  int get hashCode => id.hashCode;
 }

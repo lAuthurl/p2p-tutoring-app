@@ -1,18 +1,21 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:p2p_tutoring_app/common/widgets/appbar/home_appbar.dart';
-
+import '../../../../../../common/widgets/appbar/home_appbar.dart';
 import '../../../../../../personalization/controllers/user_controller.dart';
 import '../../../../../../personalization/screens/profile/profile_screen.dart';
+import '../../../../../Courses/screens/product_detail/message_counter_icon.dart';
 import '../../../../../../utils/constants/colors.dart';
 import '../../../../../../utils/constants/sizes.dart';
 import '../../../../../Booking/screens/t_booking_counter_icon.dart';
+import '../../../../../Courses/controllers/tutoring_controller.dart';
 
 class THomeAppBar extends StatelessWidget {
   const THomeAppBar({super.key});
 
   Widget _profileAvatar(String? name, String? image) {
-    const double avatarRadius = 23; // increased size
+    const double avatarRadius = 23;
 
     if (image != null && image.isNotEmpty) {
       return CircleAvatar(
@@ -31,7 +34,6 @@ class THomeAppBar extends StatelessWidget {
       );
     }
 
-    // fallback: initials
     final initials =
         name != null && name.isNotEmpty
             ? name
@@ -51,7 +53,7 @@ class THomeAppBar extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.bold,
-          fontSize: 20, // larger font to match bigger avatar
+          fontSize: 20,
         ),
       ),
     );
@@ -59,6 +61,11 @@ class THomeAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Ensure TutoringController is registered before InboxCounterIcon
+    // tries to Get.find() it. Uses the singleton helper so we never
+    // create a duplicate if it was already registered elsewhere.
+    TutoringController.instance;
+
     final userController = UserController.instance;
     final user = userController.currentUser.value;
     final name = user?.username ?? 'User';
@@ -84,7 +91,7 @@ class THomeAppBar extends StatelessWidget {
                       style: Theme.of(
                         context,
                       ).textTheme.headlineSmall?.copyWith(
-                        color: Colors.white, // "Welcome," in white
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -93,7 +100,7 @@ class THomeAppBar extends StatelessWidget {
                       style: Theme.of(
                         context,
                       ).textTheme.headlineSmall?.copyWith(
-                        color: TColors.primary, // Full name in primary color
+                        color: TColors.primary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -105,9 +112,16 @@ class THomeAppBar extends StatelessWidget {
           ],
         ),
       ),
-      actions: const [
-        /// -- Booking counter icon (shows number of booked lectures)
-        TBookingCounterIcon(
+      actions: [
+        // ---------------- Inbox Icon ----------------
+        InboxCounterIcon(
+          iconColor: TColors.white,
+          counterBgColor: Colors.redAccent,
+          counterTextColor: Colors.white,
+        ),
+
+        // ---------------- Booking Counter Icon ----------------
+        const TBookingCounterIcon(
           iconColor: TColors.white,
           counterBgColor: TColors.black,
           counterTextColor: TColors.white,

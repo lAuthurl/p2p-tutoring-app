@@ -23,7 +23,6 @@ import 'ModelProvider.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 import 'package:collection/collection.dart';
 
-
 /** This is an auto generated class representing the SessionVariation type in your schema. */
 class SessionVariation extends amplify_core.Model {
   static const classType = const _SessionVariationModelType();
@@ -41,69 +40,106 @@ class SessionVariation extends amplify_core.Model {
 
   @override
   getInstanceType() => classType;
-  
-  @Deprecated('[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.')
+
+  @Deprecated(
+    '[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.',
+  )
   @override
   String getId() => id;
-  
+
   SessionVariationModelIdentifier get modelIdentifier {
-      return SessionVariationModelIdentifier(
-        id: id
-      );
+    return SessionVariationModelIdentifier(id: id);
   }
-  
+
   String get tutorId {
     try {
       return _tutorId!;
-    } catch(e) {
+    } catch (e) {
       throw amplify_core.AmplifyCodeGenModelException(
-          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
-          recoverySuggestion:
-            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
-          underlyingException: e.toString()
-          );
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
     }
   }
-  
+
   int? get availableSeats {
     return _availableSeats;
   }
-  
+
   double? get pricePerSession {
     return _pricePerSession;
   }
-  
+
   amplify_core.TemporalDateTime? get lectureTime {
     return _lectureTime;
   }
-  
+
   String? get image {
     return _image;
   }
-  
+
   String? get metadata {
     return _metadata;
   }
-  
+
   List<SessionAttribute>? get sessionAttributes {
     return _sessionAttributes;
   }
-  
+
   TutoringSession? get session {
     return _session;
   }
-  
+
   amplify_core.TemporalDateTime? get createdAt {
     return _createdAt;
   }
-  
+
   amplify_core.TemporalDateTime? get updatedAt {
     return _updatedAt;
   }
-  
-  const SessionVariation._internal({required this.id, required tutorId, availableSeats, pricePerSession, lectureTime, image, metadata, sessionAttributes, session, createdAt, updatedAt}): _tutorId = tutorId, _availableSeats = availableSeats, _pricePerSession = pricePerSession, _lectureTime = lectureTime, _image = image, _metadata = metadata, _sessionAttributes = sessionAttributes, _session = session, _createdAt = createdAt, _updatedAt = updatedAt;
-  
-  factory SessionVariation({String? id, required String tutorId, int? availableSeats, double? pricePerSession, amplify_core.TemporalDateTime? lectureTime, String? image, String? metadata, List<SessionAttribute>? sessionAttributes, TutoringSession? session, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+
+  const SessionVariation._internal({
+    required this.id,
+    required tutorId,
+    availableSeats,
+    pricePerSession,
+    lectureTime,
+    image,
+    metadata,
+    sessionAttributes,
+    session,
+    createdAt,
+    updatedAt,
+  }) : _tutorId = tutorId,
+       _availableSeats = availableSeats,
+       _pricePerSession = pricePerSession,
+       _lectureTime = lectureTime,
+       _image = image,
+       _metadata = metadata,
+       _sessionAttributes = sessionAttributes,
+       _session = session,
+       _createdAt = createdAt,
+       _updatedAt = updatedAt;
+
+  factory SessionVariation({
+    String? id,
+    required String tutorId,
+    int? availableSeats,
+    double? pricePerSession,
+    amplify_core.TemporalDateTime? lectureTime,
+    String? image,
+    String? metadata,
+    List<SessionAttribute>? sessionAttributes,
+    TutoringSession? session,
+    amplify_core.TemporalDateTime? createdAt,
+    amplify_core.TemporalDateTime? updatedAt,
+  }) {
     return SessionVariation._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       tutorId: tutorId,
@@ -112,57 +148,93 @@ class SessionVariation extends amplify_core.Model {
       lectureTime: lectureTime,
       image: image,
       metadata: metadata,
-      sessionAttributes: sessionAttributes != null ? List<SessionAttribute>.unmodifiable(sessionAttributes) : sessionAttributes,
+      sessionAttributes:
+          sessionAttributes != null
+              ? List<SessionAttribute>.unmodifiable(sessionAttributes)
+              : sessionAttributes,
       session: session,
       createdAt: createdAt,
-      updatedAt: updatedAt);
+      updatedAt: updatedAt,
+    );
   }
-  
+
   bool equals(Object other) {
     return this == other;
   }
-  
+
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
     return other is SessionVariation &&
-      id == other.id &&
-      _tutorId == other._tutorId &&
-      _availableSeats == other._availableSeats &&
-      _pricePerSession == other._pricePerSession &&
-      _lectureTime == other._lectureTime &&
-      _image == other._image &&
-      _metadata == other._metadata &&
-      DeepCollectionEquality().equals(_sessionAttributes, other._sessionAttributes) &&
-      _session == other._session &&
-      _createdAt == other._createdAt &&
-      _updatedAt == other._updatedAt;
+        id == other.id &&
+        _tutorId == other._tutorId &&
+        _availableSeats == other._availableSeats &&
+        _pricePerSession == other._pricePerSession &&
+        _lectureTime == other._lectureTime &&
+        _image == other._image &&
+        _metadata == other._metadata &&
+        DeepCollectionEquality().equals(
+          _sessionAttributes,
+          other._sessionAttributes,
+        ) &&
+        _session == other._session &&
+        _createdAt == other._createdAt &&
+        _updatedAt == other._updatedAt;
   }
-  
+
   @override
   int get hashCode => toString().hashCode;
-  
+
   @override
   String toString() {
     var buffer = new StringBuffer();
-    
+
     buffer.write("SessionVariation {");
     buffer.write("id=" + "$id" + ", ");
     buffer.write("tutorId=" + "$_tutorId" + ", ");
-    buffer.write("availableSeats=" + (_availableSeats != null ? _availableSeats!.toString() : "null") + ", ");
-    buffer.write("pricePerSession=" + (_pricePerSession != null ? _pricePerSession!.toString() : "null") + ", ");
-    buffer.write("lectureTime=" + (_lectureTime != null ? _lectureTime!.format() : "null") + ", ");
+    buffer.write(
+      "availableSeats=" +
+          (_availableSeats != null ? _availableSeats.toString() : "null") +
+          ", ",
+    );
+    buffer.write(
+      "pricePerSession=" +
+          (_pricePerSession != null ? _pricePerSession.toString() : "null") +
+          ", ",
+    );
+    buffer.write(
+      "lectureTime=" +
+          (_lectureTime != null ? _lectureTime.format() : "null") +
+          ", ",
+    );
     buffer.write("image=" + "$_image" + ", ");
     buffer.write("metadata=" + "$_metadata" + ", ");
-    buffer.write("session=" + (_session != null ? _session!.toString() : "null") + ", ");
-    buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
-    buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
+    buffer.write(
+      "session=" + (_session != null ? _session.toString() : "null") + ", ",
+    );
+    buffer.write(
+      "createdAt=" + (_createdAt != null ? _createdAt.format() : "null") + ", ",
+    );
+    buffer.write(
+      "updatedAt=" + (_updatedAt != null ? _updatedAt.format() : "null"),
+    );
     buffer.write("}");
-    
+
     return buffer.toString();
   }
-  
-  SessionVariation copyWith({String? tutorId, int? availableSeats, double? pricePerSession, amplify_core.TemporalDateTime? lectureTime, String? image, String? metadata, List<SessionAttribute>? sessionAttributes, TutoringSession? session, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
+
+  SessionVariation copyWith({
+    String? tutorId,
+    int? availableSeats,
+    double? pricePerSession,
+    amplify_core.TemporalDateTime? lectureTime,
+    String? image,
+    String? metadata,
+    List<SessionAttribute>? sessionAttributes,
+    TutoringSession? session,
+    amplify_core.TemporalDateTime? createdAt,
+    amplify_core.TemporalDateTime? updatedAt,
+  }) {
     return SessionVariation._internal(
       id: id,
       tutorId: tutorId ?? this.tutorId,
@@ -174,9 +246,10 @@ class SessionVariation extends amplify_core.Model {
       sessionAttributes: sessionAttributes ?? this.sessionAttributes,
       session: session ?? this.session,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt);
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
   }
-  
+
   SessionVariation copyWithModelFieldValues({
     ModelFieldValue<String>? tutorId,
     ModelFieldValue<int?>? availableSeats,
@@ -187,56 +260,99 @@ class SessionVariation extends amplify_core.Model {
     ModelFieldValue<List<SessionAttribute>?>? sessionAttributes,
     ModelFieldValue<TutoringSession?>? session,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
-    ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt
+    ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt,
   }) {
     return SessionVariation._internal(
       id: id,
       tutorId: tutorId == null ? this.tutorId : tutorId.value,
-      availableSeats: availableSeats == null ? this.availableSeats : availableSeats.value,
-      pricePerSession: pricePerSession == null ? this.pricePerSession : pricePerSession.value,
+      availableSeats:
+          availableSeats == null ? this.availableSeats : availableSeats.value,
+      pricePerSession:
+          pricePerSession == null
+              ? this.pricePerSession
+              : pricePerSession.value,
       lectureTime: lectureTime == null ? this.lectureTime : lectureTime.value,
       image: image == null ? this.image : image.value,
       metadata: metadata == null ? this.metadata : metadata.value,
-      sessionAttributes: sessionAttributes == null ? this.sessionAttributes : sessionAttributes.value,
+      sessionAttributes:
+          sessionAttributes == null
+              ? this.sessionAttributes
+              : sessionAttributes.value,
       session: session == null ? this.session : session.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
-      updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value
+      updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value,
     );
   }
-  
-  SessionVariation.fromJson(Map<String, dynamic> json)  
+
+  SessionVariation.fromJson(Map<String, dynamic> json)
     : id = json['id'],
       _tutorId = json['tutorId'],
       _availableSeats = (json['availableSeats'] as num?)?.toInt(),
       _pricePerSession = (json['pricePerSession'] as num?)?.toDouble(),
-      _lectureTime = json['lectureTime'] != null ? amplify_core.TemporalDateTime.fromString(json['lectureTime']) : null,
+      _lectureTime =
+          json['lectureTime'] != null
+              ? amplify_core.TemporalDateTime.fromString(json['lectureTime'])
+              : null,
       _image = json['image'],
       _metadata = json['metadata'],
-      _sessionAttributes = json['sessionAttributes']  is Map
-        ? (json['sessionAttributes']['items'] is List
-          ? (json['sessionAttributes']['items'] as List)
-              .where((e) => e != null)
-              .map((e) => SessionAttribute.fromJson(new Map<String, dynamic>.from(e)))
-              .toList()
-          : null)
-        : (json['sessionAttributes'] is List
-          ? (json['sessionAttributes'] as List)
-              .where((e) => e?['serializedData'] != null)
-              .map((e) => SessionAttribute.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
-              .toList()
-          : null),
-      _session = json['session'] != null
-        ? json['session']['serializedData'] != null
-          ? TutoringSession.fromJson(new Map<String, dynamic>.from(json['session']['serializedData']))
-          : TutoringSession.fromJson(new Map<String, dynamic>.from(json['session']))
-        : null,
-      _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
-      _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
-  
+      _sessionAttributes =
+          json['sessionAttributes'] is Map
+              ? (json['sessionAttributes']['items'] is List
+                  ? (json['sessionAttributes']['items'] as List)
+                      .where((e) => e != null)
+                      .map(
+                        (e) => SessionAttribute.fromJson(
+                          new Map<String, dynamic>.from(e),
+                        ),
+                      )
+                      .toList()
+                  : null)
+              : (json['sessionAttributes'] is List
+                  ? (json['sessionAttributes'] as List)
+                      .where((e) => e?['serializedData'] != null)
+                      .map(
+                        (e) => SessionAttribute.fromJson(
+                          new Map<String, dynamic>.from(e?['serializedData']),
+                        ),
+                      )
+                      .toList()
+                  : null),
+      _session =
+          json['session'] != null
+              ? json['session']['serializedData'] != null
+                  ? TutoringSession.fromJson(
+                    new Map<String, dynamic>.from(
+                      json['session']['serializedData'],
+                    ),
+                  )
+                  : TutoringSession.fromJson(
+                    new Map<String, dynamic>.from(json['session']),
+                  )
+              : null,
+      _createdAt =
+          json['createdAt'] != null
+              ? amplify_core.TemporalDateTime.fromString(json['createdAt'])
+              : null,
+      _updatedAt =
+          json['updatedAt'] != null
+              ? amplify_core.TemporalDateTime.fromString(json['updatedAt'])
+              : null;
+
   Map<String, dynamic> toJson() => {
-    'id': id, 'tutorId': _tutorId, 'availableSeats': _availableSeats, 'pricePerSession': _pricePerSession, 'lectureTime': _lectureTime?.format(), 'image': _image, 'metadata': _metadata, 'sessionAttributes': _sessionAttributes?.map((SessionAttribute? e) => e?.toJson()).toList(), 'session': _session?.toJson(), 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
+    'id': id,
+    'tutorId': _tutorId,
+    'availableSeats': _availableSeats,
+    'pricePerSession': _pricePerSession,
+    'lectureTime': _lectureTime?.format(),
+    'image': _image,
+    'metadata': _metadata,
+    'sessionAttributes':
+        _sessionAttributes?.map((SessionAttribute? e) => e?.toJson()).toList(),
+    'session': _session?.toJson(),
+    'createdAt': _createdAt?.format(),
+    'updatedAt': _updatedAt?.format(),
   };
-  
+
   Map<String, Object?> toMap() => {
     'id': id,
     'tutorId': _tutorId,
@@ -248,126 +364,181 @@ class SessionVariation extends amplify_core.Model {
     'sessionAttributes': _sessionAttributes,
     'session': _session,
     'createdAt': _createdAt,
-    'updatedAt': _updatedAt
+    'updatedAt': _updatedAt,
   };
 
-  static final amplify_core.QueryModelIdentifier<SessionVariationModelIdentifier> MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<SessionVariationModelIdentifier>();
+  static final amplify_core.QueryModelIdentifier<
+    SessionVariationModelIdentifier
+  >
+  MODEL_IDENTIFIER =
+      amplify_core.QueryModelIdentifier<SessionVariationModelIdentifier>();
   static final ID = amplify_core.QueryField(fieldName: "id");
   static final TUTORID = amplify_core.QueryField(fieldName: "tutorId");
-  static final AVAILABLESEATS = amplify_core.QueryField(fieldName: "availableSeats");
-  static final PRICEPERSESSION = amplify_core.QueryField(fieldName: "pricePerSession");
+  static final AVAILABLESEATS = amplify_core.QueryField(
+    fieldName: "availableSeats",
+  );
+  static final PRICEPERSESSION = amplify_core.QueryField(
+    fieldName: "pricePerSession",
+  );
   static final LECTURETIME = amplify_core.QueryField(fieldName: "lectureTime");
   static final IMAGE = amplify_core.QueryField(fieldName: "image");
   static final METADATA = amplify_core.QueryField(fieldName: "metadata");
   static final SESSIONATTRIBUTES = amplify_core.QueryField(
     fieldName: "sessionAttributes",
-    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'SessionAttribute'));
+    fieldType: amplify_core.ModelFieldType(
+      amplify_core.ModelFieldTypeEnum.model,
+      ofModelName: 'SessionAttribute',
+    ),
+  );
   static final SESSION = amplify_core.QueryField(
     fieldName: "session",
-    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'TutoringSession'));
+    fieldType: amplify_core.ModelFieldType(
+      amplify_core.ModelFieldTypeEnum.model,
+      ofModelName: 'TutoringSession',
+    ),
+  );
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
   static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
-  static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
-    modelSchemaDefinition.name = "SessionVariation";
-    modelSchemaDefinition.pluralName = "SessionVariations";
-    
-    modelSchemaDefinition.authRules = [
-      amplify_core.AuthRule(
-        authStrategy: amplify_core.AuthStrategy.OWNER,
-        ownerField: "owner",
-        identityClaim: "cognito:username",
-        provider: amplify_core.AuthRuleProvider.USERPOOLS,
-        operations: const [
-          amplify_core.ModelOperation.CREATE,
-          amplify_core.ModelOperation.READ,
-          amplify_core.ModelOperation.UPDATE,
-          amplify_core.ModelOperation.DELETE
-        ]),
-      amplify_core.AuthRule(
-        authStrategy: amplify_core.AuthStrategy.PUBLIC,
-        operations: const [
-          amplify_core.ModelOperation.READ
-        ])
-    ];
-    
-    modelSchemaDefinition.indexes = [
-      amplify_core.ModelIndex(fields: const ["sessionId"], name: "bySession")
-    ];
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: SessionVariation.TUTORID,
-      isRequired: true,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: SessionVariation.AVAILABLESEATS,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.int)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: SessionVariation.PRICEPERSESSION,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.double)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: SessionVariation.LECTURETIME,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: SessionVariation.IMAGE,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: SessionVariation.METADATA,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
-      key: SessionVariation.SESSIONATTRIBUTES,
-      isRequired: false,
-      ofModelName: 'SessionAttribute',
-      associatedKey: SessionAttribute.ID
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.belongsTo(
-      key: SessionVariation.SESSION,
-      isRequired: false,
-      targetNames: ['sessionId'],
-      ofModelName: 'TutoringSession'
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: SessionVariation.CREATEDAT,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: SessionVariation.UPDATEDAT,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
-    ));
-  });
+  static var schema = amplify_core.Model.defineSchema(
+    define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
+      modelSchemaDefinition.name = "SessionVariation";
+      modelSchemaDefinition.pluralName = "SessionVariations";
+
+      modelSchemaDefinition.authRules = [
+        amplify_core.AuthRule(
+          authStrategy: amplify_core.AuthStrategy.OWNER,
+          ownerField: "owner",
+          identityClaim: "cognito:username",
+          provider: amplify_core.AuthRuleProvider.USERPOOLS,
+          operations: const [
+            amplify_core.ModelOperation.CREATE,
+            amplify_core.ModelOperation.READ,
+            amplify_core.ModelOperation.UPDATE,
+            amplify_core.ModelOperation.DELETE,
+          ],
+        ),
+        amplify_core.AuthRule(
+          authStrategy: amplify_core.AuthStrategy.PUBLIC,
+          operations: const [amplify_core.ModelOperation.READ],
+        ),
+      ];
+
+      modelSchemaDefinition.indexes = [
+        amplify_core.ModelIndex(fields: const ["sessionId"], name: "bySession"),
+      ];
+
+      modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: SessionVariation.TUTORID,
+          isRequired: true,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: SessionVariation.AVAILABLESEATS,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.int,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: SessionVariation.PRICEPERSESSION,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.double,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: SessionVariation.LECTURETIME,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.dateTime,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: SessionVariation.IMAGE,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: SessionVariation.METADATA,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.hasMany(
+          key: SessionVariation.SESSIONATTRIBUTES,
+          isRequired: false,
+          ofModelName: 'SessionAttribute',
+          associatedKey: SessionAttribute.ID,
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.belongsTo(
+          key: SessionVariation.SESSION,
+          isRequired: false,
+          targetNames: ['sessionId'],
+          ofModelName: 'TutoringSession',
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: SessionVariation.CREATEDAT,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.dateTime,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: SessionVariation.UPDATEDAT,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.dateTime,
+          ),
+        ),
+      );
+    },
+  );
 }
 
-class _SessionVariationModelType extends amplify_core.ModelType<SessionVariation> {
+class _SessionVariationModelType
+    extends amplify_core.ModelType<SessionVariation> {
   const _SessionVariationModelType();
-  
+
   @override
   SessionVariation fromJson(Map<String, dynamic> jsonData) {
     return SessionVariation.fromJson(jsonData);
   }
-  
+
   @override
   String modelName() {
     return 'SessionVariation';
@@ -378,41 +549,37 @@ class _SessionVariationModelType extends amplify_core.ModelType<SessionVariation
  * This is an auto generated class representing the model identifier
  * of [SessionVariation] in your schema.
  */
-class SessionVariationModelIdentifier implements amplify_core.ModelIdentifier<SessionVariation> {
+class SessionVariationModelIdentifier
+    implements amplify_core.ModelIdentifier<SessionVariation> {
   final String id;
 
   /** Create an instance of SessionVariationModelIdentifier using [id] the primary key. */
-  const SessionVariationModelIdentifier({
-    required this.id});
-  
+  const SessionVariationModelIdentifier({required this.id});
+
   @override
-  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{
-    'id': id
-  });
-  
+  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{'id': id});
+
   @override
-  List<Map<String, dynamic>> serializeAsList() => serializeAsMap()
-    .entries
-    .map((entry) => (<String, dynamic>{ entry.key: entry.value }))
-    .toList();
-  
+  List<Map<String, dynamic>> serializeAsList() =>
+      serializeAsMap().entries
+          .map((entry) => (<String, dynamic>{entry.key: entry.value}))
+          .toList();
+
   @override
   String serializeAsString() => serializeAsMap().values.join('#');
-  
+
   @override
   String toString() => 'SessionVariationModelIdentifier(id: $id)';
-  
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) {
       return true;
     }
-    
-    return other is SessionVariationModelIdentifier &&
-      id == other.id;
+
+    return other is SessionVariationModelIdentifier && id == other.id;
   }
-  
+
   @override
-  int get hashCode =>
-    id.hashCode;
+  int get hashCode => id.hashCode;
 }

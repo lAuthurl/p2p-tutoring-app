@@ -1,9 +1,11 @@
 // ignore_for_file: avoid_print, unnecessary_null_comparison
 
+import 'dart:async';
 import 'dart:io';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:path/path.dart' as p;
+import '../../../personalization/controllers/user_controller.dart';
 import '../../Booking/controllers/booking_controller.dart';
 import '../../../../models/ModelProvider.dart';
 import 'session_creation_controller.dart';
@@ -25,10 +27,34 @@ class TutoringController extends GetxController {
     }
   }
 
+  // ---------------- Current User Tutor ID ----------------
+  Future<String?> get currentUserTutorId async {
+    try {
+      final user = UserController.instance.currentUser.value;
+      final userEmail = user?.email;
+      if (userEmail == null || userEmail.isEmpty) return null;
+
+      final tutors = await Amplify.DataStore.query(
+        Tutor.classType,
+        where: Tutor.EMAIL.eq(userEmail),
+      );
+
+      if (tutors.isEmpty) return null;
+      return tutors.first.id;
+    } catch (e) {
+      print('❌ Error fetching current user tutor ID: $e');
+      return null;
+    }
+  }
+
   // ---------------- Reactive State ----------------
   final sessions = <TutoringSession>[].obs;
   final featuredSessions = <TutoringSession>[].obs;
   final popularSessions = <TutoringSession>[].obs;
+
+  /// Sessions belonging to the currently logged-in tutor.
+  /// Used by InboxScreen to list conversations.
+  final activeSessions = <TutoringSession>[].obs;
 
   final selectedAttributes = <String, String>{}.obs;
   final selectedSessionImage = ''.obs;
@@ -38,11 +64,24 @@ class TutoringController extends GetxController {
 
   final sessionMessages = <String, List<ChatMessage>>{}.obs;
 
+  // ---------------- Unread Counts ----------------
+  // Tracks how many unread messages each session has.
+  // Incremented when a new message arrives for a session that isn't
+  // currently open, reset when the user opens/marks that session read.
+  final _unreadCounts = <String, int>{};
+
+  // Holds the sessionId the user currently has open in ChatScreen.
+  // Set this when ChatScreen is entered; clear it on dispose.
+  String? currentOpenSessionId;
+
+  int unreadCount(String sessionId) => _unreadCounts[sessionId] ?? 0;
+
   // ---------------- Lifecycle ----------------
   @override
   void onInit() {
     super.onInit();
     _observeSessions();
+    fetchTutorSessions(); // ← add this line
   }
 
   // ---------------- Helper: Check if user can sync ----------------
@@ -96,6 +135,73 @@ class TutoringController extends GetxController {
     }
   }
 
+  /// Queries ALL ChatMessages whose sessionId starts with any of this
+  /// tutor's session IDs (format: baseSessionId_studentUserId).
+  /// This discovers every unique student thread and subscribes to each.
+  /// Call after [fetchTutorSessions] so [activeSessions] is populated.
+  Future<void> fetchAllStudentThreads() async {
+    if (!await _canSync()) return;
+    try {
+      for (final session in activeSessions) {
+        // Query all messages whose sessionId contains the base session id.
+        // DataStore doesn't support "startsWith" so we query all messages
+        // for the base id first, then extract unique scoped chatIds.
+        final allMessages = await Amplify.DataStore.query(
+          ChatMessage.classType,
+        );
+
+        final relatedChatIds =
+            allMessages
+                .where((m) => (m.sessionId).startsWith(session.id))
+                .map((m) => m.sessionId)
+                .toSet();
+
+        for (final chatId in relatedChatIds) {
+          if (!sessionMessages.containsKey(chatId)) {
+            observeChat(chatId);
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ fetchAllStudentThreads error: $e');
+    }
+  }
+
+  /// Fetches all sessions where the logged-in user is the tutor,
+  /// populates [activeSessions], and pre-warms [sessionMessages]
+  /// by subscribing to each session's chat stream.
+  ///
+  /// Call this from your tutor home / inbox screen's initState,
+  /// or add it to onInit() if the user is always a tutor.
+  Future<void> fetchTutorSessions() async {
+    if (!await _canSync()) return;
+
+    try {
+      final tutorId = await currentUserTutorId;
+      if (tutorId == null) {
+        print('⚠️ fetchTutorSessions: no tutor ID found');
+        return;
+      }
+
+      final results = await Amplify.DataStore.query(
+        TutoringSession.classType,
+        where: TutoringSession.TUTOR.eq(tutorId),
+      );
+
+      activeSessions.assignAll(results.whereType<TutoringSession>().toList());
+
+      // Pre-warm message subscriptions so the inbox shows latest messages
+      // as soon as it opens, without waiting for the user to tap each row.
+      for (final session in activeSessions) {
+        observeChat(session.id);
+      }
+
+      print('✅ fetchTutorSessions: loaded ${activeSessions.length} sessions');
+    } catch (e) {
+      print('❌ fetchTutorSessions error: $e');
+    }
+  }
+
   // ---------------- Session Utilities ----------------
   double _computeAdjustedPrice(
     TutoringSession session,
@@ -103,7 +209,6 @@ class TutoringController extends GetxController {
   ) {
     double price = session.pricePerSession ?? 0.0;
 
-    // Adjust price for Duration
     final duration = attributes?['Duration']?.toLowerCase() ?? '';
     if (duration.contains('2hr') ||
         duration.contains('2 h') ||
@@ -111,7 +216,6 @@ class TutoringController extends GetxController {
       price *= 2;
     }
 
-    // Adjust price for Mode
     final mode = attributes?['Mode']?.toLowerCase() ?? '';
     if (mode.contains('in-person') ||
         mode.contains('offline') ||
@@ -150,14 +254,12 @@ class TutoringController extends GetxController {
     TutoringSession session, {
     Map<String, String>? selectedAttributes,
     int quantity = 1,
-    String? controllerTag, // optional tag to find the SessionCreationController
+    String? controllerTag,
   }) async {
-    // If we can't sync, just return
     if (!await _canSync()) return;
 
     final bookingController = BookingController.instance;
 
-    // Ensure a booking exists
     Booking booking;
     if (bookingController.bookings.isNotEmpty) {
       booking = bookingController.bookings.first;
@@ -167,21 +269,18 @@ class TutoringController extends GetxController {
       booking = created;
     }
 
-    // Find the SessionCreationController to get dynamic price
     final tagToUse = controllerTag ?? session.id;
     final sessionController = Get.find<SessionCreationController>(
       tag: tagToUse,
     );
 
-    // Calculate final dynamic price ONCE
     final double finalPrice = sessionController.calculateDynamicPrice(session);
 
-    // Add booking item with the final price
     await bookingController.createBookingItem(
       booking: booking,
       sessionId: session.id,
       tutorId: session.tutor?.id,
-      price: finalPrice, // <-- use finalPrice here
+      price: finalPrice,
       quantity: quantity,
       serviceTitle: session.title,
       serviceImage: session.images?.first ?? session.thumbnail ?? '',
@@ -191,10 +290,8 @@ class TutoringController extends GetxController {
       bookingDate: TemporalDateTime.now(),
     );
 
-    // Close current screen
     Get.back();
 
-    // Show confirmation
     Get.snackbar(
       "Added to Booking",
       "Session added with your selected options",
@@ -248,10 +345,8 @@ class TutoringController extends GetxController {
 
   // ---------------- Compute Price Based on Selected Attributes ----------------
   double computeSelectedAttributesPrice() {
-    // Use the currently selected session
     if (sessions.isEmpty) return 0.0;
 
-    // Pick session based on selectedSessionImage or fallback to first
     final session = sessions.firstWhere(
       (s) => s.id == selectedSessionImage.value,
       orElse: () => sessions.first,
@@ -341,7 +436,50 @@ class TutoringController extends GetxController {
     }
   }
 
+  // ---------------- Chat Sessions ----------------
+  List<String> get chatSessions => sessionMessages.keys.toList();
+
   // ---------------- Chat ----------------
+
+  /// Resolves the display name for the current user.
+  /// Checks the User table first (username), then Tutor table (name),
+  /// then falls back to the Cognito username attribute.
+  Future<String> _resolveSenderName(String userId) async {
+    try {
+      final users = await Amplify.DataStore.query(
+        User.classType,
+        where: User.ID.eq(userId),
+      );
+      if (users.isNotEmpty && (users.first.username.isNotEmpty)) {
+        return users.first.username;
+      }
+    } catch (_) {}
+
+    try {
+      final tutors = await Amplify.DataStore.query(
+        Tutor.classType,
+        where: Tutor.ID.eq(userId),
+      );
+      if (tutors.isNotEmpty && (tutors.first.name.isNotEmpty)) {
+        return tutors.first.name;
+      }
+    } catch (_) {}
+
+    // Last resort: Cognito username
+    try {
+      final attrs = await Amplify.Auth.fetchUserAttributes();
+      final nameAttr = attrs.firstWhere(
+        (a) =>
+            a.userAttributeKey.key == 'name' ||
+            a.userAttributeKey.key == 'preferred_username',
+        orElse: () => attrs.first,
+      );
+      return nameAttr.value;
+    } catch (_) {}
+
+    return 'User';
+  }
+
   Future<void> sendMessage(String sessionId, String text) async {
     if (!await _canSync()) return;
 
@@ -349,9 +487,12 @@ class TutoringController extends GetxController {
     final userId = authUser.userId;
     if (userId == null) return;
 
+    final senderName = await _resolveSenderName(userId);
+
     final message = ChatMessage(
       sessionId: sessionId,
       senderId: userId,
+      senderName: senderName,
       text: text,
       isVoice: false,
       createdAt: TemporalDateTime.now(),
@@ -366,6 +507,8 @@ class TutoringController extends GetxController {
     final authUser = await Amplify.Auth.getCurrentUser();
     final userId = authUser.userId;
     if (userId == null) return;
+
+    final senderName = await _resolveSenderName(userId);
 
     final key =
         'chat/$sessionId/${DateTime.now().millisecondsSinceEpoch}${p.extension(audioFile.path)}';
@@ -386,6 +529,7 @@ class TutoringController extends GetxController {
       final message = ChatMessage(
         sessionId: sessionId,
         senderId: userId,
+        senderName: senderName,
         text: null,
         audioUrl: presignedUrl,
         isVoice: true,
@@ -394,16 +538,19 @@ class TutoringController extends GetxController {
 
       await Amplify.DataStore.save(message);
 
-      sessionMessages.update(
-        sessionId,
-        (list) => list..add(message),
-        ifAbsent: () => [message],
-      );
+      // _onNewMessage handles updating sessionMessages + unread counts,
+      // but voice messages are saved directly here so we call it manually.
+      _onNewMessage(message);
     } on StorageException catch (e) {
       print('❌ S3 Upload or URL failed: ${e.message}');
     }
   }
 
+  /// Subscribes to real-time updates for a single session's messages.
+  /// Safe to call multiple times — GetX / DataStore deduplicates internally.
+  ///
+  /// All incoming messages are routed through [_onNewMessage] so unread
+  /// counts are always kept in sync.
   void observeChat(String sessionId) {
     Amplify.DataStore.observeQuery(
       ChatMessage.classType,
@@ -415,7 +562,184 @@ class TutoringController extends GetxController {
           b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
         ),
       );
+
+      // Detect truly new messages (not just a re-sync of existing ones)
+      // by comparing against what we already have stored locally.
+      final existing = sessionMessages[sessionId] ?? [];
+      final existingIds = existing.map((m) => m.id).toSet();
+
+      for (final msg in msgs) {
+        if (!existingIds.contains(msg.id)) {
+          _onNewMessage(msg);
+        }
+      }
+
+      // Always replace the full list so ordering and edits stay correct.
       sessionMessages[sessionId] = msgs;
     });
+  }
+
+  /// Central handler for every new inbound message.
+  ///
+  /// • Updates [sessionMessages] with the new message.
+  /// • Increments [_unreadCounts] only when the session is NOT currently
+  ///   open (i.e. the user isn't already looking at it).
+  void _onNewMessage(ChatMessage msg) {
+    final id = msg.sessionId;
+    if (id == null) return;
+
+    // Update local message list
+    sessionMessages.update(id, (list) => list..add(msg), ifAbsent: () => [msg]);
+
+    // Only count as unread if this session isn't the one currently open
+    if (currentOpenSessionId != id) {
+      _unreadCounts[id] = (_unreadCounts[id] ?? 0) + 1;
+      // Nudge GetX so InboxScreen badge re-renders
+      sessionMessages.refresh();
+    }
+  }
+
+  // ---------------- Mark Chat Session Read ----------------
+  /// Resets the unread badge for [sessionId] to zero.
+  ///
+  /// Call this when the user opens a ChatScreen.
+  /// Also set [currentOpenSessionId] so subsequent messages don't
+  /// re-increment the count while the screen is open.
+  void markSessionRead(String sessionId) {
+    _unreadCounts[sessionId] = 0;
+    currentOpenSessionId = sessionId;
+    sessionMessages.refresh();
+  }
+
+  /// Call this when the user leaves ChatScreen (in dispose / onClose).
+  void clearCurrentOpenSession() {
+    currentOpenSessionId = null;
+  }
+
+  // ---------------- Delete Session ----------------
+  Future<bool> deleteSession(String sessionId) async {
+    if (!await _canSync()) return false;
+
+    try {
+      TutoringSession session;
+      try {
+        session = sessions.firstWhere((s) => s.id == sessionId);
+      } catch (_) {
+        print('⚠️ Session $sessionId not found locally');
+        return false;
+      }
+
+      final attributes = await Amplify.DataStore.query(
+        SessionAttribute.classType,
+        where: SessionAttribute.SESSION.eq(sessionId),
+      );
+      for (final attr in attributes) {
+        await Amplify.DataStore.delete(attr);
+      }
+
+      final reviews = await Amplify.DataStore.query(
+        Review.classType,
+        where: Review.SESSIONID.eq(sessionId),
+      );
+      for (final review in reviews) {
+        await Amplify.DataStore.delete(review);
+      }
+
+      final messages = await Amplify.DataStore.query(
+        ChatMessage.classType,
+        where: ChatMessage.SESSIONID.eq(sessionId),
+      );
+      for (final msg in messages) {
+        await Amplify.DataStore.delete(msg);
+      }
+
+      final bookings = await Amplify.DataStore.query(
+        Booking.classType,
+        where: Booking.SESSIONID.eq(sessionId),
+      );
+      for (final booking in bookings) {
+        final items = await Amplify.DataStore.query(
+          BookingItem.classType,
+          where: BookingItem.BOOKING.eq(booking.id),
+        );
+        for (final item in items) {
+          await Amplify.DataStore.delete(item);
+        }
+        await Amplify.DataStore.delete(booking);
+      }
+
+      await Amplify.DataStore.delete(session);
+
+      sessions.removeWhere((s) => s.id == sessionId);
+      featuredSessions.removeWhere((s) => s.id == sessionId);
+      popularSessions.removeWhere((s) => s.id == sessionId);
+      activeSessions.removeWhere((s) => s.id == sessionId); // ← keep in sync
+      favorites.remove(sessionId);
+      sessionMessages.remove(sessionId);
+      _unreadCounts.remove(sessionId); // ← clean up badge count
+
+      update();
+
+      print('✅ Session $sessionId deleted everywhere');
+
+      await _waitForSync();
+
+      return true;
+    } catch (e, st) {
+      print('❌ Delete session failed: $e\n$st');
+      return false;
+    }
+  }
+
+  // ---------------- Undo Delete ----------------
+  Future<void> undoDelete(TutoringSession deletedSession) async {
+    if (!await _canSync()) return;
+
+    try {
+      await Amplify.DataStore.save(deletedSession);
+
+      sessions.add(deletedSession);
+
+      if (deletedSession.isFeatured == true) {
+        featuredSessions.add(deletedSession);
+      }
+
+      if (popularSessions.length < 4) {
+        popularSessions.add(deletedSession);
+      }
+
+      if (favorites.containsKey(deletedSession.id)) {
+        favorites[deletedSession.id]!.value = true;
+      }
+
+      update();
+
+      print('↩️ Session ${deletedSession.id} restored successfully');
+
+      await _waitForSync();
+    } catch (e, st) {
+      print('❌ Error restoring session ${deletedSession.id}: $e\n$st');
+    }
+  }
+
+  // ---------------- Wait for DataStore Sync ----------------
+  Future<void> _waitForSync() async {
+    final completer = Completer<void>();
+
+    late StreamSubscription subscription;
+
+    subscription = Amplify.Hub.listen(HubChannel.DataStore, (event) {
+      if (event.eventName == 'syncQueriesReady') {
+        completer.complete();
+        subscription.cancel();
+      }
+    });
+
+    await completer.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        subscription.cancel();
+      },
+    );
   }
 }

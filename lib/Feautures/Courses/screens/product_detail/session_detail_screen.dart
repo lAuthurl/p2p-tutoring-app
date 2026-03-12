@@ -41,6 +41,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   List<Review> _reviews = [];
   bool _loadingReviews = true;
+  bool _isOwner = false;
+  String? _currentUserId;
 
   @override
   void initState() {
@@ -50,6 +52,28 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     _initializeAttributes(widget.session);
     _fetchReviews();
+    _checkOwnership();
+    _fetchCurrentUser();
+  }
+
+  Future<void> _fetchCurrentUser() async {
+    try {
+      final user = await Amplify.Auth.getCurrentUser();
+      if (!mounted) return;
+      setState(() => _currentUserId = user.userId);
+    } catch (_) {
+      if (mounted) setState(() => _currentUserId = null);
+    }
+  }
+
+  /// Checks whether the logged-in user is the tutor who created this session.
+  /// If so, the Chat button is replaced with an Inbox button.
+  Future<void> _checkOwnership() async {
+    final tutorId = await _tutoringController.currentUserTutorId;
+    if (!mounted) return;
+    setState(() {
+      _isOwner = tutorId != null && tutorId == widget.session.tutor?.id;
+    });
   }
 
   @override
@@ -63,7 +87,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     super.dispose();
   }
 
-  /// Initialize session attributes for selection
   void _initializeAttributes(TutoringSession session) {
     final sessionAttrs = <String, List<String>>{};
     final attributes = session.sessionAttributes ?? [];
@@ -88,7 +111,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _creationController.initializeAttributesForSession(merged);
   }
 
-  /// Fetch reviews for this session
   Future<void> _fetchReviews() async {
     setState(() => _loadingReviews = true);
     try {
@@ -109,7 +131,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
   }
 
-  /// Fetch tutor if not already included in session
   Future<Tutor?> _getTutorOrFetch(TutoringSession session) async {
     try {
       if (session.tutor != null) return session.tutor;
@@ -192,21 +213,33 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                           const SizedBox(width: TSizes.spaceBtwItems),
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () async {
-                                final tutor = await _getTutorOrFetch(session);
-                                if (tutor != null) {
+                              // Owners (tutors) go to their inbox.
+                              // Students open their own private chat thread.
+                              // chatId = sessionId + userId so each student
+                              // gets an isolated conversation with the tutor.
+                              onPressed: () {
+                                if (_isOwner) {
+                                  Get.to(() => const InboxScreen());
+                                } else {
+                                  if (_currentUserId == null) return;
+                                  final chatId =
+                                      '${session.id}_$_currentUserId';
                                   Get.to(
                                     () => ChatScreen(
-                                      tutor: tutor,
-                                      sessionId: session.id,
+                                      sessionId: chatId,
+                                      sessionTitle: session.title,
+                                      otherUserName:
+                                          session.tutor?.name ?? 'Tutor',
                                     ),
                                   );
                                 }
                               },
                               style: _outlinedButtonStyle(),
-                              child: const Text(
-                                "Chat",
-                                style: TextStyle(fontWeight: FontWeight.w600),
+                              child: Text(
+                                _isOwner ? "Go to Inbox" : "Chat",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -309,10 +342,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   Future<void> _bookSession(TutoringSession session) async {
     try {
-      // Use the shared TutoringController for this session
       final tutoringController = Get.find<TutoringController>(tag: widget.tag);
-
-      // Add session to booking using current selected attributes
       await tutoringController.addSessionToBooking(
         session,
         selectedAttributes: Map<String, String>.from(
@@ -320,8 +350,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         ),
         quantity: 1,
       );
-
-      // Success handling removed (no snackbar)
     } catch (e) {
       // Error handling removed (no snackbar)
     }
