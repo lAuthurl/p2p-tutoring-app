@@ -4,10 +4,6 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../data/repository/authentication_repository/authentication_repository.dart';
-import '../../../data/services/notifications/notification_service.dart';
-import '../../../personalization/controllers/create_notification_controller.dart';
-import '../../../personalization/controllers/user_controller.dart';
-import '../../../utils/constants/enums.dart';
 import '../../../utils/constants/image_strings.dart';
 import '../../../utils/helpers/network_manager.dart';
 import '../../../utils/popups/full_screen_loader.dart';
@@ -15,122 +11,116 @@ import '../../../utils/popups/loaders.dart';
 import '../../screens/signup/verify_email.dart';
 import '../../../utils/security/password_hash.dart';
 import 'package:p2p_tutoring_app/personalization/screens/profile/profile_screen.dart';
-import 'package:amplify_flutter/amplify_flutter.dart';
-import '../../../models/ModelProvider.dart';
 
 class SignUpController extends GetxController {
   static SignUpController get instance => Get.find();
 
   final isGoogleLoading = false.obs;
   final isFacebookLoading = false.obs;
-
-  // TextField Controllers
   final hidePassword = true.obs;
+  final isLoading = false.obs;
+
+  final username = TextEditingController();
   final fullName = TextEditingController();
   final email = TextEditingController();
   final password = TextEditingController();
   final phoneNumber = TextEditingController();
+
   final GlobalKey<FormState> signupFormKey = GlobalKey<FormState>();
 
-  /// Loader
-  final isLoading = false.obs;
+  // Held in memory — DataStore save happens AFTER email confirmation
+  // using the real Cognito userId, not the email placeholder
+  String _pendingEmail = '';
+  String _pendingPassword = '';
+  String _pendingUsername = '';
+  String _pendingPhone = '';
 
-  /// Register New User using Email & Password
+  String get pendingEmail => _pendingEmail;
+  String get pendingPassword => _pendingPassword;
+  String get pendingUsername => _pendingUsername;
+  String get pendingPhone => _pendingPhone;
+
   Future<void> signup() async {
     try {
-      // Start Loader
       TFullScreenLoader.openLoadingDialog(
         'We are processing your information...',
         TImages.docerAnimation,
       );
 
-      // Check Internet Connectivity
       final isConnected = await NetworkManager.instance.isConnected();
       if (!isConnected) {
-        // Offline signup: store credentials locally (hashed)
         final storage = GetStorage();
         final offlineUsers = storage.read('offline_users') ?? <String, Map>{};
         final hashed = hashPassword(password.text.trim());
         offlineUsers[email.text.trim()] = {
           'passwordHash': hashed,
+          'username':
+              username.text.trim().isNotEmpty
+                  ? username.text.trim()
+                  : fullName.text.trim(),
           'fullName': fullName.text.trim(),
           'phone': phoneNumber.text.trim(),
           'createdAt': DateTime.now().toIso8601String(),
         };
         storage.write('offline_users', offlineUsers);
-
         TFullScreenLoader.stopLoading();
         TLoaders.successSnackBar(
           title: 'Offline',
-          message: 'Account created locally. Connect to the internet to sync.',
+          message: 'Account created locally. Connect to sync.',
         );
         Get.offAll(() => const ProfileScreen());
         return;
       }
 
-      // Form Validation
       if (!signupFormKey.currentState!.validate()) {
         TFullScreenLoader.stopLoading();
         return;
       }
 
-      // Register user in Firebase/Auth backend
+      // Cache credentials — NO DataStore write here
+      _pendingEmail = email.text.trim();
+      _pendingPassword = password.text.trim();
+      _pendingUsername =
+          username.text.trim().isNotEmpty
+              ? username.text.trim()
+              : fullName.text.trim();
+      _pendingPhone = phoneNumber.text.trim();
+
+      // Only registers with Cognito — does NOT sign in
       await AuthenticationRepository.instance.registerWithEmailAndPassword(
-        email.text.trim(),
-        password.text.trim(),
+        _pendingEmail,
+        _pendingPassword,
       );
 
-      final token = await TNotificationService.getToken();
-
-      // Save user in Amplify DataStore
-      final newUser = User(
-        id: AuthenticationRepository.instance.getUserID,
-        username: fullName.text.trim(),
-        email: email.text.trim(),
-        phoneNumber: phoneNumber.text.trim(),
-        profilePicture: '',
-        deviceToken: token,
-        isEmailVerified: false,
-        isProfileActive: false,
-        createdAt: TemporalDateTime.now(),
-        updatedAt: TemporalDateTime.now(),
-        role: AppRole.user.name,
-        verificationStatus: VerificationStatus.approved.name,
-      );
-
-      await Amplify.DataStore.save(newUser);
-
-      // Update UserController
-      final userController = Get.find<UserController>();
-      userController.currentUser.value = newUser;
-
-      // Create welcome notification
-      Get.find<CreateNotificationController>();
-      await CreateNotificationController.instance.createNotification();
-
-      // Stop Loader
       TFullScreenLoader.stopLoading();
 
-      // Show success
       TLoaders.successSnackBar(
         title: 'Congratulations',
         message: 'Your account has been created! Verify email to continue.',
       );
 
-      // Navigate to Email Verification
-      Get.to(() => VerifyEmailScreen(email: email.text.trim()));
+      Get.to(() => VerifyEmailScreen(email: _pendingEmail));
     } catch (e) {
       TFullScreenLoader.stopLoading();
       TLoaders.errorSnackBar(title: 'Oh Snap!', message: e.toString());
     }
   }
 
-  /// Login with Phone Number (optional)
   Future<void> loginWithPhoneNumber(String phoneNo) async {
     try {
       await AuthenticationRepository.instance.loginWithPhoneNo(phoneNo);
     } catch (e) {
       throw e.toString();
     }
+  }
+
+  @override
+  void onClose() {
+    username.dispose();
+    fullName.dispose();
+    email.dispose();
+    password.dispose();
+    phoneNumber.dispose();
+    super.onClose();
   }
 }

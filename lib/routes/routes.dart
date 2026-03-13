@@ -1,5 +1,3 @@
-// routes.dart
-
 class TRoutes {
   static const welcome = '/welcome-screen';
   static const splash = '/splash';
@@ -7,6 +5,7 @@ class TRoutes {
 
   // Authentication
   static const logIn = '/log-in';
+  static const signUp = '/sign-up';
   static const phoneSignIn = '/phone-sign-in';
   static const otpVerification = '/otp-verification';
   static const reAuthenticateOtpVerification =

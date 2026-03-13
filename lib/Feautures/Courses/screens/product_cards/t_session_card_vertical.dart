@@ -3,13 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p2p_tutoring_app/Feautures/Courses/controllers/tutoring_controller.dart';
+
 import '../../../../common/widgets/texts/t_brand_title_text_with_verified_icon.dart';
 import '../../../../utils/constants/enums.dart';
 import '../../controllers/session_creation_controller.dart';
 import '../../../../models/ModelProvider.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/image_strings.dart';
-import '../../../../utils/constants/sizes.dart';
 import '../../screens/product_detail/session_detail_screen.dart';
 
 class TSessionCardVertical extends StatelessWidget {
@@ -19,10 +19,13 @@ class TSessionCardVertical extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = TutoringController.instance;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     final double price = session.pricePerSession ?? 0.0;
     final salePercentage = controller.calculateSalePercentage(price, null);
+    final isFree = price == 0;
 
-    // Determine main image
     String mainImage() {
       if (session.images != null && session.images!.isNotEmpty) {
         final img = session.images!.first;
@@ -34,51 +37,53 @@ class TSessionCardVertical extends StatelessWidget {
       return '';
     }
 
-    // Build image widget with fallback
-    Widget buildImage(String src, {BoxFit fit = BoxFit.cover}) {
+    Widget buildImage(String src) {
       final fallback = TImages.tutorPromo1;
-      if (src.isEmpty) return Image.asset(fallback, fit: fit);
+
+      if (src.isEmpty) {
+        return Image.asset(fallback, fit: BoxFit.cover);
+      }
+
       if (src.startsWith('http')) {
         return Image.network(
           src,
-          fit: fit,
-          errorBuilder: (_, _, _) => Image.asset(fallback, fit: fit),
+          fit: BoxFit.cover,
+          errorBuilder:
+              (_, __, ___) => Image.asset(fallback, fit: BoxFit.cover),
         );
       }
-      return Image.asset(src, fit: fit);
+
+      return Image.asset(src, fit: BoxFit.cover);
     }
 
-    // Tutor avatar with initials fallback
     Widget buildTutorAvatar(Tutor? tutor) {
+      Widget inner;
+
       if (tutor == null) {
-        return CircleAvatar(
-          radius: 16,
-          backgroundColor: TColors.primary,
-          child: const Text(
-            '?',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
+        inner = const Text(
+          '?',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
           ),
         );
-      }
-
-      if (tutor.image != null && tutor.image!.isNotEmpty) {
-        return CircleAvatar(
-          radius: 16,
-          backgroundColor: TColors.textWhite,
-          child: ClipOval(
-            child: SizedBox(
-              width: 28,
-              height: 28,
-              child:
-                  tutor.image!.startsWith('http')
-                      ? Image.network(tutor.image!, fit: BoxFit.cover)
-                      : Image.asset(tutor.image!, fit: BoxFit.cover),
-            ),
-          ),
+      } else if (tutor.image != null && tutor.image!.isNotEmpty) {
+        inner = ClipOval(
+          child:
+              tutor.image!.startsWith('http')
+                  ? Image.network(
+                    tutor.image!,
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                  )
+                  : Image.asset(
+                    tutor.image!,
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                  ),
         );
       } else {
         final initials =
@@ -89,19 +94,35 @@ class TSessionCardVertical extends StatelessWidget {
                 .take(2)
                 .join()
                 .toUpperCase();
-        return CircleAvatar(
-          radius: 16,
-          backgroundColor: TColors.primary,
-          child: Text(
-            initials,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
+
+        inner = Text(
+          initials,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
           ),
         );
       }
+
+      return Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: TColors.primary,
+          border: Border.all(color: Colors.white, width: 2),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 8,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: inner,
+      );
     }
 
     return GestureDetector(
@@ -109,113 +130,189 @@ class TSessionCardVertical extends StatelessWidget {
         final tag = session.id;
 
         if (!Get.isRegistered<TutoringController>(tag: tag)) {
-          Get.put(TutoringController(), tag: tag, permanent: false);
+          Get.put(TutoringController(), tag: tag);
         }
+
         if (!Get.isRegistered<SessionCreationController>(tag: tag)) {
-          Get.put(SessionCreationController(), tag: tag, permanent: false);
+          Get.put(SessionCreationController(), tag: tag);
         }
 
         Get.to(() => SessionDetailScreen(session: session, tag: tag));
       },
       child: Container(
+        margin: const EdgeInsets.all(10),
         width: 180,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(TSizes.productImageRadius),
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
           boxShadow: const [
             BoxShadow(
-              color: Colors.black26,
-              blurRadius: 8,
-              offset: Offset(0, 2),
+              color: Colors.black38,
+              blurRadius: 25,
+              spreadRadius: 3,
+              offset: Offset(0, 12),
+            ),
+            BoxShadow(
+              color: TColors.dashboardAppbarBackground,
+              blurRadius: 2,
               spreadRadius: 1,
+              offset: Offset(0, 4),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Stack with Tutor Icon & Sale Badge
-            SizedBox(
-              height: 180,
-              width: 180,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                        TSizes.productImageRadius,
-                      ),
-                      child: buildImage(mainImage()),
-                    ),
-                  ),
-                  Positioned(
-                    left: 8,
-                    bottom: 8,
-                    child: buildTutorAvatar(session.tutor),
-                  ),
-                  if (salePercentage > 0)
+            /// IMAGE
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              child: SizedBox(
+                height: 160,
+                width: 180,
+                child: Stack(
+                  clipBehavior: Clip.none, // allows shadow overflow
+                  children: [
+                    Positioned.fill(child: buildImage(mainImage())),
+
+                    /// bottom gradient
                     Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 60,
+                      child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: const Color.fromRGBO(255, 0, 0, 0.8),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '$salePercentage%',
-                          style: const TextStyle(
-                            color: TColors.textWhite,
-                            fontSize: 12,
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black54],
                           ),
                         ),
                       ),
                     ),
-                ],
+
+                    /// TUTOR AVATAR (safe bottom-left placement)
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: buildTutorAvatar(session.tutor),
+                    ),
+
+                    if (salePercentage > 0)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: _Badge(
+                          label: '-$salePercentage%',
+                          color: Colors.redAccent.shade700,
+                        ),
+                      ),
+
+                    if (isFree)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: _Badge(
+                          label: 'Free',
+                          color: Colors.green.shade600,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: TSizes.spaceBtwItems / 2),
 
-            // Tutor name + session title & price
+            /// INFO
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: TSizes.sm),
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (session.tutor != null) ...[
-                    Row(
-                      children: [
-                        const SizedBox(width: 0),
-                        TBrandTitleWithVerifiedIcon(
-                          title: session.tutor!.name,
-                          brandTextSize: TextSizes.medium,
-                        ),
-                      ],
+                  if (session.tutor != null)
+                    TBrandTitleWithVerifiedIcon(
+                      title: session.tutor!.name,
+                      brandTextSize: TextSizes.small,
                     ),
-                    const SizedBox(height: TSizes.spaceBtwItems / 4),
-                  ],
 
-                  // Session Title
+                  const SizedBox(height: 4),
+
                   Text(
                     session.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
                   ),
-                  const SizedBox(height: TSizes.spaceBtwItems / 4),
 
-                  // Session Price
-                  Text(
-                    '\$${price.toStringAsFixed(0)}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  const SizedBox(height: 8),
+
+                  if (isFree)
+                    Text(
+                      'Free',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: Colors.green,
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: TColors.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '₦${price.toStringAsFixed(0)}',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: TColors.primary,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.4),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

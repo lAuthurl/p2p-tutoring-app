@@ -24,14 +24,37 @@ class LoginFormWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ✅ Username field
+          _buildField(
+            controller.username,
+            'Username',
+            LineAwesomeIcons.user,
+            validator: (v) => null, // optional if email is provided
+          ),
+
+          const SizedBox(height: TSizes.sm),
+
+          // ✅ Email field
           _buildField(
             controller.email,
             TTexts.tEmail,
-            LineAwesomeIcons.user,
-            validator: TValidator.validateEmail,
+            LineAwesomeIcons.envelope,
+            validator: (v) {
+              // Only validate email if username is empty
+              if ((controller.username.text.trim().isEmpty) &&
+                  (v == null || v.trim().isEmpty)) {
+                return 'Enter your username or email';
+              }
+              if (v != null && v.trim().isNotEmpty) {
+                return TValidator.validateEmail(v);
+              }
+              return null;
+            },
           ),
+
           const SizedBox(height: TSizes.sm),
 
+          // ✅ Password field
           Obx(
             () => _buildPasswordField(
               controller.password,
@@ -44,6 +67,7 @@ class LoginFormWidget extends StatelessWidget {
 
           const SizedBox(height: TSizes.md),
 
+          // ✅ Login button
           Obx(
             () => TPrimaryButton(
               text: TTexts.tLogin,
@@ -59,6 +83,7 @@ class LoginFormWidget extends StatelessWidget {
 
           const SizedBox(height: TSizes.sm),
 
+          // ✅ Remember me + Forgot password
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [

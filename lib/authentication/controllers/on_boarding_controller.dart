@@ -1,60 +1,103 @@
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:liquid_swipe/PageHelpers/LiquidController.dart';
+import 'package:amplify_flutter/amplify_flutter.dart';
 
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/image_strings.dart';
 import '../../../../utils/constants/text_strings.dart';
 import '../../models/model_on_boarding.dart';
 import '../../screens/on_boarding/on_boarding_page_widget.dart';
-import '../../screens/welcome/welcome_screen.dart';
-import '../../../Feautures/dashboard/Home/screens/home/home.dart';
+import '../../../routes/routes.dart';
 
 class OnBoardingController extends GetxController {
-  // Variables
-  final userStorage = GetStorage(); // Use for local Storage
+  final userStorage = GetStorage();
   final controller = LiquidController();
   RxInt currentPage = 0.obs;
-
-  // Track whether the user is currently interacting with the swiper
   final RxBool isUserInteracting = false.obs;
 
-  // Functions to trigger Skip, Next and onPageChange Events
-  dynamic skip() => controller.jumpToPage(page: 2);
+  // ✅ Navigation lock — prevents double-fires and back-redirects
+  bool _isNavigating = false;
 
-  dynamic animateToNextSlide() =>
-      controller.animateToPage(page: controller.currentPage + 1);
+  // ✅ Debounce rapid page changes
+  DateTime _lastPageChange = DateTime.now();
+  static const _pageChangeCooldown = Duration(milliseconds: 400);
+
+  // =========================================================
+  // PAGE CHANGE CALLBACK — debounced to stop rapid swipe bugs
+  // =========================================================
+
+  int onPageChangedCallback(int activePageIndex) {
+    final now = DateTime.now();
+    if (now.difference(_lastPageChange) < _pageChangeCooldown) {
+      // Too fast — snap back to current known page, ignore the event
+      return currentPage.value;
+    }
+    _lastPageChange = now;
+    currentPage.value = activePageIndex;
+    return activePageIndex;
+  }
+
+  // =========================================================
+  // NEXT BUTTON
+  // =========================================================
 
   void animateToNextSlideWithLocalStorage() {
-    if (controller.currentPage == 2) {
-      userStorage.write('isFirstTime', false);
+    if (_isNavigating) return;
 
-      // If user chose "Remember me" during login, skip Welcome and go to Home
-      try {
-        final remember = userStorage.read('REMEMBER_ME') as bool? ?? false;
-        if (remember) {
-          Get.offAll(() => const HomeScreen());
-          return;
-        }
-      } catch (_) {}
+    final isLastPage = currentPage.value == pages.length - 1;
 
-      Get.offAll(() => const WelcomeScreen());
+    if (isLastPage) {
+      handleFinish();
     } else {
-      controller.animateToPage(page: controller.currentPage + 1);
+      final nextPage = currentPage.value + 1;
+      controller.animateToPage(page: nextPage);
     }
   }
 
-  /// Animate directly to the last slide
+  // =========================================================
+  // SKIP BUTTON / FINISH — single authoritative exit point
+  // =========================================================
+
+  Future<void> handleFinish() async {
+    if (_isNavigating) return;
+    _isNavigating = true;
+
+    // Mark onboarding as done
+    userStorage.write('isFirstTime', false);
+
+    try {
+      final session = await Amplify.Auth.fetchAuthSession();
+
+      if (session.isSignedIn) {
+        await Get.offAllNamed(TRoutes.mainDashboard);
+      } else {
+        await Get.offAllNamed(TRoutes.logIn);
+      }
+    } catch (_) {
+      await Get.offAllNamed(TRoutes.logIn);
+    } finally {
+      // ✅ Always reset so re-entry works if navigation fails
+      _isNavigating = false;
+    }
+  }
+
+  // =========================================================
+  // HELPERS
+  // =========================================================
+
   void animateToLastSlide() {
     final lastPage = pages.length - 1;
     controller.animateToPage(page: lastPage);
     currentPage.value = lastPage;
   }
 
-  int onPageChangedCallback(int activePageIndex) =>
-      currentPage.value = activePageIndex;
+  dynamic skip() => handleFinish();
 
-  // Three Onboarding Pages
+  // =========================================================
+  // PAGES
+  // =========================================================
+
   final pages = [
     OnBoardingPageWidget(
       model: OnBoardingModel(

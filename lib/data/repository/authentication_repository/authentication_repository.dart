@@ -17,7 +17,7 @@ import '../user_repository/user_repository.dart';
 class AuthenticationRepository extends GetxController {
   static AuthenticationRepository get instance => Get.find();
 
-  final deviceStorage = GetStorage(); // Local storage
+  final deviceStorage = GetStorage();
   late final Rx<AppUser?> _currentUser;
 
   var phoneNo = ''.obs;
@@ -25,7 +25,6 @@ class AuthenticationRepository extends GetxController {
   var isPhoneAutoVerified = false;
 
   AppUser? get currentUser => _currentUser.value;
-  // Backwards-compatible getter used by older code
   AppUser? get firebaseUser => _currentUser.value;
   String get getUserID => currentUser?.uid ?? '';
   String get getUserEmail => currentUser?.email ?? '';
@@ -38,7 +37,6 @@ class AuthenticationRepository extends GetxController {
     initializeCurrentUser();
   }
 
-  /// Checks if a user is currently signed in
   Future<bool> isSignedIn() async {
     try {
       final res = await Amplify.Auth.getCurrentUser();
@@ -48,23 +46,23 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
+  // =========================================================
+  // INITIALIZE CURRENT USER
+  // =========================================================
+
   Future<void> initializeCurrentUser() async {
     try {
       final authUser = await Amplify.Auth.getCurrentUser();
-      // Determine email verification status from user attributes
+
       bool emailVerified = false;
       try {
         final attrs = await Amplify.Auth.fetchUserAttributes();
-        AuthUserAttribute? emailVerifiedAttr;
         for (final a in attrs) {
-          if (a.userAttributeKey.key == 'email_verified') {
-            emailVerifiedAttr = a;
+          if (a.userAttributeKey.key == 'email_verified' &&
+              a.value.toLowerCase() == 'true') {
+            emailVerified = true;
             break;
           }
-        }
-        if (emailVerifiedAttr != null &&
-            emailVerifiedAttr.value.toLowerCase() == 'true') {
-          emailVerified = true;
         }
       } catch (_) {}
 
@@ -75,7 +73,7 @@ class AuthenticationRepository extends GetxController {
       );
       _currentUser.value = appUser;
 
-      if (await AuthenticationRepository.instance.isSignedIn()) {
+      if (await isSignedIn()) {
         await UserController.instance.loadUserData();
       }
 
@@ -90,6 +88,7 @@ class AuthenticationRepository extends GetxController {
         final password =
             await SecureStorageService.instance.read('REMEMBER_ME_PASSWORD') ??
             '';
+
         if (remember && email.isNotEmpty && password.isNotEmpty) {
           try {
             final cred = await loginWithEmailAndPassword(email, password);
@@ -123,22 +122,23 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
+  // =========================================================
+  // REFRESH CURRENT USER (no navigation)
+  // =========================================================
+
   Future<AppUser?> refreshCurrentUserNoRedirect() async {
     try {
       final authUser = await Amplify.Auth.getCurrentUser();
+
       bool emailVerified = false;
       try {
         final attrs = await Amplify.Auth.fetchUserAttributes();
-        AuthUserAttribute? emailVerifiedAttr;
         for (final a in attrs) {
-          if (a.userAttributeKey.key == 'email_verified') {
-            emailVerifiedAttr = a;
+          if (a.userAttributeKey.key == 'email_verified' &&
+              a.value.toLowerCase() == 'true') {
+            emailVerified = true;
             break;
           }
-        }
-        if (emailVerifiedAttr != null &&
-            emailVerifiedAttr.value.toLowerCase() == 'true') {
-          emailVerified = true;
         }
       } catch (_) {}
 
@@ -154,6 +154,14 @@ class AuthenticationRepository extends GetxController {
       return null;
     }
   }
+
+  // =========================================================
+  // SCREEN REDIRECT
+  // ✅ Checks isFirstTime BEFORE deciding login vs onboarding
+  //    so first-time users skip the login flash entirely.
+  // ✅ Skips navigation if already on target route to avoid
+  //    overriding VerifyEmailController's navigation.
+  // =========================================================
 
   Future<void> screenRedirect(AppUser? user) async {
     if (user != null) {
@@ -176,24 +184,43 @@ class AuthenticationRepository extends GetxController {
           } catch (_) {}
         }
       } catch (_) {}
+
+      if (Get.currentRoute != TRoutes.mainDashboard) {
+        Get.offAllNamed(TRoutes.mainDashboard);
+      }
     } else {
-      deviceStorage.writeIfNull('isFirstTime', true);
+      // ✅ Read isFirstTime — default true means never opened before
+      final bool isFirstTime =
+          (deviceStorage.read('isFirstTime') as bool?) ?? true;
+
+      if (isFirstTime) {
+        // First ever launch — go straight to onboarding, no login screen
+        if (Get.currentRoute != TRoutes.onboarding) {
+          Get.offAllNamed(TRoutes.onboarding);
+        }
+      } else {
+        // Returning user, not signed in — go to login
+        if (Get.currentRoute != TRoutes.logIn &&
+            Get.currentRoute != TRoutes.signUp) {
+          Get.offAllNamed(TRoutes.logIn);
+        }
+      }
     }
   }
 
-  // ----------------------------
-  // ✅ Added function
+  // =========================================================
+  // ON LOGIN SUCCESS
+  // =========================================================
+
   Future<void> onLoginSuccess() async {
-    // Start datastore
     await Amplify.DataStore.start();
-
-    // Inject app controllers
     AppBindings().dependencies();
-
-    // Go home
-    Get.offAllNamed(TRoutes.home);
+    Get.offAllNamed(TRoutes.mainDashboard);
   }
-  // ----------------------------
+
+  // =========================================================
+  // EMAIL + PASSWORD LOGIN
+  // =========================================================
 
   Future<AppUserCredential> loginWithEmailAndPassword(
     String email,
@@ -282,6 +309,10 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
+  // =========================================================
+  // REGISTER — Cognito only, NO DataStore write
+  // =========================================================
+
   Future<AppUserCredential> registerWithEmailAndPassword(
     String email,
     String password,
@@ -320,8 +351,41 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  Future<void> sendEmailVerification() async {
-    return;
+  Future<void> sendEmailVerification() async {}
+
+  Future<void> confirmSignUp(String username, String confirmationCode) async {
+    final uname = username.trim();
+    final code = confirmationCode.trim();
+    if (uname.isEmpty) throw 'Username is required to confirm verification.';
+    if (code.isEmpty) throw 'Confirmation code is required.';
+
+    try {
+      final res = await Amplify.Auth.confirmSignUp(
+        username: uname,
+        confirmationCode: code,
+      );
+      if (res.isSignUpComplete) {
+        await refreshCurrentUserNoRedirect();
+      }
+    } on AmplifyException catch (e) {
+      throw e.message;
+    } catch (_) {
+      throw 'Failed to confirm sign up';
+    }
+  }
+
+  Future<void> resendConfirmationCode(String username) async {
+    final uname = username.trim();
+    if (uname.isEmpty) {
+      throw 'Username is required to resend confirmation code.';
+    }
+    try {
+      await Amplify.Auth.resendSignUpCode(username: uname);
+    } on AmplifyException catch (e) {
+      throw e.message;
+    } catch (_) {
+      throw 'Failed to resend confirmation code';
+    }
   }
 
   Future<void> resetPasswordStart(String username) async {
@@ -352,61 +416,6 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
-  Future<void> confirmSignUp(String username, String confirmationCode) async {
-    final uname = username.trim();
-    final code = confirmationCode.trim();
-    if (uname.isEmpty) throw 'Username is required to confirm verification.';
-    if (code.isEmpty) throw 'Confirmation code is required.';
-
-    try {
-      final res = await Amplify.Auth.confirmSignUp(
-        username: uname,
-        confirmationCode: code,
-      );
-      if (res.isSignUpComplete) {
-        await refreshCurrentUserNoRedirect();
-      }
-    } on AmplifyException catch (e) {
-      throw e.message;
-    } catch (_) {
-      throw 'Failed to confirm sign up';
-    }
-  }
-
-  Future<void> resendConfirmationCode(String username) async {
-    final uname = username.trim();
-    if (uname.isEmpty) {
-      throw 'Username is required to resend confirmation code.';
-    }
-    try {
-      await sendEmailVerification();
-    } on AmplifyException catch (e) {
-      throw e.message;
-    } catch (_) {
-      throw 'Failed to resend confirmation code';
-    }
-  }
-
-  Future<void> clearExistingUsers() async {
-    try {
-      await deviceStorage.erase();
-      await GetStorage().erase();
-      await UserRepository.instance.clearAllUsers();
-      _currentUser.value = null;
-      Get.offAll(() => LoginScreen());
-    } catch (_) {
-      throw 'Failed to clear local data';
-    }
-  }
-
-  Future<void> loginWithPhoneNo(String phoneNumber) async {
-    throw 'Phone authentication not implemented for Amplify/Cognito in this migration.';
-  }
-
-  Future<bool> verifyOTP(String otp) async {
-    throw 'Phone OTP verification not supported in this migration yet.';
-  }
-
   Future<AppUserCredential?> signInWithGoogle() async {
     try {
       await Amplify.Auth.signInWithWebUI(provider: AuthProvider.google);
@@ -425,15 +434,31 @@ class AuthenticationRepository extends GetxController {
     }
   }
 
+  Future<void> loginWithPhoneNo(String phoneNumber) async {
+    throw 'Phone authentication not implemented for Amplify/Cognito.';
+  }
+
+  Future<bool> verifyOTP(String otp) async {
+    throw 'Phone OTP verification not supported yet.';
+  }
+
+  // =========================================================
+  // LOGOUT
+  // ✅ Navigate first via offAllNamed — this triggers GetX route
+  //    lifecycle to clean up controllers naturally, avoiding
+  //    "TextEditingController used after disposed" errors.
+  // =========================================================
+
   Future<void> logout() async {
     try {
       await Amplify.Auth.signOut();
       try {
         await deviceStorage.remove('REMEMBER_ME');
         await deviceStorage.remove('REMEMBER_ME_EMAIL');
+        await deviceStorage.remove('REMEMBER_ME_USERNAME');
         await SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
       } catch (_) {}
-      Get.offAll(() => LoginScreen());
+      Get.offAllNamed(TRoutes.logIn);
     } catch (_) {
       throw 'Something went wrong. Please try again';
     }
@@ -469,6 +494,18 @@ class AuthenticationRepository extends GetxController {
       await Amplify.Auth.signOut();
     } catch (_) {
       throw 'Something went wrong. Please try again';
+    }
+  }
+
+  Future<void> clearExistingUsers() async {
+    try {
+      await deviceStorage.erase();
+      await GetStorage().erase();
+      await UserRepository.instance.clearAllUsers();
+      _currentUser.value = null;
+      Get.offAll(() => LoginScreen());
+    } catch (_) {
+      throw 'Failed to clear local data';
     }
   }
 }

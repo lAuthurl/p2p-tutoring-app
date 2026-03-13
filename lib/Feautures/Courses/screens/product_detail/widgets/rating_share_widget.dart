@@ -12,7 +12,6 @@ class TRatingAndShare extends StatelessWidget {
 
   double get averageRating {
     if (reviews == null || reviews!.isEmpty) return 0;
-    // Use `r.rating ?? 0` to handle possible nulls
     final total = reviews!.fold<double>(0, (sum, r) => sum + (r.rating));
     return total / reviews!.length;
   }
@@ -20,36 +19,17 @@ class TRatingAndShare extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final avgRating = averageRating;
-    final totalReviews = reviews?.length ?? 0;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        /// Rating Stars
+        /// Rating Stars Only
         Row(
-          children: [
-            Row(
-              children: List.generate(5, (index) {
-                final iconColor =
-                    index < avgRating.round()
-                        ? Colors.amber
-                        : Colors.grey.shade300;
-                return Icon(Iconsax.star5, color: iconColor, size: 24);
-              }),
-            ),
-            const SizedBox(width: TSizes.spaceBtwItems / 2),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: avgRating > 0 ? avgRating.toStringAsFixed(1) : '0.0 ',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  TextSpan(text: ' ($totalReviews)'),
-                ],
-              ),
-            ),
-          ],
+          children: List.generate(5, (index) {
+            final iconColor =
+                index < avgRating.round() ? Colors.amber : Colors.grey.shade300;
+            return Icon(Iconsax.star5, color: iconColor, size: 24);
+          }),
         ),
 
         /// Share Button

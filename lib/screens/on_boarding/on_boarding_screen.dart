@@ -2,45 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:liquid_swipe/liquid_swipe.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-import 'package:amplify_flutter/amplify_flutter.dart';
 
 import '../../../../../utils/constants/colors.dart';
 import '../../Feautures/dashboard/Home/controllers/subject_controller.dart';
 import '../../authentication/controllers/on_boarding_controller.dart';
-import '../../../routes/routes.dart';
 
 class OnBoardingScreen extends StatelessWidget {
   const OnBoardingScreen({super.key});
-
-  /// Prevent multiple navigations
-  static bool _isNavigating = false;
-
-  /// Safe navigation (no post-frame hacks, no stack corruption)
-  Future<void> _navigateSafely(String route) async {
-    if (_isNavigating) return;
-    _isNavigating = true;
-
-    if (Get.currentRoute != route) {
-      await Get.offAllNamed(route);
-    }
-
-    _isNavigating = false;
-  }
-
-  /// Decide where to go (Dashboard or Login)
-  Future<void> _handleFinish() async {
-    try {
-      final session = await Amplify.Auth.fetchAuthSession();
-
-      if (session.isSignedIn) {
-        await _navigateSafely(TRoutes.mainDashboard);
-      } else {
-        await _navigateSafely(TRoutes.logIn);
-      }
-    } catch (_) {
-      await _navigateSafely(TRoutes.logIn);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +31,7 @@ class OnBoardingScreen extends StatelessWidget {
               pages: obController.pages,
               enableSideReveal: true,
               liquidController: obController.controller,
+              // ✅ All page change events go through the debounced callback
               onPageChangeCallback: obController.onPageChangedCallback,
               waveType: WaveType.circularReveal,
             ),
@@ -85,22 +54,13 @@ class OnBoardingScreen extends StatelessWidget {
             ),
           ),
 
-          /// ---------------- Next Button ----------------
+          /// ---------------- Next / Finish Button ----------------
           Positioned(
             bottom: 42,
             right: 28,
             child: OutlinedButton(
-              onPressed: () async {
-                final isLastPage =
-                    obController.currentPage.value ==
-                    obController.pages.length - 1;
-
-                if (isLastPage) {
-                  await _handleFinish();
-                } else {
-                  obController.animateToNextSlideWithLocalStorage();
-                }
-              },
+              // ✅ Single call — controller decides next page or finish
+              onPressed: obController.animateToNextSlideWithLocalStorage,
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: TColors.borderLight, width: 1),
                 shape: const CircleBorder(),
@@ -129,7 +89,8 @@ class OnBoardingScreen extends StatelessWidget {
             top: MediaQuery.of(context).padding.top + 12,
             right: 16,
             child: ElevatedButton(
-              onPressed: _handleFinish,
+              // ✅ skip() now delegates to handleFinish() in controller
+              onPressed: obController.handleFinish,
               style: ElevatedButton.styleFrom(
                 backgroundColor: TColors.black,
                 foregroundColor: TColors.textWhite,

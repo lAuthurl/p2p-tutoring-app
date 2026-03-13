@@ -29,7 +29,6 @@ class UserController extends GetxController {
 
   void setHasSeenOnboarding(bool value) =>
       _storage.write('HAS_SEEN_ONBOARDING', value);
-
   void setLoggedIn(bool value) => _storage.write('IS_LOGGED_IN', value);
 
   // ---------------------------------------------------------------------------
@@ -49,23 +48,62 @@ class UserController extends GetxController {
 
   // ---------------------------------------------------------------------------
   // FORM KEYS
+  // ✅ These are recreated fresh each time the controller is instantiated,
+  //    preventing "Multiple widgets used the same GlobalKey" after re-login
   // ---------------------------------------------------------------------------
-  final updateUserProfileFormKey = GlobalKey<FormState>();
-  final reAuthFormKey = GlobalKey<FormState>();
+  late GlobalKey<FormState> updateUserProfileFormKey;
+  late GlobalKey<FormState> reAuthFormKey;
 
   // ---------------------------------------------------------------------------
   // TEXT CONTROLLERS
+  // ✅ All created fresh in onInit — never reused after dispose
   // ---------------------------------------------------------------------------
-  final verifyEmail = TextEditingController();
-  final verifyPassword = TextEditingController();
+  late TextEditingController verifyEmail;
+  late TextEditingController verifyPassword;
+  late TextEditingController email;
+  late TextEditingController phoneNo;
+  late TextEditingController fullName;
+  late TextEditingController skills;
+  late TextEditingController about;
 
-  final email = TextEditingController();
-  final phoneNo = TextEditingController();
-  final fullName = TextEditingController();
+  // ---------------------------------------------------------------------------
+  // LIFECYCLE
+  // ---------------------------------------------------------------------------
 
-  // ✅ NEW
-  final skills = TextEditingController();
-  final about = TextEditingController();
+  @override
+  void onInit() {
+    super.onInit();
+    // ✅ Always create fresh instances — safe after logout/re-login
+    updateUserProfileFormKey = GlobalKey<FormState>();
+    reAuthFormKey = GlobalKey<FormState>();
+
+    verifyEmail = TextEditingController();
+    verifyPassword = TextEditingController();
+    email = TextEditingController();
+    phoneNo = TextEditingController();
+    fullName = TextEditingController();
+    skills = TextEditingController();
+    about = TextEditingController();
+  }
+
+  @override
+  void onClose() {
+    // ✅ Safe dispose — only dispose if not already disposed
+    _safeDispose(verifyEmail);
+    _safeDispose(verifyPassword);
+    _safeDispose(email);
+    _safeDispose(phoneNo);
+    _safeDispose(fullName);
+    _safeDispose(skills);
+    _safeDispose(about);
+    super.onClose();
+  }
+
+  void _safeDispose(TextEditingController controller) {
+    try {
+      controller.dispose();
+    } catch (_) {}
+  }
 
   // ---------------------------------------------------------------------------
   // FETCH USER
@@ -162,7 +200,7 @@ class UserController extends GetxController {
                 .map((s) => s.trim())
                 .where((s) => s.isNotEmpty)
                 .toList(),
-        about: about.text.trim(), // ✅ NEW
+        about: about.text.trim(),
       );
 
       await Amplify.DataStore.save(updatedUser);
@@ -223,7 +261,6 @@ class UserController extends GetxController {
 
   Future<String> _uploadImageToS3(String folder, XFile image) async {
     final filename = '${DateTime.now().millisecondsSinceEpoch}_${image.name}';
-
     final storagePath = StoragePath.fromString('$folder/$filename');
 
     await Amplify.Storage.uploadFile(
@@ -232,7 +269,6 @@ class UserController extends GetxController {
     ).result;
 
     final urlResult = await Amplify.Storage.getUrl(path: storagePath).result;
-
     return urlResult.url.toString();
   }
 
@@ -280,7 +316,6 @@ class UserController extends GetxController {
       await Amplify.Auth.deleteUser();
 
       TFullScreenLoader.stopLoading();
-
       Get.offAllNamed(TRoutes.logIn);
     } catch (e) {
       TFullScreenLoader.stopLoading();
@@ -317,23 +352,7 @@ class UserController extends GetxController {
     email.text = currentUser.value?.email ?? '';
     phoneNo.text = currentUser.value?.phoneNumber ?? '';
     profileImageUrl.value = currentUser.value?.profilePicture ?? '';
-
     skills.text = (currentUser.value?.skills ?? []).join(', ');
     about.text = currentUser.value?.about ?? '';
-  }
-
-  // ---------------------------------------------------------------------------
-  // DISPOSE
-  // ---------------------------------------------------------------------------
-  @override
-  void onClose() {
-    verifyEmail.dispose();
-    verifyPassword.dispose();
-    email.dispose();
-    phoneNo.dispose();
-    fullName.dispose();
-    skills.dispose();
-    about.dispose();
-    super.onClose();
   }
 }

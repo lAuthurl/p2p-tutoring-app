@@ -32,6 +32,8 @@ class HomeScreen extends StatelessWidget {
     final searchController = TextEditingController();
 
     return Scaffold(
+      // ✅ Slightly darker than surface so cards (which are surface) stand out
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Get.to(() => const CreateTutoringSessionScreen()),
         icon: const Icon(Icons.add),
@@ -42,25 +44,22 @@ class HomeScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
+            // Header stays on its own themed container — unaffected
             TPrimaryHeaderContainer(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const THomeAppBar(),
                   const SizedBox(height: TSizes.spaceBtwSections),
-                  // ---------------- Search Container ----------------
                   TSearchContainer(
                     controller: searchController,
                     hintText: 'Search for Lectures or Tutors',
                     showBorder: false,
                     onChanged: (value) {
-                      homeController.updateSearch(
-                        value,
-                      ); // Filter sessions reactively
+                      homeController.updateSearch(value);
                     },
                   ),
                   const SizedBox(height: TSizes.spaceBtwSections),
-                  // ---------------- Subjects ----------------
                   Obx(() {
                     final featuredSubjects = subjectController.featuredSubjects;
                     return featuredSubjects.isNotEmpty
@@ -113,7 +112,7 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Featured Lectures Section (2 Random Popular + 2 Random Recent, daily shuffle)
+/// Featured Lectures Section
 class _FeaturedSection extends StatelessWidget {
   const _FeaturedSection();
 
@@ -188,16 +187,12 @@ class _PopularSection extends StatelessWidget {
           title: 'All Lectures',
           onPressed: () {
             final allSessions = controller.filteredSessions.toList();
-
             final uniqueSessions =
                 {for (var s in allSessions) s.id: s}.values.toList();
-
-            // Sort newest first
             uniqueSessions.sort(
               (a, b) => (b.createdAt?.getDateTimeInUtc() ?? DateTime(0))
                   .compareTo(a.createdAt?.getDateTimeInUtc() ?? DateTime(0)),
             );
-
             Get.to(
               () => AllLecturesScreen(
                 title: 'All Lectures',
@@ -209,16 +204,12 @@ class _PopularSection extends StatelessWidget {
         const SizedBox(height: TSizes.spaceBtwItems),
         Obx(() {
           final allSessions = controller.filteredSessions.toList();
-
           final uniqueSessions =
               {for (var s in allSessions) s.id: s}.values.toList();
-
-          // Sort newest first
           uniqueSessions.sort(
             (a, b) => (b.createdAt?.getDateTimeInUtc() ?? DateTime(0))
                 .compareTo(a.createdAt?.getDateTimeInUtc() ?? DateTime(0)),
           );
-
           final limitedSessions = uniqueSessions.take(6).toList();
 
           if (limitedSessions.isEmpty) {

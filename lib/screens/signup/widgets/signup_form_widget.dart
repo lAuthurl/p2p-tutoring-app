@@ -23,15 +23,21 @@ class SignUpFormWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ✅ Username / display name
           _buildField(
-            controller.fullName,
-            'Full Name',
+            controller.username,
+            'Username',
             LineAwesomeIcons.user,
-            validator: (v) => v!.isEmpty ? 'Name cannot be empty' : null,
+            validator:
+                (v) =>
+                    v == null || v.trim().isEmpty
+                        ? 'Username cannot be empty'
+                        : null,
           ),
 
           const SizedBox(height: TSizes.sm),
 
+          // ✅ Email
           _buildField(
             controller.email,
             'Email',
@@ -41,6 +47,7 @@ class SignUpFormWidget extends StatelessWidget {
 
           const SizedBox(height: TSizes.sm),
 
+          // ✅ Password
           Obx(
             () => _buildField(
               controller.password,
@@ -58,16 +65,21 @@ class SignUpFormWidget extends StatelessWidget {
 
           const SizedBox(height: TSizes.sm),
 
+          // ✅ Phone number
           _buildField(
             controller.phoneNumber,
             'Phone No',
             LineAwesomeIcons.phone_solid,
             validator:
-                (v) => v!.isEmpty ? 'Phone number cannot be empty' : null,
+                (v) =>
+                    v == null || v.trim().isEmpty
+                        ? 'Phone number cannot be empty'
+                        : null,
           ),
 
           const SizedBox(height: TSizes.md),
 
+          // ✅ Sign up button
           Obx(
             () => TPrimaryButton(
               text: TTexts.tSignup,

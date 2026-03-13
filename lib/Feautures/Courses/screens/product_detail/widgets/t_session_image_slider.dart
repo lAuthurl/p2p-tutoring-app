@@ -86,10 +86,7 @@ class TSessionImageSlider extends StatelessWidget {
     final images = controller.getAllSessionImages(session);
 
     final filteredImages =
-        images.where((img) {
-          // Filter out tutor image if it exists in images
-          return img != session.tutor?.image;
-        }).toList();
+        images.where((img) => img != session.tutor?.image).toList();
     final visibleImages =
         filteredImages.length > 1 ? filteredImages.sublist(1) : <String>[];
 
@@ -101,59 +98,62 @@ class TSessionImageSlider extends StatelessWidget {
             // Main Large Image
             SizedBox(
               height: 360,
-              child: Padding(
-                padding: const EdgeInsets.all(TSizes.defaultSpace * 1.5),
-                child: Center(
-                  child: Builder(
-                    builder: (_) {
-                      final image =
-                          (selectedImage?.isNotEmpty ?? false)
-                              ? selectedImage!
-                              : (controller.selectedSessionImage.value.isEmpty
-                                  ? session.thumbnail ?? ''
-                                  : controller.selectedSessionImage.value);
+              width: double.infinity,
+              child: Builder(
+                builder: (_) {
+                  final image =
+                      (selectedImage?.isNotEmpty ?? false)
+                          ? selectedImage!
+                          : (controller.selectedSessionImage.value.isEmpty
+                              ? session.thumbnail ?? ''
+                              : controller.selectedSessionImage.value);
 
-                      final cleaned = THelperFunctions.normalizeImagePath(
-                        image,
-                      );
+                  final cleaned = THelperFunctions.normalizeImagePath(image);
 
-                      if (cleaned.isEmpty) {
-                        return Image.asset(
-                          TImages.tutorPromo1,
-                          fit: BoxFit.contain,
+                  if (cleaned.isEmpty) {
+                    return Image.asset(
+                      TImages.tutorPromo1,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    );
+                  }
+
+                  if (THelperFunctions.isNetworkImagePath(image)) {
+                    return Image.network(
+                      cleaned,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(child: CircularProgressIndicator());
+                      },
+                      frameBuilder: (context, child, frame, _) {
+                        if (frame == null) return const SizedBox.shrink();
+                        return AnimatedOpacity(
+                          opacity: 1,
+                          duration: const Duration(milliseconds: 180),
+                          child: child,
                         );
-                      }
+                      },
+                      errorBuilder:
+                          (_, __, ___) => Image.asset(
+                            TImages.tutorPromo1,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          ),
+                    );
+                  }
 
-                      if (THelperFunctions.isNetworkImagePath(image)) {
-                        return Image.network(
-                          cleaned,
-                          fit: BoxFit.contain,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          },
-                          frameBuilder: (context, child, frame, _) {
-                            if (frame == null) return const SizedBox.shrink();
-                            return AnimatedOpacity(
-                              opacity: 1,
-                              duration: const Duration(milliseconds: 180),
-                              child: child,
-                            );
-                          },
-                          errorBuilder:
-                              (_, _, _) => Image.asset(
-                                TImages.tutorPromo1,
-                                fit: BoxFit.contain,
-                              ),
-                        );
-                      }
-
-                      return Image.asset(cleaned, fit: BoxFit.contain);
-                    },
-                  ),
-                ),
+                  return Image.asset(
+                    cleaned,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  );
+                },
               ),
             ),
 
@@ -205,7 +205,7 @@ class TSessionImageSlider extends StatelessWidget {
 
                     return TRoundedImage(
                       width: 80,
-                      fit: BoxFit.contain,
+                      fit: BoxFit.cover,
                       imageUrl: visibleImages[index],
                       isNetworkImage: visibleImages[index].startsWith('http'),
                       padding: const EdgeInsets.all(TSizes.sm),

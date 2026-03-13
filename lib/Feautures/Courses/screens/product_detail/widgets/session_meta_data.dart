@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../../common/widgets/custom_shapes/containers/rounded_container.dart';
-import '../../../../../common/widgets/texts/t_product_price_text.dart';
 import '../../../../../common/widgets/texts/t_product_title_text.dart';
 import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/constants/sizes.dart';
@@ -12,18 +11,22 @@ import '../../../../../models/ModelProvider.dart';
 
 class TProductMetaData extends StatelessWidget {
   final TutoringSession session;
-  final String? tag; // optional tag
+  final String? tag;
 
   const TProductMetaData({super.key, required this.session, this.tag});
 
   @override
   Widget build(BuildContext context) {
-    // Use the provided tag or fallback to session.id
     final controllerTag = tag ?? session.id;
     final controller = Get.find<SessionCreationController>(tag: controllerTag);
     final basePrice = session.pricePerSession ?? 0;
 
     return Obx(() {
+      // Subscribing to selectedAttributes length re-evaluates price
+      // whenever the tutee changes an option. Using .length on RxMap
+      // is valid in any context (unlike .value which is subclass-only).
+      final _ = controller.selectedAttributes.length;
+
       final adjustedPrice = controller.calculateDynamicPrice(session);
 
       int? salePercentage;
@@ -66,7 +69,7 @@ class TProductMetaData extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(left: TSizes.spaceBtwItems),
                   child: Text(
-                    basePrice.toStringAsFixed(0),
+                    '₦${basePrice.toStringAsFixed(0)}',
                     style: Theme.of(context).textTheme.titleSmall!.apply(
                       decoration: TextDecoration.lineThrough,
                     ),
@@ -75,9 +78,12 @@ class TProductMetaData extends StatelessWidget {
 
               Padding(
                 padding: const EdgeInsets.only(left: TSizes.spaceBtwItems),
-                child: TProductPriceText(
-                  price: adjustedPrice.toStringAsFixed(2),
-                  isLarge: true,
+                child: Text(
+                  '₦${adjustedPrice.toStringAsFixed(2)}',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: TColors.primary,
+                  ),
                 ),
               ),
             ],

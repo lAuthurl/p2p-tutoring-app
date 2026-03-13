@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../bindings/notification_binding.dart';
 import '../screens/login/login_screen.dart';
+import '../screens/signup/signup_screen.dart'; // ✅ import signup screen
 import '../screens/welcome/welcome_screen.dart';
 import '../screens/splash_screen/splash_screen.dart';
 import '../screens/on_boarding/on_boarding_screen.dart';
@@ -28,7 +29,7 @@ class AppRoutes {
     GetPage(name: TRoutes.onboarding, page: () => OnBoardingScreen()),
     GetPage(name: TRoutes.welcome, page: () => WelcomeScreen()),
     GetPage(name: TRoutes.logIn, page: () => LoginScreen()),
-
+    GetPage(name: TRoutes.signUp, page: () => SignupScreen()), // ✅ added
     // Auth helpers
     GetPage(name: TRoutes.phoneSignIn, page: () => OTPScreen()),
     GetPage(name: TRoutes.otpVerification, page: () => OTPScreen()),
@@ -63,11 +64,7 @@ class AppRoutes {
     // Favourites
     GetPage(
       name: TRoutes.favouritesScreen,
-      page:
-          () => FavouriteScreen(
-            homeController:
-                Get.find<HomeController>(), // Pass required controller
-          ),
+      page: () => FavouriteScreen(homeController: Get.find<HomeController>()),
     ),
 
     // Profile & Notifications
@@ -87,7 +84,6 @@ class AppRoutes {
   ];
 }
 
-/// Inline placeholder widget for unimplemented screens
 class _FeaturePlaceholder extends StatelessWidget {
   final String title;
   const _FeaturePlaceholder(this.title);

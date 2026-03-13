@@ -66,8 +66,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
   }
 
-  /// Checks whether the logged-in user is the tutor who created this session.
-  /// If so, the Chat button is replaced with an Inbox button.
   Future<void> _checkOwnership() async {
     final tutorId = await _tutoringController.currentUserTutorId;
     if (!mounted) return;
@@ -134,7 +132,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   Future<Tutor?> _getTutorOrFetch(TutoringSession session) async {
     try {
       if (session.tutor != null) return session.tutor;
-
       final tutorId = session.tutor?.id;
       if (tutorId != null && tutorId.isNotEmpty) {
         final tutors = await Amplify.DataStore.query(
@@ -143,7 +140,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         );
         if (tutors.isNotEmpty) return tutors.first;
       }
-
       Get.snackbar(
         "Error",
         "Tutor information not available",
@@ -158,188 +154,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final session = widget.session;
-    const buttonHeight = 56.0;
-    TDeviceUtils.getScreenWidth(context);
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: EdgeInsets.only(
-              bottom: buttonHeight + TSizes.spaceBtwItems,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TSessionImageSlider(session: session),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: TSizes.defaultSpace,
-                    vertical: TSizes.defaultSpace / 4,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TRatingAndShare(reviews: _reviews),
-                      const SizedBox(height: TSizes.spaceBtwItems / 2),
-                      TProductMetaData(session: session, tag: widget.tag),
-                      const SizedBox(height: TSizes.spaceBtwSections / 2),
-                      TSessionAttributes(session: session),
-                      const SizedBox(height: TSizes.spaceBtwSections / 2),
-
-                      /// Tutor Profile & Chat Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () async {
-                                final tutor = await _getTutorOrFetch(session);
-                                if (tutor != null) {
-                                  Get.to(
-                                    () => TutorProfileScreen(tutor: tutor),
-                                  );
-                                }
-                              },
-                              style: _outlinedButtonStyle(),
-                              child: const Text(
-                                "Tutor Profile",
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: TSizes.spaceBtwItems),
-                          Expanded(
-                            child: OutlinedButton(
-                              // Owners (tutors) go to their inbox.
-                              // Students open their own private chat thread.
-                              // chatId = sessionId + userId so each student
-                              // gets an isolated conversation with the tutor.
-                              onPressed: () {
-                                if (_isOwner) {
-                                  Get.to(() => const InboxScreen());
-                                } else {
-                                  if (_currentUserId == null) return;
-                                  final chatId =
-                                      '${session.id}_$_currentUserId';
-                                  Get.to(
-                                    () => ChatScreen(
-                                      sessionId: chatId,
-                                      sessionTitle: session.title,
-                                      otherUserName:
-                                          session.tutor?.name ?? 'Tutor',
-                                    ),
-                                  );
-                                }
-                              },
-                              style: _outlinedButtonStyle(),
-                              child: Text(
-                                _isOwner ? "Go to Inbox" : "Chat",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: TSizes.spaceBtwSections),
-
-                      /// Description
-                      const TSectionHeading(
-                        title: "Description",
-                        showActionButton: false,
-                      ),
-                      const SizedBox(height: TSizes.spaceBtwItems),
-                      ReadMoreText(
-                        session.description ?? "No description provided.",
-                        trimLines: 3,
-                        trimMode: TrimMode.Line,
-                        trimCollapsedText: " Show more",
-                        trimExpandedText: " Less",
-                        moreStyle: const TextStyle(fontWeight: FontWeight.bold),
-                        lessStyle: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: TSizes.spaceBtwSections / 2),
-
-                      /// Reviews Section
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const TSectionHeading(
-                            title: "Reviews",
-                            showActionButton: false,
-                          ),
-                          IconButton(
-                            icon: const Icon(Iconsax.arrow_right_3, size: 18),
-                            onPressed: () async {
-                              final updated = await Get.to(
-                                () => SessionReviewScreen(session: session),
-                              );
-                              if (updated == true) _fetchReviews();
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: TSizes.spaceBtwItems),
-
-                      _loadingReviews
-                          ? const Center(child: CircularProgressIndicator())
-                          : _reviews.isEmpty
-                          ? const Text("No reviews yet.")
-                          : Column(
-                            children:
-                                _reviews
-                                    .map((r) => _buildReviewCard(r))
-                                    .toList(),
-                          ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          /// Book Session Button
-          Positioned(
-            bottom: -8,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(TSizes.defaultSpace),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: ElevatedButton(
-                    onPressed: () => _bookSession(session),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: TColors.primary,
-                      padding: const EdgeInsets.all(TSizes.md),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      "Book Session",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: TColors.textWhite,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _bookSession(TutoringSession session) async {
     try {
       final tutoringController = Get.find<TutoringController>(tag: widget.tag);
@@ -350,84 +164,518 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         ),
         quantity: 1,
       );
-    } catch (e) {
-      // Error handling removed (no snackbar)
-    }
+    } catch (_) {}
   }
 
-  Widget _buildReviewCard(Review r) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: TSizes.spaceBtwItems / 2),
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(TSizes.defaultSpace),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundImage:
-                        r.user?.profilePicture != null &&
-                                r.user!.profilePicture!.isNotEmpty
-                            ? NetworkImage(r.user!.profilePicture!)
-                            : null,
-                    backgroundColor: TColors.primary,
-                    child:
-                        (r.user?.profilePicture == null ||
-                                r.user!.profilePicture!.isEmpty)
-                            ? Text(
-                              r.user?.username[0].toUpperCase() ?? "?",
-                              style: const TextStyle(color: Colors.white),
-                            )
-                            : null,
+  @override
+  Widget build(BuildContext context) {
+    final session = widget.session;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    TDeviceUtils.getScreenWidth(context);
+
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
+      body: Stack(
+        children: [
+          // ── Scrollable content ──────────────────────────────────────
+          SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 96),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Image slider (full bleed)
+                TSessionImageSlider(session: session),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TSizes.defaultSpace,
+                    vertical: TSizes.spaceBtwItems,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      r.user?.username ?? "Anonymous",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  Row(
-                    children: List.generate(
-                      5,
-                      (index) => Icon(
-                        Icons.star,
-                        size: 16,
-                        color:
-                            index < (r.rating)
-                                ? Colors.amber
-                                : Colors.grey.shade300,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Rating & share ─────────────────────────────
+                      TRatingAndShare(reviews: _reviews),
+                      const SizedBox(height: 4),
+
+                      // ── Title & price ──────────────────────────────
+                      TProductMetaData(session: session, tag: widget.tag),
+                      const SizedBox(height: TSizes.spaceBtwItems),
+
+                      // ── Session options ────────────────────────────
+                      TSessionAttributes(session: session),
+                      const SizedBox(height: TSizes.spaceBtwSections / 2),
+
+                      // ── Tutor + Chat buttons ───────────────────────
+                      _ActionRow(
+                        isOwner: _isOwner,
+                        currentUserId: _currentUserId,
+                        session: session,
+                        onTutorTap: () async {
+                          final tutor = await _getTutorOrFetch(session);
+                          if (tutor != null) {
+                            Get.to(() => TutorProfileScreen(tutor: tutor));
+                          }
+                        },
                       ),
-                    ),
+                      const SizedBox(height: TSizes.spaceBtwSections),
+
+                      // ── Description ────────────────────────────────
+                      _SectionLabel(title: "Description"),
+                      const SizedBox(height: TSizes.spaceBtwItems),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHighest.withValues(
+                            alpha: 0.38,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: ReadMoreText(
+                          session.description ?? "No description provided.",
+                          trimLines: 4,
+                          trimMode: TrimMode.Line,
+                          trimCollapsedText: "  Show more",
+                          trimExpandedText: "  Show less",
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.65,
+                            color: colorScheme.onSurface.withValues(alpha: 0.8),
+                          ),
+                          moreStyle: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.primary,
+                            fontSize: 13,
+                          ),
+                          lessStyle: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.primary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: TSizes.spaceBtwSections),
+
+                      // ── Reviews ────────────────────────────────────
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          _SectionLabel(title: "Reviews"),
+                          TextButton.icon(
+                            onPressed: () async {
+                              final updated = await Get.to(
+                                () => SessionReviewScreen(session: session),
+                              );
+                              if (updated == true) _fetchReviews();
+                            },
+                            icon: Icon(
+                              Iconsax.star,
+                              size: 14,
+                              color: colorScheme.primary,
+                            ),
+                            label: Text(
+                              "Write a review",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: TSizes.spaceBtwItems),
+
+                      if (_loadingReviews)
+                        const Center(child: CircularProgressIndicator())
+                      else if (_reviews.isEmpty)
+                        _EmptyReviews(theme: theme, colorScheme: colorScheme)
+                      else
+                        Column(
+                          children:
+                              _reviews
+                                  .take(3)
+                                  .map(
+                                    (r) => _ReviewCard(
+                                      review: r,
+                                      theme: theme,
+                                      colorScheme: colorScheme,
+                                    ),
+                                  )
+                                  .toList(),
+                        ),
+
+                      if (_reviews.length > 3)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                final updated = await Get.to(
+                                  () => SessionReviewScreen(session: session),
+                                );
+                                if (updated == true) _fetchReviews();
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: colorScheme.primary,
+                                side: BorderSide(
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.35,
+                                  ),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 13,
+                                ),
+                              ),
+                              child: Text("See all ${_reviews.length} reviews"),
+                            ),
+                          ),
+                        ),
+
+                      const SizedBox(height: TSizes.spaceBtwSections),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Sticky Book Session bar ─────────────────────────────────
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: colorScheme.shadow.withValues(alpha: 0.09),
+                    blurRadius: 24,
+                    offset: const Offset(0, -6),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(r.comment ?? ''),
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TSizes.defaultSpace,
+                    vertical: 12,
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () => _bookSession(session),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: TColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Iconsax.calendar_add, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          "Book Session",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section label
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    // TSectionHeading import is kept — using it for the heading
+    return TSectionHeading(title: title, showActionButton: false);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tutor Profile + Chat action row
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.isOwner,
+    required this.currentUserId,
+    required this.session,
+    required this.onTutorTap,
+  });
+
+  final bool isOwner;
+  final String? currentUserId;
+  final TutoringSession session;
+  final VoidCallback onTutorTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final buttonStyle = OutlinedButton.styleFrom(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      foregroundColor: colorScheme.primary,
+      side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.38)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onTutorTap,
+            icon: const Icon(Iconsax.profile_circle, size: 17),
+            label: const Text("Tutor Profile"),
+            style: buttonStyle,
+          ),
+        ),
+        const SizedBox(width: TSizes.spaceBtwItems),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () {
+              if (isOwner) {
+                Get.to(() => const InboxScreen());
+              } else {
+                if (currentUserId == null) return;
+                Get.to(
+                  () => ChatScreen(
+                    sessionId: '${session.id}_$currentUserId',
+                    sessionTitle: session.title,
+                    otherUserName: session.tutor?.name ?? 'Tutor',
+                  ),
+                );
+              }
+            },
+            icon: Icon(
+              isOwner ? Iconsax.message_text : Iconsax.message,
+              size: 17,
+            ),
+            label: Text(isOwner ? "Inbox" : "Chat"),
+            style: buttonStyle,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty reviews placeholder
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EmptyReviews extends StatelessWidget {
+  const _EmptyReviews({required this.theme, required this.colorScheme});
+  final ThemeData theme;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Iconsax.star,
+            size: 34,
+            color: colorScheme.onSurface.withValues(alpha: 0.2),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "No reviews yet",
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface.withValues(alpha: 0.45),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            "Be the first to share your experience",
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReviewCard extends StatelessWidget {
+  const _ReviewCard({
+    required this.review,
+    required this.theme,
+    required this.colorScheme,
+  });
+
+  final Review review;
+  final ThemeData theme;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = review;
+    final hasAvatar =
+        r.user?.profilePicture != null && r.user!.profilePicture!.isNotEmpty;
+    final username = r.user?.username ?? "Anonymous";
+    final initial = username.isNotEmpty ? username[0].toUpperCase() : "?";
+    final dateStr =
+        r.createdAt != null
+            ? r.createdAt!.getDateTimeInUtc().toLocal().toString().split(" ")[0]
+            : '';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: colorScheme.outline.withValues(alpha: 0.12),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.shadow.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: TColors.primary.withValues(alpha: 0.12),
+                  backgroundImage:
+                      hasAvatar ? NetworkImage(r.user!.profilePicture!) : null,
+                  child:
+                      hasAvatar
+                          ? null
+                          : Text(
+                            initial,
+                            style: TextStyle(
+                              color: TColors.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        username,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (dateStr.isNotEmpty)
+                        Text(
+                          dateStr,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurface.withValues(
+                              alpha: 0.38,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // Star rating
+                Row(
+                  children: List.generate(5, (i) {
+                    final filled = i < r.rating.round();
+                    return Icon(
+                      filled ? Icons.star_rounded : Icons.star_outline_rounded,
+                      size: 15,
+                      color:
+                          filled
+                              ? Colors.amber.shade600
+                              : colorScheme.onSurface.withValues(alpha: 0.18),
+                    );
+                  }),
+                ),
+              ],
+            ),
+
+            // Comment bubble
+            if ((r.comment ?? '').isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.4,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 child: Text(
-                  r.createdAt!.getDateTimeInUtc().toLocal().toString().split(
-                    " ",
-                  )[0],
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  r.comment!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.75),
+                    height: 1.5,
+                  ),
                 ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
-
-  ButtonStyle _outlinedButtonStyle() => OutlinedButton.styleFrom(
-    padding: const EdgeInsets.symmetric(vertical: TSizes.md),
-    foregroundColor: TColors.primary,
-    side: BorderSide(color: TColors.primary.withValues(alpha: 0.4)),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-  );
 }

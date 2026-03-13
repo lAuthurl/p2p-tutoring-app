@@ -13,7 +13,6 @@ import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/constants/text_strings.dart';
 import '../../../personalization/controllers/user_controller.dart';
 import '../../../routes/routes.dart';
-import '../../../../bindings/general_bindings.dart';
 import 'update_profile_screen.dart';
 import 'widgets/profile_menu.dart';
 
@@ -38,7 +37,6 @@ class ProfileScreen extends StatelessWidget {
           TTexts.tProfile,
           style: Theme.of(context).textTheme.headlineMedium,
         ),
-        actions: [],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(TSizes.defaultSpace),
@@ -66,7 +64,7 @@ class ProfileScreen extends StatelessWidget {
                                   (user?.username != null &&
                                           user!.username.isNotEmpty)
                                       ? user.username[0].toUpperCase()
-                                      : "?",
+                                      : '?',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 28,
@@ -112,7 +110,7 @@ class ProfileScreen extends StatelessWidget {
                   (user?.username.isNotEmpty ?? false)
                       ? user!.username
                       : TTexts.tProfileHeading;
-              final email =
+              final userEmail =
                   (user?.email.isNotEmpty ?? false)
                       ? user!.email
                       : TTexts.tProfileSubHeading;
@@ -120,7 +118,10 @@ class ProfileScreen extends StatelessWidget {
               return Column(
                 children: [
                   Text(name, style: Theme.of(context).textTheme.headlineMedium),
-                  Text(email, style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    userEmail,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ],
               );
             }),
@@ -139,26 +140,25 @@ class ProfileScreen extends StatelessWidget {
             const Divider(),
             const SizedBox(height: 10),
 
-            // Menu Options
             ProfileMenuWidget(
-              title: "Dashboard",
+              title: 'Dashboard',
               icon: Icons.home,
               onPress: () => Get.toNamed(TRoutes.mainDashboard),
             ),
             ProfileMenuWidget(
-              title: "Checkout",
+              title: 'Checkout',
               icon: Icons.shopping_bag,
               onPress: () => Get.toNamed(TRoutes.checkoutScreen),
             ),
             ProfileMenuWidget(
-              title: "Wishlist",
+              title: 'Wishlist',
               icon: Icons.favorite,
               onPress: () => Get.toNamed(TRoutes.favouritesScreen),
             ),
             const Divider(),
             const SizedBox(height: 10),
             ProfileMenuWidget(
-              title: "Logout",
+              title: 'Logout',
               icon: LineAwesomeIcons.sign_out_alt_solid,
               textColor: Colors.red,
               endIcon: false,
@@ -172,33 +172,43 @@ class ProfileScreen extends StatelessWidget {
 
   void _showLogoutModal() {
     Get.defaultDialog(
-      title: "LOGOUT",
+      title: 'LOGOUT',
       titleStyle: const TextStyle(fontSize: 20),
       content: const Padding(
         padding: EdgeInsets.symmetric(vertical: 15.0),
-        child: Text("Are you sure you want to logout?"),
+        child: Text('Are you sure you want to logout?'),
       ),
       confirm: SizedBox(
         width: 120,
         child: ElevatedButton(
           onPressed: () async {
             try {
+              // ✅ Close dialog first to avoid disposed context issues
+              Get.back();
+
+              // ✅ Sign out from Amplify and clear storage
               await AuthenticationRepository.instance.logout();
-              Get.deleteAll(force: true);
-              GeneralBindings().dependencies();
-              Get.offAllNamed(TRoutes.logIn);
+
+              // ✅ Delete all GetX controllers cleanly AFTER navigation
+              // logout() calls Get.offAll(LoginScreen) which rebuilds the
+              // widget tree — deleteAll here would dispose controllers that
+              // the new screen may immediately need, causing the
+              // "used after disposed" error. Instead, logout() in
+              // AuthenticationRepository handles navigation, and
+              // LoginController re-registers itself via Get.put in LoginScreen.
             } catch (e) {
               print('❌ Logout failed: $e');
+              Get.snackbar('Error', 'Logout failed: $e');
             }
           },
-          child: const Text("Yes"),
+          child: const Text('Yes'),
         ),
       ),
       cancel: SizedBox(
         width: 100,
         child: OutlinedButton(
           onPressed: () => Get.back(),
-          child: const Text("No"),
+          child: const Text('No'),
         ),
       ),
     );
