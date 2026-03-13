@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
-import '../../../../../models/ModelProvider.dart';
-import '../../../../../personalization/controllers/user_controller.dart';
+import '../../../../models/ModelProvider.dart';
+import '../../../../personalization/controllers/user_controller.dart';
 import '../../../Booking/controllers/booking_controller.dart';
 import '../controllers/subject_controller.dart';
 
@@ -23,7 +23,6 @@ class HomeController extends GetxController {
   // ---------------- Sessions ----------------
   final RxList<TutoringSession> allSessions = <TutoringSession>[].obs;
 
-  // Filtered session lists
   final RxList<TutoringSession> featuredSessions = <TutoringSession>[].obs;
   final RxList<TutoringSession> popularSessions = <TutoringSession>[].obs;
   final RxList<TutoringSession> recentSessions = <TutoringSession>[].obs;
@@ -31,6 +30,12 @@ class HomeController extends GetxController {
   // ---------------- Search ----------------
   final RxString searchQuery = ''.obs;
   final RxList<TutoringSession> filteredSessions = <TutoringSession>[].obs;
+
+  // ---------------- Tutor Cache ----------------
+  // Shared with TutoringController pattern: query Tutor by FK id directly
+  // rather than relying on v2 AsyncModel lazy resolution which fails after
+  // a restart. Cache survives reactive rebuilds.
+  final _tutorCache = <String, Tutor>{};
 
   // ---------------- Lifecycle ----------------
   @override
@@ -40,7 +45,6 @@ class HomeController extends GetxController {
     userController = Get.find<UserController>();
     subjectController = Get.find<SubjectController>();
 
-    // React to user login state
     ever<User?>(userController.currentUser, (user) {
       if (user != null) {
         _startAppFlow();
@@ -49,13 +53,8 @@ class HomeController extends GetxController {
       }
     });
 
-    // React to subject selection to filter sessions
     ever(subjectController.selectedSubject, (_) => _applyFilters());
-
-    // React to sessions being loaded to populate filtered lists
     ever(allSessions, (_) => _applyFilters());
-
-    // React to search query changes
     ever(searchQuery, (_) => _applyFilters());
   }
 
@@ -118,17 +117,65 @@ class HomeController extends GetxController {
   Future<void> _loadAllSessions() async {
     try {
       final sessions = await Amplify.DataStore.query(TutoringSession.classType);
-      allSessions.assignAll(sessions);
 
-      debugPrint('🔹 All sessions loaded: ${sessions.length}');
+      // ✅ FIX: Amplify v2 BelongsTo relations are lazy (AsyncModel).
+      //    After a restart `await session.tutor` silently returns null
+      //    because the relation hasn't been pulled into local SQLite yet.
+      //
+      //    The FK id (session.tutor?.id) is ALWAYS stored on the session
+      //    row. We query Tutor by that id directly and cache the result
+      //    so subsequent observeQuery cycles re-apply it from memory
+      //    without hitting DataStore again.
+      final hydrated = await _hydrateSessions(sessions);
+
+      allSessions.assignAll(hydrated);
+      debugPrint('🔹 Sessions loaded + hydrated: ${hydrated.length}');
     } catch (e) {
       debugPrint('❌ Error loading sessions: $e');
       allSessions.clear();
     }
   }
 
+  Future<Tutor?> _resolveTutor(TutoringSession session) async {
+    final tutorId = session.tutor?.id;
+    if (tutorId == null || tutorId.isEmpty) return null;
+
+    if (_tutorCache.containsKey(tutorId)) return _tutorCache[tutorId];
+
+    try {
+      final results = await Amplify.DataStore.query(
+        Tutor.classType,
+        where: Tutor.ID.eq(tutorId),
+      );
+      if (results.isEmpty) return null;
+      _tutorCache[tutorId] = results.first;
+      return results.first;
+    } catch (e) {
+      debugPrint('❌ _resolveTutor failed for $tutorId: $e');
+      return null;
+    }
+  }
+
+  Future<List<TutoringSession>> _hydrateSessions(
+    List<TutoringSession> raw,
+  ) async {
+    return Future.wait(
+      raw.map((session) async {
+        final tutor = await _resolveTutor(session);
+        if (tutor == null) return session;
+        return session.copyWith(tutor: tutor);
+      }),
+    );
+  }
+
+  // ---------------- Cache Warming ----------------
+  /// Allows external controllers (e.g. SessionCreationController) to warm
+  /// this cache without accessing the private _tutorCache field directly.
+  void warmTutorCache(Tutor tutor) {
+    _tutorCache[tutor.id] = tutor;
+  }
+
   // ---------------- Reactive Filtering ----------------
-  /// Filters sessions by selected subject and search query (title or tutor name)
   void _applyFilters() {
     final selectedSubject = subjectController.selectedSubject.value;
     final query = searchQuery.value.toLowerCase();
@@ -148,7 +195,6 @@ class HomeController extends GetxController {
 
     filteredSessions.assignAll(filtered);
 
-    // Update other reactive session lists
     featuredSessions.value =
         filtered.where((s) => s.isFeatured ?? false).toList();
     popularSessions.value = filtered.toList();
@@ -168,6 +214,7 @@ class HomeController extends GetxController {
     subjectController.subjects.clear();
     isReady.value = false;
     searchQuery.value = '';
+    _tutorCache.clear();
   }
 
   // ---------------- Public Getters ----------------

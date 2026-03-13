@@ -3,3 +3,6 @@ amplify push
 flutter clean
 flutter pub get
 amplify codegen models
+
+
+Fix filter problems for subject 

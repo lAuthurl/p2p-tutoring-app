@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
+
 import '../../../../models/ModelProvider.dart';
 import '../../../personalization/controllers/user_controller.dart';
 import '../../dashboard/Home/controllers/home_controller.dart';
@@ -10,8 +11,6 @@ import '../../dashboard/Home/controllers/home_controller.dart';
 class SessionCreationController extends GetxController {
   static SessionCreationController get instance => Get.find();
 
-  // ✅ Fresh GlobalKey on every onInit — prevents "Multiple widgets used the
-  //    same GlobalKey" errors after logout/re-login
   late GlobalKey<FormState> formKey;
 
   // ---------------- Form fields ----------------
@@ -23,23 +22,7 @@ class SessionCreationController extends GetxController {
   final isUploading = false.obs;
   final isFree = false.obs;
 
-  /// Maximum allowed session price in Naira (₦)
   static const double kMaxPriceNaira = 5000.0;
-
-  // ─────────────────────────────────────────────────────────────────
-  // Attribute model
-  //
-  // • [_defaultAttributeOptions] — the full catalogue of attribute
-  //   groups and their possible values. Never changes at runtime.
-  //
-  // • [enabledAttributes] — set of attribute-group keys the TUTOR
-  //   has toggled ON when creating the session.  Only enabled groups
-  //   are saved to DataStore and shown to tutees on the detail page.
-  //
-  // • [selectedAttributes] — single-value selection per group used
-  //   by the TUTEE on the detail page (and for dynamic pricing).
-  //   Defaults to the first value of each enabled group.
-  // ─────────────────────────────────────────────────────────────────
 
   static const Map<String, List<String>> _defaultAttributeOptions = {
     'Duration': ['1hr', '2hr'],
@@ -47,45 +30,33 @@ class SessionCreationController extends GetxController {
     'Payment': ['Before Session', 'After Session'],
   };
 
-  /// Which attribute groups the tutor has enabled for this session.
   final RxSet<String> enabledAttributes = <String>{}.obs;
-
-  /// The tutee's single-value selection per group (used on detail screen).
-  /// Automatically seeded with [values.first] when a group is enabled.
   final RxMap<String, String> selectedAttributes = <String, String>{}.obs;
 
-  // ✅ Cache the resolved tutor so getOrCreateTutor() only hits DataStore once
   Tutor? _cachedTutor;
 
   @override
   void onInit() {
     super.onInit();
-
     formKey = GlobalKey<FormState>();
     title = TextEditingController();
     description = TextEditingController();
     price = TextEditingController();
 
-    // Start with nothing enabled — tutor explicitly enables what they offer
     enabledAttributes.clear();
     selectedAttributes.clear();
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Tutor-side: enabling / disabling attribute groups
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Attribute Groups
+  // ─────────────────────────────────────────────
 
-  /// All possible attribute group keys.
   List<String> get allAttributeKeys =>
       _defaultAttributeOptions.keys.toList(growable: false);
 
-  /// The possible values for [groupKey].
   List<String> optionsFor(String groupKey) =>
       _defaultAttributeOptions[groupKey] ?? [];
 
-  /// Toggles a whole attribute group on or off.
-  /// When enabled, [selectedAttributes] is seeded with the first value
-  /// so dynamic pricing and the detail page always have a valid default.
   void toggleAttributeGroup(String groupKey) {
     if (enabledAttributes.contains(groupKey)) {
       enabledAttributes.remove(groupKey);
@@ -93,40 +64,30 @@ class SessionCreationController extends GetxController {
     } else {
       enabledAttributes.add(groupKey);
       final options = optionsFor(groupKey);
-      if (options.isNotEmpty) {
-        selectedAttributes[groupKey] = options.first;
-      }
+      if (options.isNotEmpty) selectedAttributes[groupKey] = options.first;
     }
   }
 
   bool isGroupEnabled(String groupKey) => enabledAttributes.contains(groupKey);
 
-  // ─────────────────────────────────────────────────────────────────
-  // Tutee-side: picking a value within an enabled group
-  // ─────────────────────────────────────────────────────────────────
-
-  /// Called when the tutee selects [value] for [groupKey] on the detail page.
   void onAttributeSelected(String groupKey, String value) {
     if (!enabledAttributes.contains(groupKey)) return;
     selectedAttributes[groupKey] = value;
   }
 
-  /// Returns the tutee's current selection for [groupKey],
-  /// falling back to the first available option if nothing is set.
   String? getSelectedValue(String groupKey) {
     if (selectedAttributes.containsKey(groupKey)) {
       return selectedAttributes[groupKey];
     }
+
     final options = optionsFor(groupKey);
     return options.isNotEmpty ? options.first : null;
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Dynamic pricing
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Dynamic Pricing
+  // ─────────────────────────────────────────────
 
-  /// Calculates the adjusted price based on the tutee's current selections
-  /// across enabled attribute groups.
   double calculateDynamicPrice(TutoringSession session) {
     double adjusted = session.pricePerSession ?? 0;
 
@@ -141,9 +102,9 @@ class SessionCreationController extends GetxController {
     return adjusted;
   }
 
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
   // Thumbnail
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
 
   String? get selectedThumbnail =>
       subjectId.value.isNotEmpty ? _seededThumbnails[subjectId.value] : null;
@@ -170,20 +131,24 @@ class SessionCreationController extends GetxController {
         'https://p2p-tutoring-assets.s3.amazonaws.com/images/courses/others.png',
   };
 
-  // ─────────────────────────────────────────────────────────────────
-  // Tutor resolution
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Tutor Resolution
+  // ─────────────────────────────────────────────
 
   Future<Tutor> getOrCreateTutor() async {
     if (_cachedTutor != null) return _cachedTutor!;
 
     final user = UserController.instance.currentUser.value;
-    if (user == null) throw Exception('User not signed in');
+
+    if (user == null) {
+      throw Exception('User not signed in');
+    }
 
     final byEmail = await Amplify.DataStore.query(
       Tutor.classType,
       where: Tutor.EMAIL.eq(user.email),
     );
+
     if (byEmail.isNotEmpty) {
       _cachedTutor = byEmail.first;
       return _cachedTutor!;
@@ -195,17 +160,20 @@ class SessionCreationController extends GetxController {
       about: (user.about?.isNotEmpty ?? false) ? user.about : null,
       skills: (user.skills?.isNotEmpty ?? false) ? user.skills! : [],
     );
+
     await Amplify.DataStore.save(newTutor);
+
     _cachedTutor = newTutor;
     return _cachedTutor!;
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Create session
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Create Session
+  // ─────────────────────────────────────────────
 
   Future<void> createSession() async {
     if (!formKey.currentState!.validate()) return;
+
     if (subjectId.value.isEmpty) {
       Get.snackbar('Error', 'Please select a subject');
       return;
@@ -215,45 +183,103 @@ class SessionCreationController extends GetxController {
 
     try {
       final tutor = await getOrCreateTutor();
+      final sessionId = UUID.getUUID();
 
-      final subjects = await Amplify.DataStore.query(
-        Subject.classType,
-        where: Subject.ID.eq(subjectId.value),
+      final priceVal =
+          isFree.value ? 0.0 : double.tryParse(price.text.trim()) ?? 0.0;
+
+      final mutationDoc = """
+mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
+  createTutoringSession(input: \$input) {
+    id
+    title
+    description
+    pricePerSession
+    thumbnail
+    tutorId
+    subjectId
+    isFeatured
+    hasPaid
+    createdAt
+    updatedAt
+  }
+}
+""";
+
+      final variables = {
+        'input': {
+          'id': sessionId,
+          'title': title.text.trim(),
+          'description': description.text.trim(),
+          'pricePerSession': priceVal,
+          'thumbnail': selectedThumbnail,
+          'tutorId': tutor.id,
+          'subjectId': subjectId.value,
+          'isFeatured': false,
+          'hasPaid': false,
+        },
+      };
+
+      final request = GraphQLRequest<String>(
+        document: mutationDoc,
+        variables: variables,
       );
-      if (subjects.isEmpty) {
-        Get.snackbar('Error', 'Subject not found');
+
+      final response = await Amplify.API.mutate(request: request).response;
+
+      if (response.errors.isNotEmpty) {
+        safePrint('❌ GraphQL errors: ${response.errors}');
+        Get.snackbar(
+          'Error',
+          'Failed to create session: ${response.errors.first.message}',
+        );
         return;
       }
 
-      final session = TutoringSession(
-        title: title.text.trim(),
-        description: description.text.trim(),
-        pricePerSession:
-            isFree.value ? 0 : (double.tryParse(price.text.trim()) ?? 0),
-        thumbnail: selectedThumbnail,
-        tutor: tutor,
-        subject: subjects.first,
-      );
+      safePrint('✅ Session created via GraphQL: $sessionId');
 
-      await Amplify.DataStore.save(session);
-
-      // Only save SessionAttribute records for groups the tutor enabled.
-      // Each record stores the full list of options for that group so the
-      // tutee can pick from them on the detail page.
+      // Save attributes
       for (final key in enabledAttributes) {
         final options = optionsFor(key);
         if (options.isEmpty) continue;
+
+        final sessionRef = TutoringSession(
+          id: sessionId,
+          title: title.text.trim(),
+        );
+
         final attr = SessionAttribute(
           name: key,
           values: options,
-          session: session,
+          session: sessionRef,
           tutorId: tutor.id,
         );
+
         await Amplify.DataStore.save(attr);
       }
 
+      // Optimistic UI update
       if (Get.isRegistered<HomeController>()) {
-        Get.find<HomeController>().recentSessions.insert(0, session);
+        final subjects = await Amplify.DataStore.query(
+          Subject.classType,
+          where: Subject.ID.eq(subjectId.value),
+        );
+
+        final optimisticSession = TutoringSession(
+          id: sessionId,
+          title: title.text.trim(),
+          description: description.text.trim(),
+          pricePerSession: priceVal,
+          thumbnail: selectedThumbnail,
+          tutor: tutor,
+          subject: subjects.isNotEmpty ? subjects.first : null,
+        );
+
+        final home = Get.find<HomeController>();
+
+        home.warmTutorCache(tutor);
+        home.allSessions.insert(0, optimisticSession);
+        home.recentSessions.insert(0, optimisticSession);
       }
 
       Get.back();
@@ -266,14 +292,9 @@ class SessionCreationController extends GetxController {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Detail-screen initialisation
-  //
-  // Called by SessionDetailScreen._initializeAttributes().
-  // Populates [enabledAttributes] and [selectedAttributes] from the
-  // SessionAttribute records already saved in DataStore so the tutee
-  // sees only what the tutor enabled, defaulting to the first option.
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Detail Screen Initialization
+  // ─────────────────────────────────────────────
 
   void initializeAttributesForSession(Map<String, List<String>> attrs) {
     enabledAttributes.clear();
@@ -282,18 +303,15 @@ class SessionCreationController extends GetxController {
     attrs.forEach((key, values) {
       if (values.isNotEmpty) {
         enabledAttributes.add(key);
-        // Default to the first value (tutee can change later)
         selectedAttributes[key] = values.first;
       }
     });
   }
 
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
   // Helpers
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
 
-  /// Flat list of every enabled-group + value combination. Used by
-  /// booking logic that needs a concrete attribute map.
   Map<String, String> get effectiveSelections =>
       Map<String, String>.from(selectedAttributes);
 
