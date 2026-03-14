@@ -23,6 +23,7 @@ class TRoutes {
   // Booking / Cart / Checkout
   static const bookings = '/bookings';
   static const bookingScreen = '/booking-screen';
+  static const bookingsScreen = '/bookings-screen'; // ✅ added
   static const cartScreen = '/cart-screen';
   static const checkoutScreen = '/checkout-screen';
   static const paymentScreen = '/payment-screen';

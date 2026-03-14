@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 
 import '../bindings/notification_binding.dart';
 import '../screens/login/login_screen.dart';
-import '../screens/signup/signup_screen.dart'; // ✅ import signup screen
+import '../screens/signup/signup_screen.dart';
 import '../screens/welcome/welcome_screen.dart';
 import '../screens/splash_screen/splash_screen.dart';
 import '../screens/on_boarding/on_boarding_screen.dart';
@@ -29,7 +29,8 @@ class AppRoutes {
     GetPage(name: TRoutes.onboarding, page: () => OnBoardingScreen()),
     GetPage(name: TRoutes.welcome, page: () => WelcomeScreen()),
     GetPage(name: TRoutes.logIn, page: () => LoginScreen()),
-    GetPage(name: TRoutes.signUp, page: () => SignupScreen()), // ✅ added
+    GetPage(name: TRoutes.signUp, page: () => SignupScreen()),
+
     // Auth helpers
     GetPage(name: TRoutes.phoneSignIn, page: () => OTPScreen()),
     GetPage(name: TRoutes.otpVerification, page: () => OTPScreen()),
@@ -45,6 +46,10 @@ class AppRoutes {
     // Booking / Cart / Checkout
     GetPage(name: TRoutes.bookings, page: () => BookingScreen()),
     GetPage(name: TRoutes.bookingScreen, page: () => BookingScreen()),
+    GetPage(
+      name: TRoutes.bookingsScreen,
+      page: () => BookingScreen(),
+    ), // ✅ added
     GetPage(
       name: TRoutes.cartScreen,
       page: () => const _FeaturePlaceholder('Cart'),

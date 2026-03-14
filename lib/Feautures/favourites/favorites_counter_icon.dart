@@ -1,15 +1,17 @@
+// t_favourite_counter_icon.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../../utils/constants/colors.dart';
+import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/helpers/helper_functions.dart';
-import '../../../utils/constants/sizes.dart';
-import '../controllers/booking_controller.dart';
-import 'booking_screen.dart';
+import '../Courses/controllers/tutoring_controller.dart';
+import '../dashboard/Home/controllers/home_controller.dart';
+import 'favourite.dart';
 
-class TBookingCounterIcon extends StatelessWidget {
-  const TBookingCounterIcon({
+class TFavouriteCounterIcon extends StatelessWidget {
+  const TFavouriteCounterIcon({
     super.key,
     this.iconColor,
     this.counterBgColor,
@@ -20,19 +22,23 @@ class TBookingCounterIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = BookingController.instance;
+    final tutoringController = TutoringController.instance;
     final dark = THelperFunctions.isDarkMode(context);
 
     return Stack(
       children: [
         IconButton(
-          onPressed: () => Get.to(() => const BookingScreen()),
-          icon: Icon(Iconsax.shopping_bag, color: iconColor),
+          onPressed:
+              () => Get.to(
+                () =>
+                    FavouriteScreen(homeController: Get.find<HomeController>()),
+              ),
+          icon: Icon(Iconsax.heart, color: iconColor),
         ),
         Positioned(
           right: 0,
           child: Obx(() {
-            final count = controller.totalBookedSessions();
+            final count = tutoringController.favoriteSessions().length;
             if (count == 0) return const SizedBox.shrink();
             return Container(
               width: TSizes.fontSizeLg,

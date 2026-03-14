@@ -43,6 +43,21 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
       final reviews = await _tutoringController.fetchReviews(
         _currentSession.id,
       );
+      // Creator reviews pinned first, then newest first within each group.
+      reviews.sort((a, b) {
+        final aIsCreator =
+            a.user?.email != null &&
+            a.tutor?.email != null &&
+            a.user!.email == a.tutor!.email;
+        final bIsCreator =
+            b.user?.email != null &&
+            b.tutor?.email != null &&
+            b.user!.email == b.tutor!.email;
+        if (aIsCreator != bIsCreator) return aIsCreator ? -1 : 1;
+        final aDate = a.createdAt?.getDateTimeInUtc() ?? DateTime(0);
+        final bDate = b.createdAt?.getDateTimeInUtc() ?? DateTime(0);
+        return bDate.compareTo(aDate);
+      });
       setState(() {
         _reviews = reviews;
         _loading = false;
@@ -72,6 +87,7 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
     setState(() => _submitting = true);
 
     try {
+      // ✅ FIX: Resolve tutor if the lazy BelongsTo stub is null.
       if (_currentSession.tutor == null) {
         final tutorId = _currentSession.tutor?.id;
         if (tutorId != null && tutorId.isNotEmpty) {
@@ -89,14 +105,21 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
         }
       }
 
-      final newReview = await _tutoringController.addReview(
+      // addReview now returns a fully hydrated Review (user.username populated).
+      await _tutoringController.addReview(
         session: _currentSession,
         rating: _rating,
         comment: _commentController.text.trim(),
       );
 
+      // ✅ FIX: Re-fetch the full list so the reviews shown on this screen
+      //    also have hydrated user names — not just the one we just added.
+      final updatedReviews = await _tutoringController.fetchReviews(
+        _currentSession.id,
+      );
+
       setState(() {
-        _reviews.insert(0, newReview);
+        _reviews = updatedReviews;
         _rating = 0;
         _commentController.clear();
         _submitting = false;
@@ -108,6 +131,7 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
         snackPosition: SnackPosition.BOTTOM,
       );
 
+      // ✅ FIX: Always pop with result: true so the detail screen refreshes.
       Get.back(result: true);
     } catch (e) {
       setState(() => _submitting = false);
@@ -154,7 +178,7 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Summary hero ─────────────────────────────────────
+                    // ── Summary hero ──────────────────────────────────────
                     _RatingSummaryCard(
                       averageRating: _averageRating,
                       reviewCount: _reviews.length,
@@ -253,7 +277,6 @@ class _RatingSummaryCard extends StatelessWidget {
               )
               : Row(
                 children: [
-                  // Big average number
                   Text(
                     averageRating.toStringAsFixed(1),
                     style: theme.textTheme.displayMedium?.copyWith(
@@ -487,15 +510,27 @@ class _ReviewTile extends StatelessWidget {
     final initial = username.isNotEmpty ? username[0].toUpperCase() : "?";
     final hasAvatar = review.user?.profilePicture?.isNotEmpty ?? false;
 
+    // ✅ Creator tag: reviewer is the tutor who owns the session.
+    final isCreator =
+        review.user?.email != null &&
+        review.tutor?.email != null &&
+        review.user!.email == review.tutor!.email;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: colorScheme.surface,
+          color:
+              isCreator
+                  ? TColors.primary.withValues(alpha: 0.05)
+                  : colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: colorScheme.outline.withValues(alpha: 0.15),
+            color:
+                isCreator
+                    ? TColors.primary.withValues(alpha: 0.25)
+                    : colorScheme.outline.withValues(alpha: 0.15),
           ),
           boxShadow: [
             BoxShadow(
@@ -532,16 +567,27 @@ class _ReviewTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
 
-                // Name + date
+                // Name + creator tag + date
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        username,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              username,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isCreator) ...[
+                            const SizedBox(width: 6),
+                            _CreatorTag(colorScheme: colorScheme),
+                          ],
+                        ],
                       ),
                       if (date.isNotEmpty)
                         Text(
@@ -593,6 +639,42 @@ class _ReviewTile extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Creator tag badge
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CreatorTag extends StatelessWidget {
+  const _CreatorTag({required this.colorScheme});
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: TColors.primary,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.verified_rounded, size: 10, color: Colors.white),
+          SizedBox(width: 3),
+          Text(
+            'Creator',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
       ),
     );
   }

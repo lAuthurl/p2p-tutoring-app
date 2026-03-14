@@ -5,8 +5,10 @@ import 'dart:io';
 
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:get/get.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -15,36 +17,7 @@ import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../Feautures/Courses/controllers/tutoring_controller.dart';
 
-// ─────────────────────────────────────────────
-// ARCHITECTURE NOTES
-//
-// One-to-many model:
-//   • A TutoringSession IS the conversation.
-//   • Students send messages into a session by sessionId.
-//   • The tutor's InboxScreen lists all sessions that have
-//     at least one message, showing the session title and
-//     the last sender's name — no client-side grouping hacks.
-//   • TutoringController exposes:
-//       - activeSessions      : RxList<TutoringSession>
-//       - sessionMessages     : RxMap<String, List<ChatMessage>>
-//       - observeChat(id)     : subscribe to AppSync for a session
-//       - sendMessage(id, text)
-//       - sendVoiceMessage(id, file)
-//       - markSessionRead(id)
-//       - authUserId          : Future<String?>
-//
-//  ChatMessage model fields expected:
-//       id, sessionId, senderId, senderName,
-//       text, isVoice, audioUrl, createdAt
-//
-//  TutoringSession model fields used:
-//       id, title, tutor (nested Tutor object)
-//  Student name is sourced from ChatMessage.senderName
-// ─────────────────────────────────────────────
-
-/// ==========================
-/// Inbox Screen  (Tutor view)
-/// ==========================
+// ── InboxScreen ───────────────────────────────────────────────────────────────
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
 
@@ -62,9 +35,6 @@ class _InboxScreenState extends State<InboxScreen> {
     _load();
   }
 
-  /// Fetches the tutor's sessions, then queries all ChatMessages whose
-  /// sessionId starts with each session's base id (format: sessionId_userId).
-  /// This discovers every unique student thread and subscribes to each one.
   Future<void> _load() async {
     await controller.fetchTutorSessions();
     await controller.fetchAllStudentThreads();
@@ -73,24 +43,46 @@ class _InboxScreenState extends State<InboxScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
+      backgroundColor: colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: const Text("Messages"),
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          'Messages',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
+          ),
+        ),
         actions: [
-          IconButton(icon: const Icon(Icons.settings), onPressed: () {}),
+          IconButton(
+            icon: Icon(
+              Iconsax.setting_2,
+              size: 20,
+              color: colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+            onPressed: () {},
+          ),
         ],
       ),
       body:
           _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: TColors.primary,
+                ),
+              )
               : Obx(() {
-                // sessionMessages keys are scoped chatIds: "baseSessionId_userId"
-                // Each student gets their own private thread with the tutor.
                 final sessionMap = controller.sessionMessages;
                 final baseSessions = controller.activeSessions;
                 final baseIds = baseSessions.map((s) => s.id).toSet();
 
-                // Collect all chatIds that belong to this tutor's sessions.
                 final chatIds =
                     sessionMap.keys
                         .where(
@@ -101,10 +93,9 @@ class _InboxScreenState extends State<InboxScreen> {
                         .toList();
 
                 if (chatIds.isEmpty) {
-                  return const Center(child: Text("No conversations yet"));
+                  return _EmptyInbox();
                 }
 
-                // Sort by most recent message first.
                 chatIds.sort((a, b) {
                   final aTime =
                       sessionMap[a]?.last.createdAt?.getDateTimeInUtc();
@@ -116,80 +107,42 @@ class _InboxScreenState extends State<InboxScreen> {
                   return bTime.compareTo(aTime);
                 });
 
-                return ListView.separated(
-                  padding: const EdgeInsets.all(TSizes.defaultSpace),
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TSizes.defaultSpace,
+                    vertical: 12,
+                  ),
                   itemCount: chatIds.length,
-                  separatorBuilder:
-                      (_, __) => const SizedBox(height: TSizes.spaceBtwItems),
                   itemBuilder: (context, index) {
                     final chatId = chatIds[index];
                     final messages = sessionMap[chatId] ?? [];
                     final lastMessage = messages.last;
                     final lastTime = lastMessage.createdAt?.getDateTimeInUtc();
                     final unreadCount = controller.unreadCount(chatId);
+                    final hasUnread = unreadCount > 0;
                     final lastText =
                         (lastMessage.isVoice == true)
-                            ? "🎤 Voice message"
+                            ? '🎤 Voice message'
                             : (lastMessage.text ?? '');
                     final studentName = lastMessage.senderName ?? 'Student';
-
-                    // Match back to the base session for the title.
                     final baseSession = baseSessions.firstWhereOrNull(
                       (s) => chatId.startsWith(s.id),
                     );
                     final sessionTitle = baseSession?.title ?? chatId;
+                    final initials =
+                        studentName.isNotEmpty
+                            ? studentName
+                                .trim()
+                                .split(' ')
+                                .map((e) => e[0])
+                                .take(2)
+                                .join()
+                                .toUpperCase()
+                            : '?';
 
-                    return ListTile(
-                      leading: CircleAvatar(
-                        radius: 25,
-                        backgroundColor: TColors.primary,
-                        child: Text(
-                          studentName.isNotEmpty
-                              ? studentName[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            color: TColors.textDarkPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        sessionTitle,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(
-                        "$studentName · $lastText",
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (lastTime != null)
-                            Text(
-                              _formatTime(lastTime),
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          const SizedBox(height: 5),
-                          if (unreadCount > 0)
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(
-                                color: Colors.blue,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                unreadCount.toString(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                    return GestureDetector(
                       onTap: () {
+                        HapticFeedback.lightImpact();
                         controller.markSessionRead(chatId);
                         Get.to(
                           () => ChatScreen(
@@ -199,6 +152,143 @@ class _InboxScreenState extends State<InboxScreen> {
                           ),
                         );
                       },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color:
+                                hasUnread
+                                    ? TColors.primary.withValues(alpha: 0.2)
+                                    : colorScheme.outline.withValues(
+                                      alpha: 0.1,
+                                    ),
+                            width: hasUnread ? 1 : 0.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            // Avatar
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: TColors.primary.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  initials,
+                                  style: TextStyle(
+                                    color: TColors.primary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            // Content
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          sessionTitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight:
+                                                hasUnread
+                                                    ? FontWeight.w700
+                                                    : FontWeight.w600,
+                                            color: colorScheme.onSurface,
+                                            letterSpacing: -0.2,
+                                          ),
+                                        ),
+                                      ),
+                                      if (lastTime != null)
+                                        Text(
+                                          _formatTime(lastTime),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color:
+                                                hasUnread
+                                                    ? TColors.primary
+                                                    : colorScheme.onSurface
+                                                        .withValues(
+                                                          alpha: 0.35,
+                                                        ),
+                                            fontWeight:
+                                                hasUnread
+                                                    ? FontWeight.w600
+                                                    : FontWeight.w400,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 4),
+
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          '$studentName · $lastText',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color:
+                                                hasUnread
+                                                    ? colorScheme.onSurface
+                                                        .withValues(alpha: 0.7)
+                                                    : colorScheme.onSurface
+                                                        .withValues(alpha: 0.4),
+                                            fontWeight:
+                                                hasUnread
+                                                    ? FontWeight.w500
+                                                    : FontWeight.w400,
+                                          ),
+                                        ),
+                                      ),
+                                      if (hasUnread)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: TColors.primary,
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            unreadCount.toString(),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                   },
                 );
@@ -211,27 +301,69 @@ class _InboxScreenState extends State<InboxScreen> {
     if (now.day == time.day &&
         now.month == time.month &&
         now.year == time.year) {
-      return "${time.hour}:${time.minute.toString().padLeft(2, '0')}";
+      return '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
     }
-    return "${time.day}/${time.month}";
+    return '${time.day}/${time.month}';
   }
 }
 
-/// ==========================
-/// Chat Screen
-/// ==========================
-///
-/// Used by BOTH student and tutor.
-///   - Student opens it from their session/booking screen.
-///   - Tutor opens it from InboxScreen above.
-///
-/// Required: sessionId — the single source of truth for
-/// which AppSync subscription / DynamoDB partition to use.
+// ── Empty inbox state ─────────────────────────────────────────────────────────
+class _EmptyInbox extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: TColors.primary.withValues(alpha: 0.05),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: TColors.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              Icon(Iconsax.message, size: 30, color: TColors.primary),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'No conversations yet',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Student messages will appear here',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── ChatScreen ────────────────────────────────────────────────────────────────
 class ChatScreen extends StatefulWidget {
   final String sessionId;
   final String sessionTitle;
-  final String
-  otherUserName; // Tutor name (for student) or Student name (for tutor)
+  final String otherUserName;
 
   const ChatScreen({
     super.key,
@@ -263,7 +395,6 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _initAudio();
     _fetchCurrentUser();
-    // Subscribe to real-time updates for this session only.
     controller.observeChat(widget.sessionId);
     _textController.addListener(() => setState(() {}));
   }
@@ -307,17 +438,14 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!_isRecording) {
       final status = await Permission.microphone.request();
       if (!status.isGranted) return;
-
       final dir = await getTemporaryDirectory();
       final path =
           '${dir.path}/${widget.sessionId}_${DateTime.now().millisecondsSinceEpoch}.aac';
-
       await _recorder!.startRecorder(toFile: path, codec: Codec.aacADTS);
       setState(() => _isRecording = true);
     } else {
       final path = await _recorder!.stopRecorder();
       setState(() => _isRecording = false);
-
       if (path != null && _currentUserId != null) {
         await controller.sendVoiceMessage(widget.sessionId, File(path));
       }
@@ -326,20 +454,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _playVoice(ChatMessage message) async {
     if (message.audioUrl == null) return;
-
     if (_currentlyPlayingId == message.id) {
       await _player!.stopPlayer();
       setState(() => _currentlyPlayingId = null);
       return;
     }
-
     await _player!.startPlayer(
       fromURI: message.audioUrl,
       whenFinished: () {
         if (mounted) setState(() => _currentlyPlayingId = null);
       },
     );
-
     _playerSubscription?.cancel();
     _playerSubscription = _player!.onProgress!.listen((event) {
       final duration = event.duration.inMilliseconds;
@@ -367,21 +492,49 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final isTextEmpty = _textController.text.trim().isEmpty;
+    final initials =
+        widget.otherUserName.isNotEmpty
+            ? widget.otherUserName
+                .trim()
+                .split(' ')
+                .map((e) => e[0])
+                .take(2)
+                .join()
+                .toUpperCase()
+            : '?';
 
     return Scaffold(
+      backgroundColor: colorScheme.surfaceContainerLowest,
+
+      // ── App bar ─────────────────────────────────────────────
       appBar: AppBar(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leadingWidth: 40,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+          onPressed: () => Get.back(),
+        ),
         title: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: TColors.primary,
-              child: Text(
-                widget.otherUserName.isNotEmpty
-                    ? widget.otherUserName[0].toUpperCase()
-                    : '?',
-                style: const TextStyle(
-                  color: TColors.textDarkPrimary,
-                  fontWeight: FontWeight.bold,
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: TColors.primary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                    color: TColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ),
@@ -392,26 +545,52 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Text(
                     widget.otherUserName,
-                    style: const TextStyle(fontSize: 16),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
                   ),
                   Text(
                     widget.sessionTitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.normal,
-                    ),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                 ],
               ),
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              Iconsax.call,
+              size: 18,
+              color: colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: Icon(
+              Iconsax.more,
+              size: 18,
+              color: colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+            onPressed: () {},
+          ),
+        ],
       ),
+
       body: Column(
         children: [
-          // ── Message list ──────────────────────────────
+          // ── Messages ───────────────────────────────────────
           Expanded(
             child: Obx(() {
               final messages =
@@ -423,133 +602,239 @@ class _ChatScreenState extends State<ChatScreen> {
               );
 
               if (messages.isEmpty) {
-                return const Center(
-                  child: Text(
-                    "No messages yet.\nSay hello! 👋",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey),
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Iconsax.message_add,
+                        size: 40,
+                        color: colorScheme.onSurface.withValues(alpha: 0.15),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No messages yet',
+                        style: TextStyle(
+                          color: colorScheme.onSurface.withValues(alpha: 0.4),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Say hello 👋',
+                        style: TextStyle(
+                          color: colorScheme.onSurface.withValues(alpha: 0.25),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }
 
               return ListView.builder(
                 controller: _scrollController,
-                padding: const EdgeInsets.all(TSizes.defaultSpace),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 itemCount: messages.length,
                 itemBuilder: (_, index) {
                   final message = messages[index];
                   final isMe = message.senderId == _currentUserId;
                   final isPlaying = _currentlyPlayingId == message.id;
 
-                  return Align(
-                    alignment:
-                        isMe ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(TSizes.sm),
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.72,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isMe ? TColors.primary : Colors.grey.shade200,
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(12),
-                          topRight: const Radius.circular(12),
-                          bottomLeft: Radius.circular(isMe ? 12 : 0),
-                          bottomRight: Radius.circular(isMe ? 0 : 12),
+                  // Date separator
+                  final showDate =
+                      index == 0 ||
+                      _isDifferentDay(
+                        messages[index - 1].createdAt?.getDateTimeInUtc(),
+                        message.createdAt?.getDateTimeInUtc(),
+                      );
+
+                  return Column(
+                    children: [
+                      if (showDate)
+                        _DateSeparator(
+                          time: message.createdAt?.getDateTimeInUtc(),
+                        ),
+                      Align(
+                        alignment:
+                            isMe ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
+                          margin: EdgeInsets.only(
+                            bottom: 6,
+                            left: isMe ? 48 : 0,
+                            right: isMe ? 0 : 48,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isMe ? TColors.primary : colorScheme.surface,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(16),
+                              topRight: const Radius.circular(16),
+                              bottomLeft: Radius.circular(isMe ? 16 : 4),
+                              bottomRight: Radius.circular(isMe ? 4 : 16),
+                            ),
+                            border:
+                                isMe
+                                    ? null
+                                    : Border.all(
+                                      color: colorScheme.outline.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      width: 0.5,
+                                    ),
+                          ),
+                          child:
+                              (message.isVoice ?? false)
+                                  ? _voiceBubble(message, isMe, isPlaying)
+                                  : Text(
+                                    message.text ?? '',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color:
+                                          isMe
+                                              ? Colors.white
+                                              : colorScheme.onSurface,
+                                      height: 1.4,
+                                    ),
+                                  ),
                         ),
                       ),
-                      child:
-                          (message.isVoice ?? false)
-                              ? _voiceBubble(message, isMe, isPlaying)
-                              : Text(
-                                message.text ?? '',
-                                style: TextStyle(
-                                  color: isMe ? Colors.white : Colors.black,
-                                ),
-                              ),
-                    ),
+                    ],
                   );
                 },
               );
             }),
           ),
 
-          // ── Input bar ─────────────────────────────────
-          Container(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            padding: const EdgeInsets.symmetric(
-              horizontal: TSizes.defaultSpace,
-              vertical: 8,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    minLines: 1,
-                    maxLines: 4,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: "Type a message...",
-                      filled: true,
-                      fillColor: TColors.dashboardAppbarBackground,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: isTextEmpty ? _toggleRecording : _sendTextMessage,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: TColors.primary,
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(14),
-                    minimumSize: Size.zero,
-                  ),
-                  child: Icon(
-                    isTextEmpty
-                        ? (_isRecording ? Icons.stop : Icons.mic)
-                        : Icons.send,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Recording indicator ───────────────────────
+          // ── Recording indicator ───────────────────────────
           if (_isRecording)
             Container(
-              color: Colors.red.shade50,
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              color: Colors.red.withValues(alpha: 0.06),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.fiber_manual_record,
-                    color: Colors.red,
-                    size: 14,
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Text(
-                    "Recording... tap stop when done",
-                    style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                    'Recording — tap stop when done',
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
             ),
+
+          // ── Input bar ─────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: colorScheme.outline.withValues(alpha: 0.08),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: SafeArea(
+              top: false,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Text field
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: colorScheme.outline.withValues(alpha: 0.1),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: TextField(
+                        controller: _textController,
+                        minLines: 1,
+                        maxLines: 4,
+                        textCapitalization: TextCapitalization.sentences,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: colorScheme.onSurface,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Message...',
+                          hintStyle: TextStyle(
+                            color: colorScheme.onSurface.withValues(
+                              alpha: 0.35,
+                            ),
+                            fontSize: 14,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  // Send / mic button
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      if (isTextEmpty) {
+                        _toggleRecording();
+                      } else {
+                        _sendTextMessage();
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: _isRecording ? Colors.red : TColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isTextEmpty
+                            ? (_isRecording ? Iconsax.stop : Iconsax.microphone)
+                            : Iconsax.send_1,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  bool _isDifferentDay(DateTime? a, DateTime? b) {
+    if (a == null || b == null) return false;
+    return a.day != b.day || a.month != b.month || a.year != b.year;
   }
 
   Widget _voiceBubble(ChatMessage msg, bool isMe, bool isPlaying) {
@@ -559,28 +844,54 @@ class _ChatScreenState extends State<ChatScreen> {
         GestureDetector(
           onTap: () => _playVoice(msg),
           child: Container(
-            padding: const EdgeInsets.all(6),
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: isMe ? Colors.white24 : Colors.black12,
+              color:
+                  isMe
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : TColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isPlaying ? Icons.pause : Icons.play_arrow,
+              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
               size: 18,
-              color: isMe ? Colors.white : Colors.black,
+              color: isMe ? Colors.white : TColors.primary,
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         SizedBox(
-          width: 120,
-          child: LinearProgressIndicator(
-            value: _playbackProgress[msg.id] ?? 0,
-            minHeight: 4,
-            backgroundColor: isMe ? Colors.white24 : Colors.black12,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              isMe ? Colors.white : TColors.primary,
-            ),
+          width: 100,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: _playbackProgress[msg.id] ?? 0,
+                  minHeight: 3,
+                  backgroundColor:
+                      isMe
+                          ? Colors.white.withValues(alpha: 0.25)
+                          : Colors.black.withValues(alpha: 0.08),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isMe ? Colors.white : TColors.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Voice message',
+                style: TextStyle(
+                  fontSize: 10,
+                  color:
+                      isMe
+                          ? Colors.white.withValues(alpha: 0.6)
+                          : Colors.black.withValues(alpha: 0.4),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -588,52 +899,65 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// REQUIRED CONTROLLER ADDITIONS  (add to TutoringController)
-// ─────────────────────────────────────────────────────────────────
-//
-// 1. Expose activeSessions so InboxScreen can list them:
-//
-//    final RxList<TutoringSession> activeSessions = <TutoringSession>[].obs;
-//
-//    // Call this in your controller's onInit / after fetching sessions:
-//    Future<void> fetchTutorSessions() async {
-//      final userId = await authUserId;
-//      // Query your TutoringSession model filtered by tutorId == userId
-//      // Populate activeSessions and call observeChat for each session
-//      // so the inbox message map is pre-warmed.
-//    }
-//
-// 2. Add unreadCount helper:
-//
-//    final Map<String, int> _unreadCounts = {};
-//
-//    int unreadCount(String sessionId) => _unreadCounts[sessionId] ?? 0;
-//
-//    @override
-//    void markSessionRead(String sessionId) {
-//      _unreadCounts[sessionId] = 0;
-//      // Optionally persist to backend / local storage
-//    }
-//
-//    // Increment in your subscription listener when a new message
-//    // arrives and the session is not currently open:
-//    void _onNewMessage(ChatMessage msg) {
-//      sessionMessages[msg.sessionId] ??= [];
-//      sessionMessages[msg.sessionId]!.add(msg);
-//      if (_currentOpenSessionId != msg.sessionId) {
-//        _unreadCounts[msg.sessionId] =
-//            (_unreadCounts[msg.sessionId] ?? 0) + 1;
-//      }
-//    }
-//
-// 3. Student entry point — no inbox needed for students:
-//
-//    // From student's booking/session detail screen:
-//    Get.to(() => ChatScreen(
-//      sessionId: session.id,
-//      sessionTitle: session.title ?? 'Your session',
-//      otherUserName: session.tutorName ?? 'Tutor',
-//    ));
-//
-// ─────────────────────────────────────────────────────────────────
+// ── Date separator ────────────────────────────────────────────────────────────
+class _DateSeparator extends StatelessWidget {
+  final DateTime? time;
+  const _DateSeparator({this.time});
+
+  @override
+  Widget build(BuildContext context) {
+    if (time == null) return const SizedBox.shrink();
+    final colorScheme = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    String label;
+    if (now.day == time!.day &&
+        now.month == time!.month &&
+        now.year == time!.year) {
+      label = 'Today';
+    } else if (now.subtract(const Duration(days: 1)).day == time!.day) {
+      label = 'Yesterday';
+    } else {
+      label = '${time!.day}/${time!.month}/${time!.year}';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Divider(
+              color: colorScheme.outline.withValues(alpha: 0.1),
+              thickness: 0.5,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.5,
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: colorScheme.onSurface.withValues(alpha: 0.4),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Divider(
+              color: colorScheme.outline.withValues(alpha: 0.1),
+              thickness: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

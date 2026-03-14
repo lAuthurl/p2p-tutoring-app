@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import '../../../../../common/widgets/appbar/appbar.dart';
 import '../../../../../common/widgets/custom_shapes/curved_edges/curved_edges_widget.dart';
-import '../../../../../common/widgets/images/t_rounded_image.dart';
 import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/helpers/helper_functions.dart';
@@ -24,80 +23,56 @@ class TSessionImageSlider extends StatelessWidget {
   final String? selectedImage;
   final void Function(String image)? onImageSelected;
 
-  /// Returns a widget for tutor avatar: image if available, otherwise initials
-  Widget _tutorIconWidget(Tutor? tutor) {
+  Widget _tutorAvatar(Tutor? tutor) {
     if (tutor == null) {
-      return CircleAvatar(
-        radius: 28,
-        backgroundColor: TColors.primary,
-        child: const Text(
-          '?',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      );
+      return _InitialsAvatar(initials: '?');
     }
-
     if (tutor.image != null && tutor.image!.isNotEmpty) {
       return CircleAvatar(
-        radius: 28,
-        backgroundColor: TColors.textWhite,
+        radius: 22,
+        backgroundColor: Colors.white.withValues(alpha: 0.15),
         child: ClipOval(
           child: SizedBox(
-            width: 48,
-            height: 48,
+            width: 44,
+            height: 44,
             child:
                 tutor.image!.startsWith('http')
-                    ? Image.network(tutor.image!, fit: BoxFit.cover)
+                    ? Image.network(
+                      tutor.image!,
+                      fit: BoxFit.cover,
+                      errorBuilder:
+                          (_, _, _) =>
+                              _InitialsAvatar(initials: _initials(tutor.name)),
+                    )
                     : Image.asset(tutor.image!, fit: BoxFit.cover),
           ),
         ),
       );
-    } else {
-      final initials =
-          tutor.name
-              .trim()
-              .split(' ')
-              .map((e) => e[0])
-              .take(2)
-              .join()
-              .toUpperCase();
-      return CircleAvatar(
-        radius: 28,
-        backgroundColor: TColors.primary,
-        child: Text(
-          initials,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-      );
     }
+    return _InitialsAvatar(initials: _initials(tutor.name));
   }
+
+  String _initials(String name) =>
+      name.trim().split(' ').map((e) => e[0]).take(2).join().toUpperCase();
 
   @override
   Widget build(BuildContext context) {
     final controller = TutoringController.instance;
     final images = controller.getAllSessionImages(session);
-
     final filteredImages =
         images.where((img) => img != session.tutor?.image).toList();
     final visibleImages =
         filteredImages.length > 1 ? filteredImages.sublist(1) : <String>[];
+    final tutorName = session.tutor?.name ?? '';
 
     return TCurvedEdgesWidget(
       child: Container(
         color: Theme.of(context).colorScheme.surface,
         child: Stack(
           children: [
-            // Main Large Image
+            // ── Hero image ──────────────────────────────────────────
             SizedBox(
-              height: 360,
+              height: 380,
               width: double.infinity,
               child: Builder(
                 builder: (_) {
@@ -107,7 +82,6 @@ class TSessionImageSlider extends StatelessWidget {
                           : (controller.selectedSessionImage.value.isEmpty
                               ? session.thumbnail ?? ''
                               : controller.selectedSessionImage.value);
-
                   final cleaned = THelperFunctions.normalizeImagePath(image);
 
                   if (cleaned.isEmpty) {
@@ -126,19 +100,17 @@ class TSessionImageSlider extends StatelessWidget {
                       width: double.infinity,
                       height: double.infinity,
                       loadingBuilder: (context, child, progress) {
-                        if (progress == null) return child;
-                        return const Center(child: CircularProgressIndicator());
-                      },
-                      frameBuilder: (context, child, frame, _) {
-                        if (frame == null) return const SizedBox.shrink();
-                        return AnimatedOpacity(
-                          opacity: 1,
-                          duration: const Duration(milliseconds: 180),
-                          child: child,
-                        );
+                        if (progress == null) {
+                          return AnimatedOpacity(
+                            opacity: 1,
+                            duration: const Duration(milliseconds: 220),
+                            child: child,
+                          );
+                        }
+                        return _ShimmerPlaceholder();
                       },
                       errorBuilder:
-                          (_, __, ___) => Image.asset(
+                          (_, _, _) => Image.asset(
                             TImages.tutorPromo1,
                             fit: BoxFit.cover,
                             width: double.infinity,
@@ -157,80 +129,124 @@ class TSessionImageSlider extends StatelessWidget {
               ),
             ),
 
-            // Small tutor icon
+            // ── Bottom gradient overlay ─────────────────────────────
             Positioned(
-              left: TSizes.defaultSpace,
-              bottom: 30,
-              child: GestureDetector(
-                onTap: () {
-                  if (onImageSelected != null) {
-                    onImageSelected!(session.tutor?.image ?? '');
-                  } else {
-                    controller.selectedSessionImage.value =
-                        session.tutor?.image ?? '';
-                  }
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: TColors.borderDark, width: 2),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black26, blurRadius: 4),
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 160,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.55),
                     ],
                   ),
-                  child: _tutorIconWidget(session.tutor),
                 ),
               ),
             ),
 
-            // Image Slider Thumbnails
+            // ── Tutor chip + thumbnails row ────────────────────────
             Positioned(
-              right: 0,
-              bottom: 30,
               left: TSizes.defaultSpace,
-              child: SizedBox(
-                height: 80,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  itemCount: visibleImages.length,
-                  separatorBuilder:
-                      (_, _) => const SizedBox(width: TSizes.spaceBtwItems),
-                  itemBuilder: (_, index) {
-                    final imageSelected =
-                        (selectedImage?.isNotEmpty ?? false)
-                            ? selectedImage == visibleImages[index]
-                            : controller.selectedSessionImage.value ==
-                                visibleImages[index];
-
-                    return TRoundedImage(
-                      width: 80,
-                      fit: BoxFit.cover,
-                      imageUrl: visibleImages[index],
-                      isNetworkImage: visibleImages[index].startsWith('http'),
-                      padding: const EdgeInsets.all(TSizes.sm),
-                      backgroundColor: TColors.darkBackground,
-                      onPressed: () {
-                        if (onImageSelected != null) {
-                          onImageSelected!(visibleImages[index]);
-                        } else {
-                          controller.selectedSessionImage.value =
-                              visibleImages[index];
-                        }
-                      },
-                      border: Border.all(
-                        color:
-                            imageSelected
-                                ? TColors.primary
-                                : Colors.transparent,
+              right: TSizes.defaultSpace,
+              bottom: 20,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Tutor avatar + name chip
+                  GestureDetector(
+                    onTap: () {
+                      if (onImageSelected != null) {
+                        onImageSelected!(session.tutor?.image ?? '');
+                      } else {
+                        controller.selectedSessionImage.value =
+                            session.tutor?.image ?? '';
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
                       ),
-                    );
-                  },
-                ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(40),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _tutorAvatar(session.tutor),
+                          if (tutorName.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 110),
+                              child: Text(
+                                tutorName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  // Thumbnails
+                  if (visibleImages.isNotEmpty)
+                    Expanded(
+                      child: SizedBox(
+                        height: 64,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: visibleImages.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (_, index) {
+                            final isSelected =
+                                (selectedImage?.isNotEmpty ?? false)
+                                    ? selectedImage == visibleImages[index]
+                                    : controller.selectedSessionImage.value ==
+                                        visibleImages[index];
+
+                            return _ThumbTile(
+                              imageUrl: visibleImages[index],
+                              isSelected: isSelected,
+                              onTap: () {
+                                if (onImageSelected != null) {
+                                  onImageSelected!(visibleImages[index]);
+                                } else {
+                                  controller.selectedSessionImage.value =
+                                      visibleImages[index];
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
 
-            // AppBar
+            // ── AppBar ─────────────────────────────────────────────
             TAppBar(
               showBackArrow: true,
               actions: [TFavouriteIcon(sessionId: session.id)],
@@ -240,6 +256,143 @@ class TSessionImageSlider extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Thumbnail tile ────────────────────────────────────────────────────────────
+class _ThumbTile extends StatelessWidget {
+  final String imageUrl;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ThumbTile({
+    required this.imageUrl,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        width: 60,
+        height: 64,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color:
+                isSelected
+                    ? TColors.primary
+                    : Colors.white.withValues(alpha: 0.25),
+            width: isSelected ? 2 : 0.5,
+          ),
+          boxShadow:
+              isSelected
+                  ? [
+                    BoxShadow(
+                      color: TColors.primary.withValues(alpha: 0.4),
+                      blurRadius: 6,
+                      spreadRadius: 0,
+                    ),
+                  ]
+                  : [],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(9),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 180),
+            opacity: isSelected ? 1.0 : 0.6,
+            child:
+                imageUrl.startsWith('http')
+                    ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder:
+                          (_, _, _) => Container(
+                            color: Colors.white.withValues(alpha: 0.1),
+                          ),
+                    )
+                    : Image.asset(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Initials avatar ───────────────────────────────────────────────────────────
+class _InitialsAvatar extends StatelessWidget {
+  final String initials;
+  const _InitialsAvatar({required this.initials});
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: TColors.primary,
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 15,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Shimmer placeholder ───────────────────────────────────────────────────────
+class _ShimmerPlaceholder extends StatefulWidget {
+  @override
+  State<_ShimmerPlaceholder> createState() => _ShimmerPlaceholderState();
+}
+
+class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(
+      begin: 0.3,
+      end: 0.7,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder:
+          (_, __) => Container(
+            width: double.infinity,
+            height: double.infinity,
+            color: Colors.grey.withValues(alpha: _anim.value),
+          ),
     );
   }
 }

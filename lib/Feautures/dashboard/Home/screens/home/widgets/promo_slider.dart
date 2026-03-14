@@ -1,11 +1,10 @@
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../../../common/widgets/custom_shapes/containers/circular_container.dart';
 import '../../../../../../common/widgets/images/t_rounded_image.dart';
+import '../../../../../../utils/constants/colors.dart';
 import '../../../../../../utils/constants/sizes.dart';
 
-/// -- Carousel slider for promotional banners (e.g., upcoming lectures, events)
 class TPromoSlider extends StatefulWidget {
   const TPromoSlider({super.key, required this.banners});
 
@@ -18,11 +17,11 @@ class TPromoSlider extends StatefulWidget {
 class _TPromoSliderState extends State<TPromoSlider> {
   final CarouselSliderController _carouselController =
       CarouselSliderController();
+  int _currentIndex = 0;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Pre-cache banner images to avoid visual lag when carousel advances
     for (final url in widget.banners) {
       try {
         if (url.startsWith('http')) {
@@ -34,56 +33,93 @@ class _TPromoSliderState extends State<TPromoSlider> {
     }
   }
 
-  int _currentIndex = 0;
-
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
       children: [
-        CarouselSlider(
-          carouselController: _carouselController,
-          options: CarouselOptions(
-            viewportFraction: 1,
-            autoPlay: true,
-            autoPlayInterval: const Duration(seconds: 5),
-            autoPlayAnimationDuration: const Duration(milliseconds: 800),
-            autoPlayCurve: Curves.easeInOut,
-            pauseAutoPlayOnTouch: true,
-            enableInfiniteScroll: true,
-            onPageChanged: (index, _) => setState(() => _currentIndex = index),
+        // ── Carousel ──────────────────────────────────────────────
+        ClipRRect(
+          borderRadius: BorderRadius.circular(TSizes.cardRadiusLg),
+          child: CarouselSlider(
+            carouselController: _carouselController,
+            options: CarouselOptions(
+              viewportFraction: 1,
+              autoPlay: true,
+              autoPlayInterval: const Duration(seconds: 5),
+              autoPlayAnimationDuration: const Duration(milliseconds: 600),
+              autoPlayCurve: Curves.easeInOut,
+              pauseAutoPlayOnTouch: true,
+              enableInfiniteScroll: true,
+              onPageChanged:
+                  (index, _) => setState(() => _currentIndex = index),
+            ),
+            items:
+                widget.banners
+                    .map(
+                      (url) => TRoundedImage(
+                        imageUrl: url,
+                        backgroundColor: Colors.transparent,
+                        borderRadius: 0,
+                      ),
+                    )
+                    .toList(),
           ),
-          items:
-              widget.banners
-                  .map(
-                    (url) => TRoundedImage(
-                      imageUrl: url,
-                      backgroundColor: Colors.transparent,
-                    ),
-                  )
-                  .toList(),
         ),
-        const SizedBox(height: TSizes.spaceBtwItems),
-        Center(
+
+        // ── Dot indicators — overlaid bottom-centre ───────────────
+        Positioned(
+          bottom: 12,
+          left: 0,
+          right: 0,
           child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (int i = 0; i < widget.banners.length; i++)
-                GestureDetector(
-                  onTap: () => _carouselController.animateToPage(i),
-                  child: TCircularContainer(
-                    width: 20,
-                    height: 4,
-                    margin: const EdgeInsets.only(right: 10),
-                    backgroundColor:
-                        _currentIndex == i
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.12),
-                    y: 0,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(widget.banners.length, (i) {
+              final isActive = _currentIndex == i;
+              return GestureDetector(
+                onTap: () => _carouselController.animateToPage(i),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeOut,
+                    width: isActive ? 22 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color:
+                          isActive
+                              ? TColors.dashboardAppbarBackground
+                              : TColors.dashboardAppbarBackground.withValues(
+                                alpha: 0.4,
+                              ),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
                 ),
-            ],
+              );
+            }),
+          ),
+        ),
+
+        // ── Slide counter pill — top-right ────────────────────────
+        Positioned(
+          top: 12,
+          right: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: TColors.dashboardAppbarBackground.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '${_currentIndex + 1} / ${widget.banners.length}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
+            ),
           ),
         ),
       ],

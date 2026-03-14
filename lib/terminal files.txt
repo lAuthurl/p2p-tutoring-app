@@ -5,4 +5,10 @@ flutter pub get
 amplify codegen models
 
 
-Fix filter problems for subject 
+CREATING SESSION BUG? DO RESEARCH NO SESSION LOADING OR SHOWING GIVE LOGS TO FIX 
+fix icon counter for messages 
+booking items should be per user and counter should load on startup 
+favorite button permanence
+fix the review system to work accross multiple accounts not just one 
+implement payment 
+redirect issues should be fixed 

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:liquid_swipe/liquid_swipe.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-
-import '../../../../../utils/constants/colors.dart';
 import '../../Feautures/dashboard/Home/controllers/subject_controller.dart';
 import '../../authentication/controllers/on_boarding_controller.dart';
 
@@ -20,9 +19,8 @@ class OnBoardingScreen extends StatelessWidget {
 
     return Scaffold(
       body: Stack(
-        alignment: Alignment.center,
         children: [
-          /// ---------------- Liquid Swipe ----------------
+          // ── Liquid swipe ──────────────────────────────────────
           GestureDetector(
             onPanStart: (_) => obController.isUserInteracting.value = true,
             onPanEnd: (_) => obController.isUserInteracting.value = false,
@@ -31,100 +29,125 @@ class OnBoardingScreen extends StatelessWidget {
               pages: obController.pages,
               enableSideReveal: true,
               liquidController: obController.controller,
-              // ✅ All page change events go through the debounced callback
               onPageChangeCallback: obController.onPageChangedCallback,
               waveType: WaveType.circularReveal,
             ),
           ),
 
-          /// ---------------- Swipe Hint ----------------
-          Obx(
-            () => Positioned(
-              bottom: 120,
-              right: 20,
-              child: AnimatedOpacity(
-                opacity: obController.isUserInteracting.value ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 300),
-                child: const Icon(
-                  Icons.arrow_back_ios,
-                  size: 32,
-                  color: TColors.iconPrimaryDark,
-                ),
-              ),
-            ),
-          ),
-
-          /// ---------------- Next / Finish Button ----------------
-          Positioned(
-            bottom: 42,
-            right: 28,
-            child: OutlinedButton(
-              // ✅ Single call — controller decides next page or finish
-              onPressed: obController.animateToNextSlideWithLocalStorage,
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: TColors.borderLight, width: 1),
-                shape: const CircleBorder(),
-                padding: const EdgeInsets.all(12),
-                minimumSize: const Size(44, 44),
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: TColors.black,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_forward_ios,
-                  color: TColors.textWhite,
-                  size: 18,
-                ),
-              ),
-            ),
-          ),
-
-          /// ---------------- Skip Button ----------------
+          // ── Skip ──────────────────────────────────────────────
           Positioned(
             top: MediaQuery.of(context).padding.top + 12,
             right: 16,
-            child: ElevatedButton(
-              // ✅ skip() now delegates to handleFinish() in controller
-              onPressed: obController.handleFinish,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: TColors.black,
-                foregroundColor: TColors.textWhite,
-                elevation: 0,
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                obController.handleFinish();
+              },
+              child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
+                  horizontal: 16,
                   vertical: 8,
                 ),
-                shape: RoundedRectangleBorder(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
-              ),
-              child: const Text(
-                'Skip',
-                style: TextStyle(fontWeight: FontWeight.w600),
+                child: const Text(
+                  'Skip',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
           ),
 
-          /// ---------------- Page Indicator ----------------
-          Obx(
-            () => Positioned(
-              bottom: 18,
-              left: 28,
-              child: AnimatedSmoothIndicator(
-                count: obController.pages.length,
-                activeIndex: obController.currentPage.value,
-                effect: const ExpandingDotsEffect(
-                  activeDotColor: TColors.dark,
-                  dotColor: TColors.grey,
-                  dotWidth: 12,
-                  dotHeight: 12,
-                  expansionFactor: 3.0,
-                  spacing: 10,
+          // ── Bottom bar ────────────────────────────────────────
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Dots
+                    Obx(
+                      () => AnimatedSmoothIndicator(
+                        count: obController.pages.length,
+                        activeIndex: obController.currentPage.value,
+                        effect: const ExpandingDotsEffect(
+                          activeDotColor: Colors.black,
+                          dotColor: Colors.black26,
+                          dotWidth: 8,
+                          dotHeight: 8,
+                          expansionFactor: 3.5,
+                          spacing: 6,
+                        ),
+                      ),
+                    ),
+
+                    // Next / Get Started button
+                    // ✅ AnimatedCrossFade avoids null width constraint crash
+                    Obx(() {
+                      final isLast =
+                          obController.currentPage.value ==
+                          obController.pages.length - 1;
+                      return GestureDetector(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          obController.animateToNextSlideWithLocalStorage();
+                        },
+                        child: AnimatedCrossFade(
+                          duration: const Duration(milliseconds: 250),
+                          crossFadeState:
+                              isLast
+                                  ? CrossFadeState.showSecond
+                                  : CrossFadeState.showFirst,
+                          // Circle arrow button
+                          firstChild: Container(
+                            width: 52,
+                            height: 52,
+                            decoration: const BoxDecoration(
+                              color: Colors.black,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.arrow_forward_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                          // Get Started pill
+                          secondChild: Container(
+                            height: 52,
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'Get Started',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
                 ),
               ),
             ),

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
+import 'package:amplify_core/amplify_core.dart' as amplify_core;
 import 'package:path/path.dart' as p;
 import '../../../personalization/controllers/user_controller.dart';
 import '../../Booking/controllers/booking_controller.dart';
@@ -29,7 +30,7 @@ class TutoringController extends GetxController {
 
   // ---------------- Current User Tutor ID ----------------
   // ✅ FIX: Retry with exponential back-off so that a hot-restart doesn't
-  //    race DataStore sync and return 0 sessions.  The tutor row IS in
+  //    race DataStore sync and return 0 sessions. The tutor row IS in
   //    local SQLite; we just need to wait a moment for the sync engine to
   //    surface it.
   Future<String?> get currentUserTutorId async {
@@ -110,8 +111,23 @@ class TutoringController extends GetxController {
   String? currentOpenSessionId;
   int unreadCount(String sessionId) => _unreadCounts[sessionId] ?? 0;
 
-  // ---------------- Tutor Cache ----------------
+  // ---------------- Caches ----------------
   final _tutorCache = <String, Tutor>{};
+
+  // ✅ NEW: User cache — same pattern as tutor cache, avoids repeated
+  //    DataStore queries when hydrating review user relations.
+  final _userCache = <String, User>{};
+
+  // ---------------- Reported Tutors ----------------
+  // Persists for the lifetime of the controller (survives navigation).
+  // Key: tutorId  Value: reason string shown in the investigation banner.
+  final reportedTutors = <String, String>{}.obs;
+
+  void reportTutor(String tutorId, String reason) {
+    reportedTutors[tutorId] = reason;
+  }
+
+  String? getReportReason(String tutorId) => reportedTutors[tutorId];
 
   // ---------------- Lifecycle ----------------
   @override
@@ -147,29 +163,23 @@ class TutoringController extends GetxController {
     }
   }
 
-  // ---------------- Tutor Hydration ----------------
+  // ============================================================
+  // RELATION HYDRATION HELPERS
+  // ============================================================
+  // Root cause of all "Anonymous", "null tutor", "missing reviews" bugs:
+  // Amplify v2 BelongsTo relations are lazy AsyncModel stubs. After a
+  // restart the stub object exists (so ?. doesn't throw) but its fields
+  // are all null except .id. We always resolve relations by querying
+  // DataStore directly with the FK id and cache results to avoid redundant
+  // round-trips.
+
+  // ---------------- Tutor Resolution ----------------
   Future<Tutor?> _resolveTutor(TutoringSession session) async {
     final tutorId = session.tutor?.id;
     if (tutorId == null || tutorId.isEmpty) return null;
-
-    if (_tutorCache.containsKey(tutorId)) return _tutorCache[tutorId];
-
-    try {
-      final results = await Amplify.DataStore.query(
-        Tutor.classType,
-        where: Tutor.ID.eq(tutorId),
-      );
-      if (results.isEmpty) return null;
-      _tutorCache[tutorId] = results.first;
-      return results.first;
-    } catch (e) {
-      print('❌ _resolveTutor failed for $tutorId: $e');
-      return null;
-    }
+    return _resolveTutorById(tutorId);
   }
 
-  // Resolve tutor directly by a known id string (used when we have the FK
-  // but the BelongsTo relation object is null due to Amplify v2 lazy loading).
   Future<Tutor?> _resolveTutorById(String tutorId) async {
     if (_tutorCache.containsKey(tutorId)) return _tutorCache[tutorId];
     try {
@@ -186,6 +196,26 @@ class TutoringController extends GetxController {
     }
   }
 
+  // ---------------- User Resolution ----------------
+  // ✅ NEW: Resolves a User by id, used to hydrate review.user so that
+  //    reviewer names are never shown as "Anonymous".
+  Future<User?> _resolveUserById(String userId) async {
+    if (_userCache.containsKey(userId)) return _userCache[userId];
+    try {
+      final results = await Amplify.DataStore.query(
+        User.classType,
+        where: User.ID.eq(userId),
+      );
+      if (results.isEmpty) return null;
+      _userCache[userId] = results.first;
+      return results.first;
+    } catch (e) {
+      print('❌ _resolveUserById failed for $userId: $e');
+      return null;
+    }
+  }
+
+  // ---------------- Session Hydration ----------------
   Future<List<TutoringSession>> _hydrateSessions(
     List<TutoringSession> raw,
   ) async {
@@ -197,6 +227,40 @@ class TutoringController extends GetxController {
       }),
     );
   }
+
+  // ---------------- Review Hydration ----------------
+  // ✅ NEW: Hydrates both user and tutor relations on reviews so that
+  //    review.user?.username and review.tutor?.name are always populated.
+  Future<List<Review>> _hydrateReviews(List<Review> raw) async {
+    return Future.wait(
+      raw.map((review) async {
+        Review hydrated = review;
+
+        // ✅ FIX: For reviews fetched via GraphQL that haven't synced back to
+        //    DataStore yet, the relation stubs (review.user, review.tutor) are
+        //    null. But we stored the FK ids on the Review model directly via
+        //    the _reviewUserIdMap. Check both the stub id AND the scalar FK.
+        final userId = review.user?.id ?? _reviewUserIdMap[review.id];
+        if (userId != null && userId.isNotEmpty) {
+          final user = await _resolveUserById(userId);
+          if (user != null) hydrated = hydrated.copyWith(user: user);
+        }
+
+        final tutorId = review.tutor?.id ?? _reviewTutorIdMap[review.id];
+        if (tutorId != null && tutorId.isNotEmpty) {
+          final tutor = await _resolveTutorById(tutorId);
+          if (tutor != null) hydrated = hydrated.copyWith(tutor: tutor);
+        }
+
+        return hydrated;
+      }),
+    );
+  }
+
+  // FK id maps for reviews fetched from GraphQL before DataStore sync.
+  // Keyed by review id — populated in fetchReviews and fetchReviewsByTutor.
+  final _reviewUserIdMap = <String, String>{};
+  final _reviewTutorIdMap = <String, String>{};
 
   // ---------------- AWS DataStore Observers ----------------
   void _observeSessions() async {
@@ -303,12 +367,10 @@ class TutoringController extends GetxController {
 
       if (response.errors.isNotEmpty) {
         print('❌ GraphQL errors: ${response.errors}');
-        // Fall back to DataStore allRaw approach
         await _fetchTutorSessionsFallback(tutorId);
         return;
       }
 
-      // Parse the JSON response manually
       final dataStr = response.data;
       if (dataStr == null) {
         print('⚠️ fetchTutorSessions: null response data');
@@ -316,18 +378,13 @@ class TutoringController extends GetxController {
         return;
       }
 
-      // Use DataStore to get full local objects by ID (for relation hydration)
-      // The GraphQL response gives us the IDs; we fetch locally for the full model.
       final resolvedTutor = await _resolveTutorById(tutorId);
-
-      // Parse session IDs from GraphQL JSON response
-      final sessionIds = _parseSessionIds(dataStr);
+      final sessionIds = _parseIds(dataStr);
       print(
         '🔍 fetchTutorSessions: GraphQL returned ${sessionIds.length} session IDs',
       );
 
       if (sessionIds.isEmpty) {
-        // AppSync has nothing — fall back to local DataStore
         await _fetchTutorSessionsFallback(tutorId);
         return;
       }
@@ -346,7 +403,6 @@ class TutoringController extends GetxController {
         }
       }
 
-      // If local DataStore hasn't synced yet, build minimal sessions from GraphQL data
       if (hydrated.isEmpty && sessionIds.isNotEmpty && resolvedTutor != null) {
         final minimalSessions = _buildMinimalSessions(dataStr, resolvedTutor);
         hydrated.addAll(minimalSessions);
@@ -363,8 +419,6 @@ class TutoringController extends GetxController {
     }
   }
 
-  // Fallback: attach the resolved tutor to ALL local sessions.
-  // Used when GraphQL is unavailable (offline / LOCAL_ONLY mode).
   Future<void> _fetchTutorSessionsFallback(String tutorId) async {
     print('⚠️ fetchTutorSessions: using local fallback');
     final allRaw = await Amplify.DataStore.query(TutoringSession.classType);
@@ -385,8 +439,12 @@ class TutoringController extends GetxController {
     );
   }
 
-  // Parse session IDs from GraphQL JSON string without dart:convert dependency issues
-  List<String> _parseSessionIds(String jsonStr) {
+  // ============================================================
+  // JSON PARSING HELPERS
+  // ============================================================
+
+  // ✅ Unified id parser — used by sessions, reviews, and any other model.
+  List<String> _parseIds(String jsonStr) {
     final ids = <String>[];
     final idPattern = RegExp(r'"id"\s*:\s*"([^"]+)"');
     for (final match in idPattern.allMatches(jsonStr)) {
@@ -395,7 +453,6 @@ class TutoringController extends GetxController {
     return ids;
   }
 
-  // Build minimal TutoringSession objects from GraphQL JSON for immediate UI display
   List<TutoringSession> _buildMinimalSessions(String jsonStr, Tutor tutor) {
     final sessions = <TutoringSession>[];
     try {
@@ -584,7 +641,22 @@ class TutoringController extends GetxController {
     return _computeAdjustedPrice(session, selectedAttributes);
   }
 
-  // ---------------- Reviews ----------------
+  // ============================================================
+  // REVIEWS
+  // ============================================================
+
+  // ✅ FIX: Use a direct GraphQL mutation instead of DataStore.save().
+  //
+  //    Root cause: DataStore serialises BelongsTo relations as {id: x}
+  //    stubs when syncing to AppSync. AppSync then tries to return the
+  //    full nested tutor/user types in the response selection set, cannot
+  //    resolve them from just an id stub, and rejects the mutation with
+  //    "Cannot return null for non-nullable type". The review was written
+  //    to local SQLite but never reached AppSync so fetchReviewsByTutor
+  //    (which queries AppSync) never saw it and names showed as Anonymous.
+  //
+  //    Solution: call AppSync directly with only scalar FK ids in the
+  //    input and only scalar fields in the response selection set.
   Future<Review> addReview({
     required TutoringSession session,
     required double rating,
@@ -593,46 +665,259 @@ class TutoringController extends GetxController {
     if (!await _canSync()) throw Exception("User not signed in");
     try {
       final authUser = await Amplify.Auth.getCurrentUser();
+      final userId = authUser.userId;
+      final tutorId = session.tutor?.id ?? '';
+      if (tutorId.isEmpty) throw Exception("Session has no tutor assigned");
+
+      // Resolve full objects into cache so _hydrateReviews works instantly.
       final userList = await Amplify.DataStore.query(
         User.classType,
-        where: User.ID.eq(authUser.userId),
+        where: User.ID.eq(userId),
       );
+      if (userList.isEmpty) throw Exception("Current user not found");
       final currentUser = userList.first;
+      _userCache[currentUser.id] = currentUser;
 
       final tutorList = await Amplify.DataStore.query(
         Tutor.classType,
-        where: Tutor.ID.eq(session.tutor!.id),
+        where: Tutor.ID.eq(tutorId),
       );
+      if (tutorList.isEmpty) throw Exception("Tutor not found");
       final currentTutor = tutorList.first;
+      _tutorCache[currentTutor.id] = currentTutor;
 
-      final review = Review(
+      final reviewId = amplify_core.UUID.getUUID();
+      final now = TemporalDateTime.now();
+
+      // Only scalar fields in input and response — no nested types.
+      // Amplify codegen names BelongsTo FK inputs as:
+      //   reviewTutorId  (relation field "tutor" on Review)
+      //   reviewUserId   (relation field "user" on Review)
+      // Check your AppSync CreateReviewInput type if names differ.
+      // ✅ Field names confirmed from generated Review model schema:
+      //    tutorId  → BelongsTo Tutor FK (targetNames: [tutorId])
+      //    userId   → BelongsTo User FK  (targetNames: [userId])
+      //    sessionId is ID! not String!
+      //    reviewTutorId does NOT exist in CreateReviewInput
+      const mutationDoc = """
+        mutation CreateReview(
+          \$id: ID!,
+          \$sessionId: ID!,
+          \$tutorId: ID!,
+          \$userId: ID!,
+          \$rating: Float!,
+          \$comment: String,
+          \$createdAt: AWSDateTime!
+        ) {
+          createReview(input: {
+            id: \$id,
+            sessionId: \$sessionId,
+            tutorId: \$tutorId,
+            userId: \$userId,
+            rating: \$rating,
+            comment: \$comment,
+            createdAt: \$createdAt
+          }) {
+            id
+            sessionId
+            tutorId
+            rating
+            comment
+            createdAt
+          }
+        }
+      """;
+
+      final request = GraphQLRequest<String>(
+        document: mutationDoc,
+        variables: {
+          'id': reviewId,
+          'sessionId': session.id,
+          'tutorId': tutorId,
+          'userId': userId,
+          'rating': rating,
+          'comment': comment,
+          'createdAt': now.format(),
+        },
+      );
+
+      final response = await Amplify.API.mutate(request: request).response;
+
+      print('📦 createReview data: ${response.data}');
+      if (response.errors.isNotEmpty) {
+        print('❌ createReview GraphQL errors: ${response.errors}');
+        throw Exception(
+          'GraphQL mutation failed: ${response.errors.first.message}',
+        );
+      }
+
+      print('✅ Review saved to AppSync via direct GraphQL: $reviewId');
+
+      // ✅ Pre-populate FK maps so fetchReviews called immediately after
+      //    can hydrate the user/tutor names without waiting for DataStore sync.
+      _reviewUserIdMap[reviewId] = userId;
+      _reviewTutorIdMap[reviewId] = tutorId;
+
+      // Return fully hydrated Review for immediate UI display.
+      // DataStore syncs the record back from AppSync in the background.
+      return Review(
+        id: reviewId,
         user: currentUser,
         sessionId: session.id,
         tutor: currentTutor,
         rating: rating,
         comment: comment,
-        createdAt: TemporalDateTime.now(),
+        createdAt: now,
       );
-
-      await Amplify.DataStore.save(review);
-      return review;
     } catch (e) {
       print('❌ Error adding review for session ${session.id}: $e');
       rethrow;
     }
   }
 
+  // ✅ FIX: Query AppSync directly via GraphQL instead of local DataStore.
+  //    Since addReview now bypasses DataStore.save() and writes directly to
+  //    AppSync, new reviews are NOT in local SQLite until DataStore syncs
+  //    them back (which can take several seconds). Querying AppSync ensures
+  //    newly submitted reviews appear immediately.
   Future<List<Review>> fetchReviews(String sessionId) async {
     if (!await _canSync()) return [];
     try {
-      final reviews = await Amplify.DataStore.query(
-        Review.classType,
-        where: Review.SESSIONID.eq(sessionId),
+      const queryDoc = """
+        query ListReviewsBySession(\$sessionId: ID!, \$limit: Int) {
+          listReviews(filter: {sessionId: {eq: \$sessionId}}, limit: \$limit) {
+            items {
+              id
+              sessionId
+              tutorId
+              userId
+              rating
+              comment
+              createdAt
+            }
+          }
+        }
+      """;
+
+      final request = GraphQLRequest<String>(
+        document: queryDoc,
+        variables: {'sessionId': sessionId, 'limit': 200},
       );
-      return reviews.where((r) => r.createdAt != null).toList();
+
+      final response = await Amplify.API.query(request: request).response;
+
+      List<Review> raw = [];
+
+      if (response.errors.isEmpty && response.data != null) {
+        final ids = _parseIds(response.data!);
+        print(
+          '🔍 fetchReviews: GraphQL returned ${ids.length} review IDs for session $sessionId',
+        );
+
+        // ✅ FIX: Parse userId + tutorId from GraphQL response and store in
+        //    maps so _hydrateReviews can resolve names even before DataStore
+        //    syncs the review back with its relation stubs populated.
+        _parseReviewFkIds(response.data!);
+
+        for (final id in ids) {
+          // Try local DataStore first (faster), fall back to minimal object.
+          final results = await Amplify.DataStore.query(
+            Review.classType,
+            where: Review.ID.eq(id),
+          );
+          if (results.isNotEmpty) {
+            raw.add(results.first);
+          } else {
+            // DataStore hasn't synced this review back yet — build from GraphQL data.
+            final minimal = _buildMinimalReviewById(
+              id,
+              response.data!,
+              sessionId,
+            );
+            if (minimal != null) raw.add(minimal);
+          }
+        }
+      } else {
+        // Offline fallback: query local DataStore.
+        print(
+          '⚠️ fetchReviews falling back to DataStore for session $sessionId',
+        );
+        final local = await Amplify.DataStore.query(
+          Review.classType,
+          where: Review.SESSIONID.eq(sessionId),
+        );
+        raw = local.where((r) => r.createdAt != null).toList();
+      }
+
+      return await _hydrateReviews(raw);
     } catch (e) {
       print('❌ Error fetching reviews for session $sessionId: $e');
       return [];
+    }
+  }
+
+  // ✅ Parses userId and tutorId scalars from a GraphQL reviews response
+  //    and stores them in maps so _hydrateReviews can resolve names for
+  //    reviews that haven't yet been synced back into local DataStore.
+  void _parseReviewFkIds(String jsonStr) {
+    // Match each {...} item block — must contain "id" field
+    final itemPattern = RegExp(r'\{[^{}]*"id"\s*:\s*"([^"]+)"[^{}]*\}');
+    final userIdPattern = RegExp(r'"userId"\s*:\s*"([^"]+)"');
+    final tutorIdPattern = RegExp(r'"tutorId"\s*:\s*"([^"]+)"');
+
+    for (final match in itemPattern.allMatches(jsonStr)) {
+      final block = match.group(0)!;
+      final reviewId = match.group(1)!;
+
+      final userIdMatch = userIdPattern.firstMatch(block);
+      if (userIdMatch != null) {
+        _reviewUserIdMap[reviewId] = userIdMatch.group(1)!;
+      }
+
+      final tutorIdMatch = tutorIdPattern.firstMatch(block);
+      if (tutorIdMatch != null) {
+        _reviewTutorIdMap[reviewId] = tutorIdMatch.group(1)!;
+      }
+    }
+  }
+
+  // Build a minimal Review from the GraphQL JSON for a specific id,
+  // used when DataStore hasn't synced the record back yet.
+  Review? _buildMinimalReviewById(String id, String jsonStr, String sessionId) {
+    try {
+      // Find the item block containing this specific id.
+      final blocks = RegExp(
+        r'\{[^{}]*"id"\s*:\s*"' + RegExp.escape(id) + r'"[^{}]*\}',
+      ).allMatches(jsonStr);
+      if (blocks.isEmpty) return null;
+      final block = blocks.first.group(0)!;
+
+      final rating =
+          double.tryParse(
+            RegExp(r'"rating"\s*:\s*([\d.]+)').firstMatch(block)?.group(1) ??
+                '0',
+          ) ??
+          0;
+      final comment = RegExp(
+        r'"comment"\s*:\s*"([^"]*)"',
+      ).firstMatch(block)?.group(1);
+      final createdAt = RegExp(
+        r'"createdAt"\s*:\s*"([^"]+)"',
+      ).firstMatch(block)?.group(1);
+
+      return Review(
+        id: id,
+        sessionId: sessionId,
+        rating: rating,
+        comment: comment,
+        createdAt:
+            createdAt != null
+                ? TemporalDateTime.fromString(createdAt)
+                : TemporalDateTime.now(),
+      );
+    } catch (e) {
+      print('❌ _buildMinimalReviewById error for $id: $e');
+      return null;
     }
   }
 
@@ -652,33 +937,125 @@ class TutoringController extends GetxController {
     return await fetchReviews(session.id);
   }
 
+  // ✅ FIX: Local SQLite tutorId FK column is null for BelongsTo in
+  //    Amplify v2 — Review.TUTOR.eq(tutorId) returns nothing locally.
+  //    Use GraphQL to query AppSync directly (same fix as fetchTutorSessions)
+  //    then hydrate so tutor profile always shows reviews correctly.
   Future<List<Review>> fetchReviewsByTutor(String tutorId) async {
+    if (!await _canSync()) return [];
     try {
-      final reviews = await Amplify.DataStore.query(
-        Review.classType,
-        where: Review.TUTOR.eq(tutorId),
+      // ✅ FIX 1: Added userId to selection set — _parseReviewFkIds needs
+      //    it to populate _reviewUserIdMap so _hydrateReviews can resolve
+      //    usernames. Without this field the names always show as Anonymous.
+      // ✅ FIX 2: Per-id fallback to _buildMinimalReviewById — same pattern
+      //    as fetchReviews. Previously skipped any review not yet in local
+      //    DataStore causing count mismatches (e.g. 2 instead of 4).
+      const queryDoc = """
+        query ListReviewsByTutor(\$tutorId: ID!, \$limit: Int) {
+          listReviews(filter: {tutorId: {eq: \$tutorId}}, limit: \$limit) {
+            items {
+              id
+              sessionId
+              tutorId
+              userId
+              rating
+              comment
+              createdAt
+            }
+          }
+        }
+      """;
+
+      final request = GraphQLRequest<String>(
+        document: queryDoc,
+        variables: {'tutorId': tutorId, 'limit': 200},
       );
-      return reviews;
+
+      final response = await Amplify.API.query(request: request).response;
+
+      List<Review> raw = [];
+
+      if (response.errors.isEmpty && response.data != null) {
+        final ids = _parseIds(response.data!);
+        print(
+          '🔍 fetchReviewsByTutor: GraphQL returned ${ids.length} review IDs',
+        );
+
+        // Populate FK maps FIRST so _hydrateReviews has userId for every id.
+        _parseReviewFkIds(response.data!);
+
+        for (final id in ids) {
+          // Try local DataStore first (faster).
+          final results = await Amplify.DataStore.query(
+            Review.classType,
+            where: Review.ID.eq(id),
+          );
+          if (results.isNotEmpty) {
+            raw.add(results.first);
+          } else {
+            // DataStore hasn't synced this review yet — build from GraphQL.
+            // Uses the sessionId stored in _reviewUserIdMap's sibling data.
+            final sessionId = _parseSessionIdForReview(id, response.data!);
+            final minimal = _buildMinimalReviewById(
+              id,
+              response.data!,
+              sessionId ?? '',
+            );
+            if (minimal != null) raw.add(minimal);
+          }
+        }
+      } else {
+        // Offline fallback: scan all local reviews
+        print('⚠️ fetchReviewsByTutor falling back to DataStore');
+        final all = await Amplify.DataStore.query(Review.classType);
+        raw = all.where((r) => r.tutor?.id == tutorId).toList();
+      }
+
+      return await _hydrateReviews(raw);
     } catch (e) {
-      print("❌ Error fetching reviews for tutor $tutorId: $e");
+      print('❌ Error fetching reviews for tutor $tutorId: $e');
       return [];
     }
+  }
+
+  // Helper: parse the sessionId for a specific review id from GraphQL JSON.
+  String? _parseSessionIdForReview(String reviewId, String jsonStr) {
+    final block = RegExp(
+      r'\{[^{}]*"id"\s*:\s*"' + RegExp.escape(reviewId) + r'"[^{}]*\}',
+    ).firstMatch(jsonStr)?.group(0);
+    if (block == null) return null;
+    return RegExp(r'"sessionId"\s*:\s*"([^"]+)"').firstMatch(block)?.group(1);
   }
 
   // ---------------- Chat Sessions ----------------
   List<String> get chatSessions => sessionMessages.keys.toList();
 
   // ---------------- Chat ----------------
+  // ✅ FIX: _resolveSenderName now uses the _userCache before hitting
+  //    DataStore, preventing redundant queries on every message send.
   Future<String> _resolveSenderName(String userId) async {
+    // Check user cache first
+    if (_userCache.containsKey(userId)) {
+      final cached = _userCache[userId]!;
+      if (cached.username.isNotEmpty) return cached.username;
+    }
+
     try {
       final users = await Amplify.DataStore.query(
         User.classType,
         where: User.ID.eq(userId),
       );
       if (users.isNotEmpty && (users.first.username.isNotEmpty)) {
+        _userCache[userId] = users.first;
         return users.first.username;
       }
     } catch (_) {}
+
+    // Check tutor cache
+    if (_tutorCache.containsKey(userId)) {
+      final cached = _tutorCache[userId]!;
+      if (cached.name.isNotEmpty) return cached.name;
+    }
 
     try {
       final tutors = await Amplify.DataStore.query(
@@ -686,6 +1063,7 @@ class TutoringController extends GetxController {
         where: Tutor.ID.eq(userId),
       );
       if (tutors.isNotEmpty && (tutors.first.name.isNotEmpty)) {
+        _tutorCache[userId] = tutors.first;
         return tutors.first.name;
       }
     } catch (_) {}
@@ -919,5 +1297,17 @@ class TutoringController extends GetxController {
       const Duration(seconds: 5),
       onTimeout: () => subscription.cancel(),
     );
+  }
+
+  // ---------------- Cache Warming ----------------
+  /// Called by HomeController to share its already-resolved tutor objects,
+  /// avoiding duplicate DataStore queries across controllers.
+  void warmTutorCache(Tutor tutor) {
+    _tutorCache[tutor.id] = tutor;
+  }
+
+  /// Called by HomeController to pre-populate user cache entries.
+  void warmUserCache(User user) {
+    _userCache[user.id] = user;
   }
 }

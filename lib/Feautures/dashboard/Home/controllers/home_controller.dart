@@ -22,7 +22,6 @@ class HomeController extends GetxController {
 
   // ---------------- Sessions ----------------
   final RxList<TutoringSession> allSessions = <TutoringSession>[].obs;
-
   final RxList<TutoringSession> featuredSessions = <TutoringSession>[].obs;
   final RxList<TutoringSession> popularSessions = <TutoringSession>[].obs;
   final RxList<TutoringSession> recentSessions = <TutoringSession>[].obs;
@@ -31,11 +30,12 @@ class HomeController extends GetxController {
   final RxString searchQuery = ''.obs;
   final RxList<TutoringSession> filteredSessions = <TutoringSession>[].obs;
 
-  // ---------------- Tutor Cache ----------------
-  // Shared with TutoringController pattern: query Tutor by FK id directly
-  // rather than relying on v2 AsyncModel lazy resolution which fails after
-  // a restart. Cache survives reactive rebuilds.
+  // ---------------- Caches ----------------
   final _tutorCache = <String, Tutor>{};
+
+  // sessionId -> subjectId sourced from GraphQL (AppSync always has this
+  // correct; local SQLite subjectId column is null due to Amplify v2 bug)
+  final _sessionSubjectMap = <String, String>{};
 
   // ---------------- Lifecycle ----------------
   @override
@@ -83,6 +83,10 @@ class HomeController extends GetxController {
       _ensureBookingController();
 
       await subjectController.fetchSubjects();
+
+      // ✅ Build the sessionId→subjectId map from GraphQL FIRST, before
+      //    loading sessions, so _applyFilters has it ready immediately.
+      await _buildSessionSubjectMapFromGraphQL();
       await _loadAllSessions();
 
       debugPrint("🏠 HomeController ready for ${user.username}");
@@ -113,21 +117,80 @@ class HomeController extends GetxController {
     }
   }
 
+  // ---------------- Build Subject Map from GraphQL ----------------
+  // AppSync always stores subjectId correctly on every session row.
+  // Local SQLite does not — the BelongsTo FK column is null after restart.
+  // We query ALL sessions from AppSync (no tutorId filter) and parse out
+  // the id→subjectId pairs.
+  Future<void> _buildSessionSubjectMapFromGraphQL() async {
+    const queryDoc = """
+      query ListAllSessions(\$limit: Int) {
+        listTutoringSessions(limit: \$limit) {
+          items {
+            id
+            subjectId
+          }
+        }
+      }
+    """;
+
+    try {
+      final request = GraphQLRequest<String>(
+        document: queryDoc,
+        variables: {'limit': 1000},
+      );
+
+      final response = await Amplify.API.query(request: request).response;
+
+      if (response.errors.isNotEmpty) {
+        debugPrint(
+          '⚠️ _buildSessionSubjectMapFromGraphQL errors: ${response.errors}',
+        );
+        return;
+      }
+
+      final data = response.data;
+      if (data == null) return;
+
+      // Parse pairs of "id":"..." and "subjectId":"..." from the JSON.
+      // Each session object has exactly one id and one subjectId (or null).
+      _parseSessionSubjectPairs(data);
+
+      debugPrint(
+        '🗺️  Session→Subject map built from GraphQL: ${_sessionSubjectMap.length} entries',
+      );
+      // Log a sample so we can verify
+      _sessionSubjectMap.entries
+          .take(3)
+          .forEach((e) => debugPrint('   ${e.key} → ${e.value}'));
+    } catch (e) {
+      debugPrint('❌ _buildSessionSubjectMapFromGraphQL error: $e');
+    }
+  }
+
+  void _parseSessionSubjectPairs(String jsonStr) {
+    // Match each {...} item block and extract id + subjectId from it.
+    // Regex finds blocks between { } that contain "id" field.
+    final itemPattern = RegExp(r'\{[^{}]*"id"\s*:\s*"([^"]+)"[^{}]*\}');
+    final subjectIdPattern = RegExp(r'"subjectId"\s*:\s*"([^"]+)"');
+
+    for (final itemMatch in itemPattern.allMatches(jsonStr)) {
+      final block = itemMatch.group(0)!;
+      final sessionId = itemMatch.group(1)!;
+      final subjectMatch = subjectIdPattern.firstMatch(block);
+      if (subjectMatch != null) {
+        _sessionSubjectMap[sessionId] = subjectMatch.group(1)!;
+      }
+    }
+  }
+
   // ---------------- Load All Sessions ----------------
   Future<void> _loadAllSessions() async {
     try {
-      final sessions = await Amplify.DataStore.query(TutoringSession.classType);
-
-      // ✅ FIX: Amplify v2 BelongsTo relations are lazy (AsyncModel).
-      //    After a restart `await session.tutor` silently returns null
-      //    because the relation hasn't been pulled into local SQLite yet.
-      //
-      //    The FK id (session.tutor?.id) is ALWAYS stored on the session
-      //    row. We query Tutor by that id directly and cache the result
-      //    so subsequent observeQuery cycles re-apply it from memory
-      //    without hitting DataStore again.
-      final hydrated = await _hydrateSessions(sessions);
-
+      final rawSessions = await Amplify.DataStore.query(
+        TutoringSession.classType,
+      );
+      final hydrated = await _hydrateSessions(rawSessions);
       allSessions.assignAll(hydrated);
       debugPrint('🔹 Sessions loaded + hydrated: ${hydrated.length}');
     } catch (e) {
@@ -136,6 +199,7 @@ class HomeController extends GetxController {
     }
   }
 
+  // ---------------- Tutor Resolution ----------------
   Future<Tutor?> _resolveTutor(TutoringSession session) async {
     final tutorId = session.tutor?.id;
     if (tutorId == null || tutorId.isEmpty) return null;
@@ -156,23 +220,54 @@ class HomeController extends GetxController {
     }
   }
 
+  // ---------------- Subject Resolution ----------------
+  Future<Subject?> _resolveSubject(TutoringSession session) async {
+    final subjectId = _sessionSubjectMap[session.id];
+    if (subjectId == null || subjectId.isEmpty) return null;
+
+    try {
+      return subjectController.subjects.firstWhere((s) => s.id == subjectId);
+    } catch (_) {}
+
+    try {
+      final results = await Amplify.DataStore.query(
+        Subject.classType,
+        where: Subject.ID.eq(subjectId),
+      );
+      return results.isEmpty ? null : results.first;
+    } catch (e) {
+      debugPrint('❌ _resolveSubject failed for $subjectId: $e');
+      return null;
+    }
+  }
+
+  // ---------------- Hydration ----------------
   Future<List<TutoringSession>> _hydrateSessions(
     List<TutoringSession> raw,
   ) async {
     return Future.wait(
       raw.map((session) async {
         final tutor = await _resolveTutor(session);
-        if (tutor == null) return session;
-        return session.copyWith(tutor: tutor);
+        final subject = await _resolveSubject(session);
+
+        TutoringSession hydrated = session;
+        if (tutor != null) hydrated = hydrated.copyWith(tutor: tutor);
+        if (subject != null) hydrated = hydrated.copyWith(subject: subject);
+        return hydrated;
       }),
     );
   }
 
   // ---------------- Cache Warming ----------------
-  /// Allows external controllers (e.g. SessionCreationController) to warm
-  /// this cache without accessing the private _tutorCache field directly.
   void warmTutorCache(Tutor tutor) {
     _tutorCache[tutor.id] = tutor;
+  }
+
+  /// Called by SessionCreationController after a new session is saved so the
+  /// subject map is immediately correct without a full reload.
+  void warmSessionSubjectMap(String sessionId, String subjectId) {
+    _sessionSubjectMap[sessionId] = subjectId;
+    debugPrint('🗺️  Warmed subject map: $sessionId → $subjectId');
   }
 
   // ---------------- Reactive Filtering ----------------
@@ -182,19 +277,24 @@ class HomeController extends GetxController {
 
     final filtered =
         allSessions.where((s) {
+          // Use the GraphQL-sourced map as the authoritative subjectId.
+          // s.subject?.id may be null (lazy load not resolved) but the map
+          // was populated from AppSync before sessions were loaded.
+          final resolvedSubjectId = _sessionSubjectMap[s.id] ?? s.subject?.id;
+
           final matchesSubject =
-              selectedSubject == null || s.subject?.id == selectedSubject.id;
+              selectedSubject == null ||
+              resolvedSubjectId == selectedSubject.id;
 
           final matchesSearch =
               query.isEmpty ||
-              (s.title.toLowerCase().contains(query)) ||
+              s.title.toLowerCase().contains(query) ||
               (s.tutor?.name.toLowerCase().contains(query) ?? false);
 
           return matchesSubject && matchesSearch;
         }).toList();
 
     filteredSessions.assignAll(filtered);
-
     featuredSessions.value =
         filtered.where((s) => s.isFeatured ?? false).toList();
     popularSessions.value = filtered.toList();
@@ -215,6 +315,7 @@ class HomeController extends GetxController {
     isReady.value = false;
     searchQuery.value = '';
     _tutorCache.clear();
+    _sessionSubjectMap.clear();
   }
 
   // ---------------- Public Getters ----------------
