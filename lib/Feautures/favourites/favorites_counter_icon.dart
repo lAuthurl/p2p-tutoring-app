@@ -1,4 +1,3 @@
-// t_favourite_counter_icon.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
@@ -6,7 +5,7 @@ import 'package:iconsax/iconsax.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/helpers/helper_functions.dart';
-import '../Courses/controllers/tutoring_controller.dart';
+import '../dashboard/Home/controllers/favorites_controller.dart';
 import '../dashboard/Home/controllers/home_controller.dart';
 import 'favourite.dart';
 
@@ -22,7 +21,13 @@ class TFavouriteCounterIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tutoringController = TutoringController.instance;
+    // ✅ FIX: Read directly from FavoritesController.favoriteIds (RxSet).
+    //    The old code called tutoringController.favoriteSessions().length
+    //    inside Obx — favoriteSessions() is a plain method returning a
+    //    filtered list, not a reactive value. Obx had nothing to subscribe
+    //    to so the counter never updated.
+    //    favoriteIds is an RxSet: any add/remove immediately triggers Obx.
+    final favoritesController = FavoritesController.instance;
     final dark = THelperFunctions.isDarkMode(context);
 
     return Stack(
@@ -38,7 +43,7 @@ class TFavouriteCounterIcon extends StatelessWidget {
         Positioned(
           right: 0,
           child: Obx(() {
-            final count = tutoringController.favoriteSessions().length;
+            final count = favoritesController.favoriteIds.length;
             if (count == 0) return const SizedBox.shrink();
             return Container(
               width: TSizes.fontSizeLg,

@@ -9,6 +9,7 @@ import '../../../../utils/constants/text_strings.dart';
 import '../../models/model_on_boarding.dart';
 import '../../screens/on_boarding/on_boarding_page_widget.dart';
 import '../../../routes/routes.dart';
+import '../../../data/repository/authentication_repository/authentication_repository.dart';
 
 class OnBoardingController extends GetxController {
   final userStorage = GetStorage();
@@ -16,21 +17,17 @@ class OnBoardingController extends GetxController {
   RxInt currentPage = 0.obs;
   final RxBool isUserInteracting = false.obs;
 
-  // ✅ Navigation lock — prevents double-fires and back-redirects
   bool _isNavigating = false;
-
-  // ✅ Debounce rapid page changes
   DateTime _lastPageChange = DateTime.now();
   static const _pageChangeCooldown = Duration(milliseconds: 400);
 
   // =========================================================
-  // PAGE CHANGE CALLBACK — debounced to stop rapid swipe bugs
+  // PAGE CHANGE CALLBACK
   // =========================================================
 
   int onPageChangedCallback(int activePageIndex) {
     final now = DateTime.now();
     if (now.difference(_lastPageChange) < _pageChangeCooldown) {
-      // Too fast — snap back to current known page, ignore the event
       return currentPage.value;
     }
     _lastPageChange = now;
@@ -56,15 +53,17 @@ class OnBoardingController extends GetxController {
   }
 
   // =========================================================
-  // SKIP BUTTON / FINISH — single authoritative exit point
+  // SKIP / FINISH
   // =========================================================
 
   Future<void> handleFinish() async {
     if (_isNavigating) return;
     _isNavigating = true;
 
-    // Mark onboarding as done
-    userStorage.write('isFirstTime', false);
+    // ✅ Use AuthenticationRepository.markOnboardingComplete() as the
+    //    single source of truth for the isFirstTime flag — keeps the key
+    //    name and write logic in one place.
+    AuthenticationRepository.instance.markOnboardingComplete();
 
     try {
       final session = await Amplify.Auth.fetchAuthSession();
@@ -77,7 +76,6 @@ class OnBoardingController extends GetxController {
     } catch (_) {
       await Get.offAllNamed(TRoutes.logIn);
     } finally {
-      // ✅ Always reset so re-entry works if navigation fails
       _isNavigating = false;
     }
   }

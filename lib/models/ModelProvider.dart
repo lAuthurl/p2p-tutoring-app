@@ -29,6 +29,7 @@ import 'Subject.dart';
 import 'Tutor.dart';
 import 'TutoringSession.dart';
 import 'User.dart';
+import 'UserFavorite.dart';
 
 export 'Booking.dart';
 export 'BookingItem.dart';
@@ -39,12 +40,13 @@ export 'Subject.dart';
 export 'Tutor.dart';
 export 'TutoringSession.dart';
 export 'User.dart';
+export 'UserFavorite.dart';
 
 class ModelProvider implements amplify_core.ModelProviderInterface {
   @override
-  String version = "87d46237bf5579bbcb0638105eff4ac1";
+  String version = "f85bc90cb01d19fce7337eff40cd8f0a";
   @override
-  List<amplify_core.ModelSchema> modelSchemas = [Booking.schema, BookingItem.schema, ChatMessage.schema, Review.schema, SessionAttribute.schema, Subject.schema, Tutor.schema, TutoringSession.schema, User.schema];
+  List<amplify_core.ModelSchema> modelSchemas = [Booking.schema, BookingItem.schema, ChatMessage.schema, Review.schema, SessionAttribute.schema, Subject.schema, Tutor.schema, TutoringSession.schema, User.schema, UserFavorite.schema];
   @override
   List<amplify_core.ModelSchema> customTypeSchemas = [];
   static final ModelProvider _instance = ModelProvider();
@@ -71,6 +73,8 @@ class ModelProvider implements amplify_core.ModelProviderInterface {
         return TutoringSession.classType;
       case "User":
         return User.classType;
+      case "UserFavorite":
+        return UserFavorite.classType;
       default:
         throw Exception("Failed to find model in model provider for model name: " + modelName);
     }

@@ -4,7 +4,7 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../../../utils/constants/colors.dart';
 import '../../../common/widgets/icons/t_circular_icon.dart';
-import '../controllers/tutoring_controller.dart';
+import '../../dashboard/Home/controllers/favorites_controller.dart';
 
 class TFavouriteIcon extends StatelessWidget {
   /// A custom Icon widget to add or remove tutoring sessions from favorites.
@@ -15,14 +15,14 @@ class TFavouriteIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = TutoringController.instance;
+    final controller = FavoritesController.instance;
 
     return Obx(() {
-      final isFav = controller.isFavourite(sessionId);
+      final isFav = controller.favoriteIds.contains(sessionId);
       return TCircularIcon(
         icon: isFav ? Iconsax.heart5 : Iconsax.heart,
         color: isFav ? TColors.error : null,
-        onPressed: () => controller.toggleFavoriteSession(sessionId),
+        onPressed: () => controller.toggleFavorite(sessionId),
       );
     });
   }

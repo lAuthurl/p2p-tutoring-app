@@ -5,10 +5,12 @@ flutter pub get
 amplify codegen models
 
 
-CREATING SESSION BUG? DO RESEARCH NO SESSION LOADING OR SHOWING GIVE LOGS TO FIX 
-fix icon counter for messages 
-booking items should be per user and counter should load on startup 
-favorite button permanence
+
+favorite button on logout problem
 fix the review system to work accross multiple accounts not just one 
 implement payment 
-redirect issues should be fixed 
+Make session load faster using cache
+messages and booking clears if app is ran in a different device or deleted and rebuilt 
+logout details still there when logout button is initiated , i need the details clared for privacy 
+make vc work 
+and try making voice call work  - last thing to do

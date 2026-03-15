@@ -32,7 +32,10 @@ class TBookingCounterIcon extends StatelessWidget {
         Positioned(
           right: 0,
           child: Obx(() {
-            final count = controller.totalBookedSessions();
+            // ✅ Read bookingItems.length (RxList) directly so Obx subscribes
+            //    to the source of truth — totalBookedSessions is computed via
+            //    ever() which fires outside the Obx window and misses rebuilds.
+            final count = controller.bookingItems.length;
             if (count == 0) return const SizedBox.shrink();
             return Container(
               width: TSizes.fontSizeLg,

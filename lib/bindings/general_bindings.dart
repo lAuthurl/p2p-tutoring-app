@@ -4,6 +4,7 @@ import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/home_contr
 import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/subject_controller.dart';
 import 'package:p2p_tutoring_app/personalization/controllers/theme_controller.dart';
 
+import '../Feautures/dashboard/Home/controllers/favorites_controller.dart';
 import '../utils/helpers/network_manager.dart';
 import '../data/services/notifications/notification_service.dart';
 
@@ -51,27 +52,29 @@ class GeneralBindings extends Bindings {
     // Onboarding must exist BEFORE login routing decision
     Get.put(OnBoardingController(), permanent: true);
 
-    // ================= AUTH FLOW =================
-    // Lazy loading ensures controller is only created when needed
-    Get.lazyPut(
-      () => LoginController(),
-      fenix: true,
-    ); // <--- make it persistent
-    Get.lazyPut(() => SignUpController(), fenix: true);
-    Get.lazyPut(() => OTPController(), fenix: true);
-    Get.lazyPut(() => VerifyEmailController(), fenix: true);
-    Get.lazyPut(() => MailVerificationController(), fenix: true);
-    Get.lazyPut<HomeController>(() => HomeController());
-    Get.lazyPut<SubjectController>(() => SubjectController());
-    Get.lazyPut<BookingController>(() => BookingController());
-
-    // These require signed-in user + datastore started
+    // ================= PERSISTENT APP CONTROLLERS =================
+    // These must be permanent so they survive navigation and are
+    // available immediately when the user reaches the dashboard.
     Get.put(SubjectController(), permanent: true);
     Get.put(HomeController(), permanent: true);
     Get.put(BookingController(), permanent: true);
 
+    // ✅ FavoritesController: registered here so it loads the current
+    //    user's favorites from AppSync on startup — before the home
+    //    screen renders. permanent: true keeps it alive across all
+    //    navigation so heart icons stay in sync everywhere.
+    Get.put(FavoritesController(), permanent: true);
+
+    // ================= AUTH FLOW =================
+    // lazyPut / fenix: true — created only when navigated to,
+    // recreated automatically if GetX disposes them.
+    Get.lazyPut(() => LoginController(), fenix: true);
+    Get.lazyPut(() => SignUpController(), fenix: true);
+    Get.lazyPut(() => OTPController(), fenix: true);
+    Get.lazyPut(() => VerifyEmailController(), fenix: true);
+    Get.lazyPut(() => MailVerificationController(), fenix: true);
+
     // ================= ANIMATION CONTROLLER =================
-    // Ensure FadeInAnimationController is available
     if (!Get.isRegistered<FadeInAnimationController>()) {
       Get.put(FadeInAnimationController(), permanent: true);
     }

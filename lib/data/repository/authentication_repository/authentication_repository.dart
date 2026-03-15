@@ -2,6 +2,8 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:flutter/services.dart';
+import '../../../Feautures/dashboard/Home/controllers/favorites_controller.dart';
+import '../../../Feautures/Courses/controllers/tutoring_controller.dart';
 import '../../../bindings/app_bindings.dart';
 import '../../../data/models/app_user.dart';
 import '../../../routes/routes.dart';
@@ -13,6 +15,7 @@ import '../../../utils/local_storage/storage_utility.dart';
 import '../../../utils/security/password_hash.dart';
 import '../../../utils/local_storage/secure_storage_service.dart';
 import '../user_repository/user_repository.dart';
+import '../../../Feautures/Booking/controllers/booking_controller.dart';
 
 class AuthenticationRepository extends GetxController {
   static AuthenticationRepository get instance => Get.find();
@@ -31,6 +34,17 @@ class AuthenticationRepository extends GetxController {
   String get getDisplayName => currentUser?.displayName ?? '';
   String get getPhoneNo => currentUser?.phoneNumber ?? '';
 
+  static const _kIsFirstTime = 'isFirstTime';
+
+  bool get _isFirstTime {
+    final val = deviceStorage.read<bool>(_kIsFirstTime);
+    return val == true;
+  }
+
+  void markOnboardingComplete() {
+    deviceStorage.write(_kIsFirstTime, false);
+  }
+
   @override
   void onReady() {
     _currentUser = Rx<AppUser?>(null);
@@ -44,6 +58,48 @@ class AuthenticationRepository extends GetxController {
     } catch (_) {
       return false;
     }
+  }
+
+  // =========================================================
+  // CLEAR ALL USER STATE ON LOGOUT
+  // =========================================================
+
+  /// Clears every per-user controller in one place.
+  /// Call this before signOut so nothing bleeds to the next account.
+  void _clearAllUserState() {
+    // ✅ FIX: clear TutoringController sessions so favoriteSessions()
+    // doesn't try to filter a stale previous-user session list against
+    // the new user's favoriteIds (which always produces []).
+    if (Get.isRegistered<TutoringController>()) {
+      TutoringController.instance.clearSessionState();
+    }
+    if (Get.isRegistered<FavoritesController>()) {
+      FavoritesController.instance.clearOnLogout();
+    }
+    if (Get.isRegistered<BookingController>()) {
+      BookingController.instance.clearOnLogout();
+    }
+  }
+
+  // =========================================================
+  // RELOAD USER CONTROLLERS AFTER LOGIN
+  // =========================================================
+
+  /// Always ensures FavoritesController is registered before reloading.
+  /// Never skips due to a missing isRegistered guard.
+  Future<void> _reloadUserControllers() async {
+    final favCtrl =
+        Get.isRegistered<FavoritesController>()
+            ? FavoritesController.instance
+            : Get.put(FavoritesController(), permanent: true);
+
+    final futures = <Future>[favCtrl.reloadForUser()];
+
+    if (Get.isRegistered<BookingController>()) {
+      futures.add(BookingController.instance.reloadForUser());
+    }
+
+    await Future.wait(futures);
   }
 
   // =========================================================
@@ -75,6 +131,7 @@ class AuthenticationRepository extends GetxController {
 
       if (await isSignedIn()) {
         await UserController.instance.loadUserData();
+        await _reloadUserControllers();
       }
 
       await screenRedirect(_currentUser.value);
@@ -157,14 +214,12 @@ class AuthenticationRepository extends GetxController {
 
   // =========================================================
   // SCREEN REDIRECT
-  // ✅ Checks isFirstTime BEFORE deciding login vs onboarding
-  //    so first-time users skip the login flash entirely.
-  // ✅ Skips navigation if already on target route to avoid
-  //    overriding VerifyEmailController's navigation.
   // =========================================================
 
   Future<void> screenRedirect(AppUser? user) async {
     if (user != null) {
+      deviceStorage.write(_kIsFirstTime, false);
+
       try {
         await TLocalStorage.init(user.uid);
       } catch (_) {}
@@ -189,17 +244,11 @@ class AuthenticationRepository extends GetxController {
         Get.offAllNamed(TRoutes.mainDashboard);
       }
     } else {
-      // ✅ Read isFirstTime — default true means never opened before
-      final bool isFirstTime =
-          (deviceStorage.read('isFirstTime') as bool?) ?? true;
-
-      if (isFirstTime) {
-        // First ever launch — go straight to onboarding, no login screen
+      if (_isFirstTime) {
         if (Get.currentRoute != TRoutes.onboarding) {
           Get.offAllNamed(TRoutes.onboarding);
         }
       } else {
-        // Returning user, not signed in — go to login
         if (Get.currentRoute != TRoutes.logIn &&
             Get.currentRoute != TRoutes.signUp) {
           Get.offAllNamed(TRoutes.logIn);
@@ -215,6 +264,11 @@ class AuthenticationRepository extends GetxController {
   Future<void> onLoginSuccess() async {
     await Amplify.DataStore.start();
     AppBindings().dependencies();
+
+    // ✅ FIX: await reload BEFORE navigating so the dashboard renders
+    // with data already populated, not racing against the network call.
+    await _reloadUserControllers();
+
     Get.offAllNamed(TRoutes.mainDashboard);
   }
 
@@ -310,7 +364,7 @@ class AuthenticationRepository extends GetxController {
   }
 
   // =========================================================
-  // REGISTER — Cognito only, NO DataStore write
+  // REGISTER
   // =========================================================
 
   Future<AppUserCredential> registerWithEmailAndPassword(
@@ -422,6 +476,9 @@ class AuthenticationRepository extends GetxController {
       final authUser = await Amplify.Auth.getCurrentUser();
       final appUser = AppUser(uid: authUser.userId, email: authUser.username);
       _currentUser.value = appUser;
+
+      await _reloadUserControllers();
+
       return AppUserCredential(user: appUser);
     } on AmplifyException catch (e) {
       throw e.message;
@@ -444,19 +501,19 @@ class AuthenticationRepository extends GetxController {
 
   // =========================================================
   // LOGOUT
-  // ✅ Navigate first via offAllNamed — this triggers GetX route
-  //    lifecycle to clean up controllers naturally, avoiding
-  //    "TextEditingController used after disposed" errors.
   // =========================================================
 
   Future<void> logout() async {
     try {
+      _clearAllUserState();
+
       await Amplify.Auth.signOut();
       try {
         await deviceStorage.remove('REMEMBER_ME');
         await deviceStorage.remove('REMEMBER_ME_EMAIL');
         await deviceStorage.remove('REMEMBER_ME_USERNAME');
         await SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
+        await deviceStorage.write(_kIsFirstTime, false);
       } catch (_) {}
       Get.offAllNamed(TRoutes.logIn);
     } catch (_) {
@@ -465,19 +522,21 @@ class AuthenticationRepository extends GetxController {
   }
 
   Future<void> logoutSilent() async {
-    final dynamic wasFirstTime = deviceStorage.read('isFirstTime');
+    _clearAllUserState();
+
     try {
       await Amplify.Auth.signOut();
     } catch (_) {}
+
     try {
       await deviceStorage.erase();
-      if (wasFirstTime != null) {
-        await deviceStorage.write('isFirstTime', wasFirstTime);
-      }
+      await deviceStorage.write(_kIsFirstTime, false);
     } catch (_) {}
+
     try {
       await GetStorage().erase();
     } catch (_) {}
+
     _currentUser.value = null;
   }
 
@@ -490,8 +549,10 @@ class AuthenticationRepository extends GetxController {
 
   Future<void> deleteAccount() async {
     try {
+      _clearAllUserState();
       await UserRepository.instance.removeUserRecord(getUserID);
       await Amplify.Auth.signOut();
+      await deviceStorage.write(_kIsFirstTime, false);
     } catch (_) {
       throw 'Something went wrong. Please try again';
     }
@@ -499,8 +560,10 @@ class AuthenticationRepository extends GetxController {
 
   Future<void> clearExistingUsers() async {
     try {
+      _clearAllUserState();
       await deviceStorage.erase();
       await GetStorage().erase();
+      await deviceStorage.write(_kIsFirstTime, false);
       await UserRepository.instance.clearAllUsers();
       _currentUser.value = null;
       Get.offAll(() => LoginScreen());

@@ -109,13 +109,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _creationController.initializeAttributesForSession(merged);
   }
 
-  // ✅ FIX: fetchReviews now hydrates user relations so names are always
-  //    populated. No change needed here — just calling the fixed method.
   Future<void> _fetchReviews() async {
     setState(() => _loadingReviews = true);
     try {
       final reviews = await _tutoringController.fetchReviews(widget.session.id);
-      // Creator reviews pinned first, then newest first within each group.
       reviews.sort((a, b) {
         final aIsCreator =
             a.user?.email != null &&
@@ -184,13 +181,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     } catch (_) {}
   }
 
-  // ✅ FIX: Extracted helper so both "Write a review" and "See all reviews"
-  //    buttons share the same navigation + refresh logic.
-  //    Always refresh on return — no longer gated on result == true.
   Future<void> _openReviewScreen() async {
     await Get.to(() => SessionReviewScreen(session: widget.session));
-    // Refresh regardless of whether a review was submitted — the user may
-    // have read new reviews added by others while on that screen.
     _fetchReviews();
   }
 
@@ -211,7 +203,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Image slider (full bleed)
+                // Image slider — favourite heart is in TSessionImageSlider's AppBar
+                // via TFavouriteIcon which reads FavoritesController directly.
                 TSessionImageSlider(session: session),
 
                 Padding(
@@ -222,7 +215,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ── Rating + Title + Price ─────────────────────
                       TSessionMetaHeader(
                         session: session,
                         reviews: _reviews,
@@ -230,11 +222,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       ),
                       const SizedBox(height: TSizes.spaceBtwItems),
 
-                      // ── Session options ─────────────────────────────
                       TSessionAttributes(session: session),
                       const SizedBox(height: TSizes.spaceBtwSections / 2),
 
-                      // ── Tutor + Chat buttons ────────────────────────
                       _ActionRow(
                         isOwner: _isOwner,
                         currentUserId: _currentUserId,
@@ -248,7 +238,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       ),
                       const SizedBox(height: TSizes.spaceBtwSections),
 
-                      // ── Description ─────────────────────────────────
                       _SectionLabel(title: "Description"),
                       const SizedBox(height: TSizes.spaceBtwItems),
                       Container(
@@ -284,14 +273,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       ),
                       const SizedBox(height: TSizes.spaceBtwSections),
 
-                      // ── Reviews ─────────────────────────────────────
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           _SectionLabel(title: "Reviews"),
                           TextButton.icon(
-                            // ✅ FIX: Always refresh on return
                             onPressed: _openReviewScreen,
                             icon: Icon(
                               Iconsax.star,
@@ -345,7 +332,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                           child: SizedBox(
                             width: double.infinity,
                             child: OutlinedButton(
-                              // ✅ FIX: Always refresh on return
                               onPressed: _openReviewScreen,
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: colorScheme.primary,
@@ -589,7 +575,6 @@ class _ReviewCard extends StatelessWidget {
             ? r.createdAt!.getDateTimeInUtc().toLocal().toString().split(" ")[0]
             : '';
 
-    // ✅ Creator tag: reviewer is the tutor who owns the session.
     final isCreator =
         r.user?.email != null &&
         r.tutor?.email != null &&
@@ -622,7 +607,6 @@ class _ReviewCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row
             Row(
               children: [
                 CircleAvatar(
@@ -660,7 +644,7 @@ class _ReviewCard extends StatelessWidget {
                           ),
                           if (isCreator) ...[
                             const SizedBox(width: 6),
-                            _CreatorTag(),
+                            const _CreatorTag(),
                           ],
                         ],
                       ),
@@ -676,7 +660,6 @@ class _ReviewCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Star rating
                 Row(
                   children: List.generate(5, (i) {
                     final filled = i < r.rating.round();
@@ -692,8 +675,6 @@ class _ReviewCard extends StatelessWidget {
                 ),
               ],
             ),
-
-            // Comment bubble
             if ((r.comment ?? '').isNotEmpty) ...[
               const SizedBox(height: 10),
               Container(
@@ -721,10 +702,6 @@ class _ReviewCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Creator tag badge (shared across detail + review screens)
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _CreatorTag extends StatelessWidget {
   const _CreatorTag();
 
@@ -736,9 +713,9 @@ class _CreatorTag extends StatelessWidget {
         color: TColors.primary,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
-        children: const [
+        children: [
           Icon(Icons.verified_rounded, size: 10, color: Colors.white),
           SizedBox(width: 3),
           Text(

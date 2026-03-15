@@ -241,3 +241,22 @@ type ChatMessage @model
   audioUrl: String       # S3 URL if voice message
   createdAt: AWSDateTime
 }
+
+# ------------------------------- 
+# UserFavorite
+# ------------------------------- 
+# Add this block to your existing schema.graphql
+# Then run: amplify push
+# Then run: amplify codegen models
+# This generates the UserFavorite Dart class in lib/models/
+type UserFavorite @model
+  @auth(rules: [
+    { allow: owner, operations: [create, read, update, delete] },
+    { allow: public, operations: [read] }
+  ]) {
+  id: ID!
+  userId: ID! @index(name: "byUser", queryField: "listUserFavoritesByUser")
+  sessionId: ID!
+ 
+  createdAt: AWSDateTime
+}

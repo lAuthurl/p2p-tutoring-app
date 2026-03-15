@@ -184,6 +184,7 @@ class SessionCreationController extends GetxController {
     try {
       final tutor = await getOrCreateTutor();
       final sessionId = UUID.getUUID();
+      final capturedSubjectId = subjectId.value;
 
       final priceVal =
           isFree.value ? 0.0 : double.tryParse(price.text.trim()) ?? 0.0;
@@ -214,7 +215,7 @@ mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
           'pricePerSession': priceVal,
           'thumbnail': selectedThumbnail,
           'tutorId': tutor.id,
-          'subjectId': subjectId.value,
+          'subjectId': capturedSubjectId,
           'isFeatured': false,
           'hasPaid': false,
         },
@@ -258,11 +259,11 @@ mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
         await Amplify.DataStore.save(attr);
       }
 
-      // Optimistic UI update
+      // ─── Optimistic UI update ─────────────────────────────────────────
       if (Get.isRegistered<HomeController>()) {
         final subjects = await Amplify.DataStore.query(
           Subject.classType,
-          where: Subject.ID.eq(subjectId.value),
+          where: Subject.ID.eq(capturedSubjectId),
         );
 
         final optimisticSession = TutoringSession(
@@ -277,6 +278,11 @@ mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
 
         final home = Get.find<HomeController>();
 
+        // ✅ FIX: Register the subjectId in HomeController's map so
+        //    _applyFilters() can match this session to its subject
+        //    immediately — without this, the new session is invisible
+        //    whenever any subject filter is active.
+        home.warmSessionSubjectMap(sessionId, capturedSubjectId);
         home.warmTutorCache(tutor);
         home.allSessions.insert(0, optimisticSession);
         home.recentSessions.insert(0, optimisticSession);

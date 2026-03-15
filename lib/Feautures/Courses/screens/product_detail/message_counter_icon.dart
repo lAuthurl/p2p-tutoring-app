@@ -24,30 +24,24 @@ class InboxCounterIcon extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         IconButton(
-          onPressed: () => Get.to(() => InboxScreen()),
+          onPressed: () => Get.to(() => const InboxScreen()),
           icon: Icon(Iconsax.message, color: iconColor ?? Colors.black),
         ),
 
-        // Obx re-renders whenever sessionMessages changes.
-        // sessionMessages.refresh() is called by the controller both when
-        // a new message arrives (_onNewMessage) and when a session is
-        // marked read (markSessionRead), so this badge stays in sync
-        // with no extra wiring needed here.
         Positioned(
           right: 0,
           top: -2,
           child: Obx(() {
-            // Touch sessionMessages so Obx subscribes to its stream.
-            // The actual count comes from _unreadCounts via unreadCount().
-            // ignore: unnecessary_statement
-            controller.sessionMessages.entries; // reactive dependency
-
-            final totalUnread = controller.activeSessions.fold<int>(
+            // ✅ Read unreadCounts (public RxMap) directly.
+            // Obx subscribes to the RxMap itself, so any write to
+            // unreadCounts[chatId] immediately triggers this rebuild —
+            // no proxy, no manual refresh(), no tap required.
+            final total = controller.unreadCounts.values.fold(
               0,
-              (sum, session) => sum + controller.unreadCount(session.id),
+              (sum, n) => sum + n,
             );
 
-            if (totalUnread == 0) return const SizedBox.shrink();
+            if (total == 0) return const SizedBox.shrink();
 
             return Container(
               width: TSizes.fontSizeLg,
@@ -58,7 +52,7 @@ class InboxCounterIcon extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-                  totalUnread > 99 ? '99+' : totalUnread.toString(),
+                  total > 99 ? '99+' : total.toString(),
                   style: TextStyle(
                     color: counterTextColor ?? Colors.white,
                     fontSize: TSizes.fontSizeSm,

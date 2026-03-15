@@ -7,8 +7,9 @@ import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/device/device_utility.dart';
 import '../../../../common/widgets/layouts/grid_layout.dart';
 import '../Courses/screens/product_cards/t_session_card_vertical.dart';
-import 'package:p2p_tutoring_app/Feautures/Courses/controllers/tutoring_controller.dart';
 import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/home_controller.dart';
+
+import '../dashboard/Home/controllers/favorites_controller.dart';
 
 class FavouriteScreen extends StatelessWidget {
   final HomeController homeController;
@@ -17,13 +18,24 @@ class FavouriteScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tutoringController = TutoringController.instance;
+    final favoritesController = FavoritesController.instance;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: Obx(() {
-        final favoriteSessions = tutoringController.favoriteSessions();
+        // ✅ FavoritesController now owns the session objects directly.
+        //    favoritedSessions is populated during _loadFavorites() via
+        //    direct DataStore/AppSync queries — no dependency on
+        //    TutoringController or HomeController timing.
+        //
+        //    This eliminates the login race entirely:
+        //      OLD: favoriteSessions() filtered TutoringController.sessions
+        //           which was empty until DataStore synced (~5-15s after login)
+        //      NEW: favoritedSessions is ready as soon as _loadFavorites()
+        //           completes, which is awaited before dashboard navigation.
+        final isLoading = favoritesController.isLoading.value;
+        final favoriteSessions = favoritesController.favoritedSessions;
 
         return CustomScrollView(
           slivers: [
@@ -51,73 +63,83 @@ class FavouriteScreen extends StatelessWidget {
               ),
             ),
 
-            // ── Stats banner ──────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  TSizes.defaultSpace,
-                  4,
-                  TSizes.defaultSpace,
-                  20,
+            // ── Loading indicator ─────────────────────────────────
+            if (isLoading)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 48),
+                  child: Center(child: CircularProgressIndicator()),
                 ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        _StatCard(
-                          icon: Iconsax.heart5,
-                          iconColor: Colors.pink,
-                          label: 'Saved',
-                          value: '${favoriteSessions.length}',
-                        ),
-                        const SizedBox(width: 12),
-                        _StatCard(
-                          icon: Iconsax.teacher,
-                          iconColor: Colors.teal,
-                          label: 'Tutors',
-                          value:
-                              '${favoriteSessions.map((e) => e.tutor?.id).toSet().length}',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _StatCard(
-                      icon: Iconsax.money,
-                      iconColor: TColors.primary,
-                      label: 'Total value of saved sessions',
-                      value:
-                          favoriteSessions.isEmpty
-                              ? '₦0'
-                              : '₦${favoriteSessions.fold<double>(0, (s, e) => s + (e.pricePerSession ?? 0)).toStringAsFixed(0)}',
-                      fullWidth: true,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Empty state ───────────────────────────────────────
-            if (favoriteSessions.isEmpty)
-              const SliverFillRemaining(child: _EmptyState()),
-
-            // ── Grid ──────────────────────────────────────────────
-            if (favoriteSessions.isNotEmpty)
+              )
+            else ...[
+              // ── Stats banner ──────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: TSizes.defaultSpace,
+                  padding: const EdgeInsets.fromLTRB(
+                    TSizes.defaultSpace,
+                    4,
+                    TSizes.defaultSpace,
+                    20,
                   ),
-                  child: TGridLayout(
-                    itemCount: favoriteSessions.length,
-                    itemBuilder:
-                        (_, index) => TSessionCardVertical(
-                          session: favoriteSessions[index],
-                        ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          _StatCard(
+                            icon: Iconsax.heart5,
+                            iconColor: Colors.pink,
+                            label: 'Saved',
+                            value: '${favoriteSessions.length}',
+                          ),
+                          const SizedBox(width: 12),
+                          _StatCard(
+                            icon: Iconsax.teacher,
+                            iconColor: Colors.teal,
+                            label: 'Tutors',
+                            value:
+                                '${favoriteSessions.map((e) => e.tutor?.id).toSet().length}',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _StatCard(
+                        icon: Iconsax.money,
+                        iconColor: TColors.primary,
+                        label: 'Total value of saved sessions',
+                        value:
+                            favoriteSessions.isEmpty
+                                ? '₦0'
+                                : '₦${favoriteSessions.fold<double>(0, (s, e) => s + (e.pricePerSession ?? 0)).toStringAsFixed(0)}',
+                        fullWidth: true,
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-            // ── Bottom padding ────────────────────────────────────
+              // ── Empty state ────────────────────────────────────────
+              if (favoriteSessions.isEmpty)
+                const SliverFillRemaining(child: _EmptyState()),
+
+              // ── Grid ──────────────────────────────────────────────
+              if (favoriteSessions.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TSizes.defaultSpace,
+                    ),
+                    child: TGridLayout(
+                      itemCount: favoriteSessions.length,
+                      itemBuilder:
+                          (_, index) => TSessionCardVertical(
+                            session: favoriteSessions[index],
+                          ),
+                    ),
+                  ),
+                ),
+            ],
+
+            // ── Bottom padding ─────────────────────────────────────
             SliverToBoxAdapter(
               child: SizedBox(
                 height:
@@ -259,7 +281,7 @@ class _EmptyState extends StatelessWidget {
                 width: 68,
                 height: 68,
                 decoration: BoxDecoration(
-                  color: Colors.pink.withValues(alpha: 0.1),
+                  color: Colors.pink.withValues(alpha: 0.10),
                   shape: BoxShape.circle,
                 ),
               ),

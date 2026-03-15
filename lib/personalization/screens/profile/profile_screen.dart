@@ -53,7 +53,6 @@ class ProfileScreen extends StatelessWidget {
                     width: double.infinity,
                     child: Column(
                       children: [
-                        // Nav row
                         Padding(
                           padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
                           child: Row(
@@ -81,10 +80,7 @@ class ProfileScreen extends StatelessWidget {
                             ],
                           ),
                         ),
-
                         const SizedBox(height: 8),
-
-                        // Avatar
                         Obx(() {
                           final user = userController.currentUser.value;
                           final imageUrl = user?.profilePicture;
@@ -167,10 +163,7 @@ class ProfileScreen extends StatelessWidget {
                             ],
                           );
                         }),
-
                         const SizedBox(height: 12),
-
-                        // Name
                         Obx(() {
                           final user = userController.currentUser.value;
                           final name =
@@ -187,10 +180,7 @@ class ProfileScreen extends StatelessWidget {
                             ),
                           );
                         }),
-
                         const SizedBox(height: 4),
-
-                        // Email
                         Obx(() {
                           final user = userController.currentUser.value;
                           final email =
@@ -215,7 +205,6 @@ class ProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // ── Action buttons ────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: TSizes.defaultSpace,
@@ -245,7 +234,6 @@ class ProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 28),
 
-            // ── Menu sections ─────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: TSizes.defaultSpace,
@@ -290,7 +278,7 @@ class ProfileScreen extends StatelessWidget {
                         title: 'Logout',
                         titleColor: Colors.red,
                         showChevron: false,
-                        onTap: _showLogoutModal,
+                        onTap: () => _showLogoutModal(context),
                       ),
                     ],
                   ),
@@ -305,35 +293,151 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showLogoutModal() {
-    Get.defaultDialog(
-      title: 'LOGOUT',
-      titleStyle: const TextStyle(fontSize: 20),
-      content: const Padding(
-        padding: EdgeInsets.symmetric(vertical: 15.0),
-        child: Text('Are you sure you want to logout?'),
-      ),
-      confirm: SizedBox(
-        width: 120,
-        child: ElevatedButton(
-          onPressed: () async {
-            try {
-              Get.back();
-              await AuthenticationRepository.instance.logout();
-            } catch (e) {
-              Get.snackbar('Error', 'Logout failed: $e');
-            }
-          },
-          child: const Text('Yes'),
-        ),
-      ),
-      cancel: SizedBox(
-        width: 100,
-        child: OutlinedButton(
-          onPressed: () => Get.back(),
-          child: const Text('No'),
-        ),
-      ),
+  // ── Logout bottom sheet ────────────────────────────────────────────────────
+  void _showLogoutModal(BuildContext context) {
+    HapticFeedback.mediumImpact();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      isScrollControlled: true,
+      builder:
+          (_) => Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              12,
+              24,
+              MediaQuery.of(context).viewInsets.bottom + 32,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colorScheme.outline.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // Icon
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    color: Colors.red,
+                    size: 28,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Title
+                Text(
+                  'Log out?',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // Subtitle
+                Text(
+                  "You'll need to sign in again\nto access your account.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.5,
+                    color: colorScheme.onSurface.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // Log out button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      HapticFeedback.lightImpact();
+                      Get.back();
+                      try {
+                        await AuthenticationRepository.instance.logout();
+                      } catch (e) {
+                        Get.snackbar('Error', 'Logout failed: $e');
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text(
+                      'Log out',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Cancel button
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      Get.back();
+                    },
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
     );
   }
 }

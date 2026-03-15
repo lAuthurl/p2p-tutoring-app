@@ -83,6 +83,12 @@ class _InboxScreenState extends State<InboxScreen> {
                 final baseSessions = controller.activeSessions;
                 final baseIds = baseSessions.map((s) => s.id).toSet();
 
+                // ✅ FIX: Subscribe to unreadCounts directly so the list
+                // rebuilds whenever any count changes — not just when a new
+                // message arrives and sessionMessages.refresh() happens.
+                // ignore: unnecessary_statement
+                controller.unreadCounts.entries;
+
                 final chatIds =
                     sessionMap.keys
                         .where(
@@ -118,8 +124,12 @@ class _InboxScreenState extends State<InboxScreen> {
                     final messages = sessionMap[chatId] ?? [];
                     final lastMessage = messages.last;
                     final lastTime = lastMessage.createdAt?.getDateTimeInUtc();
-                    final unreadCount = controller.unreadCount(chatId);
+
+                    // ✅ Read directly from unreadCounts RxMap — reactive,
+                    // no manual refresh needed.
+                    final unreadCount = controller.unreadCounts[chatId] ?? 0;
                     final hasUnread = unreadCount > 0;
+
                     final lastText =
                         (lastMessage.isVoice == true)
                             ? '🎤 Voice message'
@@ -397,6 +407,26 @@ class _ChatScreenState extends State<ChatScreen> {
     _fetchCurrentUser();
     controller.observeChat(widget.sessionId);
     _textController.addListener(() => setState(() {}));
+
+    // ✅ Defer markSessionRead to after the first frame.
+    // Calling it directly in initState triggers Obx widgets (the inbox
+    // badge, the inbox list) to setState() while the widget tree is still
+    // being built — causing "setState called during build" errors.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.markSessionRead(widget.sessionId);
+    });
+  }
+
+  @override
+  void dispose() {
+    // ✅ Clear the open chat so future messages count as unread again.
+    controller.clearCurrentOpenSession();
+    _playerSubscription?.cancel();
+    _recorder?.closeRecorder();
+    _player?.closePlayer();
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchCurrentUser() async {
@@ -414,16 +444,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _player = FlutterSoundPlayer();
     await _recorder!.openRecorder();
     await _player!.openPlayer();
-  }
-
-  @override
-  void dispose() {
-    _playerSubscription?.cancel();
-    _recorder?.closeRecorder();
-    _player?.closePlayer();
-    _textController.dispose();
-    _scrollController.dispose();
-    super.dispose();
   }
 
   Future<void> _sendTextMessage() async {
@@ -507,8 +527,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerLowest,
-
-      // ── App bar ─────────────────────────────────────────────
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
@@ -590,7 +608,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
       body: Column(
         children: [
-          // ── Messages ───────────────────────────────────────
           Expanded(
             child: Obx(() {
               final messages =
@@ -642,7 +659,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   final isMe = message.senderId == _currentUserId;
                   final isPlaying = _currentlyPlayingId == message.id;
 
-                  // Date separator
                   final showDate =
                       index == 0 ||
                       _isDifferentDay(
@@ -710,7 +726,6 @@ class _ChatScreenState extends State<ChatScreen> {
             }),
           ),
 
-          // ── Recording indicator ───────────────────────────
           if (_isRecording)
             Container(
               color: Colors.red.withValues(alpha: 0.06),
@@ -739,7 +754,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
 
-          // ── Input bar ─────────────────────────────────────
           Container(
             decoration: BoxDecoration(
               color: colorScheme.surface,
@@ -756,7 +770,6 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Text field
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
@@ -793,10 +806,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
-
                   const SizedBox(width: 8),
-
-                  // Send / mic button
                   GestureDetector(
                     onTap: () {
                       HapticFeedback.lightImpact();
