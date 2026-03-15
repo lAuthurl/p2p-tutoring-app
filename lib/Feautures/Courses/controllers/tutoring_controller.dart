@@ -104,25 +104,46 @@ class TutoringController extends GetxController {
       reportedTutors[tutorId] = reason;
   String? getReportReason(String tutorId) => reportedTutors[tutorId];
 
+  // ── Persistent user watcher ───────────────────────────────────────────────
+  // Kept alive for the controller's lifetime so it fires on EVERY login,
+  // not just the first. The old one-shot worker disposed itself after the
+  // first user load, meaning logout+login never re-triggered session/thread
+  // fetching — leaving unreadCounts empty until the inbox was opened manually.
+  Worker? _userWorker;
+
   // ---------------- Lifecycle ----------------
   @override
   void onInit() {
     super.onInit();
     _observeSessions();
-    _initTutorSessionsWhenReady();
+    _listenToUserChanges();
   }
 
-  void _initTutorSessionsWhenReady() {
+  @override
+  void onClose() {
+    _userWorker?.dispose();
+    super.onClose();
+  }
+
+  void _listenToUserChanges() {
     final userController = UserController.instance;
+
+    // If user is already loaded on init (app restart with active session),
+    // kick off immediately without waiting for the ever() callback.
     if (userController.currentUser.value != null) {
       _fetchSessionsAndThreads();
-      return;
     }
-    late Worker worker;
-    worker = ever<User?>(userController.currentUser, (user) {
+
+    // ✅ FIX: persistent ever() worker — never disposed on user change.
+    // The old code used a one-shot worker that called worker.dispose()
+    // inside its own callback, so after the first login it was gone.
+    // Logout+login never triggered _fetchSessionsAndThreads() again,
+    // so activeSessions stayed empty and unreadCounts was never populated —
+    // the inbox badge showed 0 until the user navigated to InboxScreen.
+    _userWorker?.dispose();
+    _userWorker = ever<User?>(userController.currentUser, (user) {
       if (user != null) {
         _fetchSessionsAndThreads();
-        worker.dispose();
       }
     });
   }
@@ -504,22 +525,6 @@ class TutoringController extends GetxController {
   List<TutoringSession> favoriteSessions() {
     final ids = FavoritesController.instance.favoriteIds;
 
-    // ✅ FIX: merge sessions from ALL three sources so we never miss one.
-    //
-    //    After login, these lists populate at different times:
-    //      • sessions / activeSessions  — DataStore observeQuery (slower,
-    //        waits for local SQLite to hydrate from AppSync sync)
-    //      • HomeController.allSessions — GraphQL after syncQueriesReady
-    //        (arrives faster because it's a direct network call)
-    //
-    //    Previously only sessions + activeSessions were searched, so if
-    //    DataStore hadn't finished syncing when the user opened Favourites,
-    //    favoriteSessions() returned [] even though favoriteIds was correct.
-    //    Now HomeController.allSessions fills the gap until DataStore catches up.
-    //
-    //    putIfAbsent means DataStore's fully-hydrated version (with tutor,
-    //    subject, images) takes precedence over HomeController's minimal one
-    //    once it arrives — no data downgrade on re-render.
     final all = <String, TutoringSession>{};
     for (final s in [...sessions, ...activeSessions]) {
       all[s.id] = s;
@@ -1140,11 +1145,11 @@ class TutoringController extends GetxController {
   // CLEAR ON LOGOUT
   // ============================================================
 
-  /// Call on logout — clears all session, chat, and cache state so the
-  /// next signed-in user starts fresh. Without this, favoriteSessions()
-  /// filters the previous user's sessions against the new user's
-  /// favoriteIds, which always returns [] because the IDs never match.
   void clearSessionState() {
+    // ✅ Do NOT dispose _userWorker here — it must stay alive so the next
+    //    login triggers _fetchSessionsAndThreads() automatically.
+    //    The worker watches UserController.currentUser which goes null on
+    //    logout and non-null again on the next login.
     sessions.clear();
     featuredSessions.clear();
     popularSessions.clear();

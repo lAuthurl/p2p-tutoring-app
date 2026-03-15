@@ -13,4 +13,6 @@ Make session load faster using cache
 messages and booking clears if app is ran in a different device or deleted and rebuilt 
 logout details still there when logout button is initiated , i need the details clared for privacy 
 make vc work 
+make image upload work
+make algorithm for feautured lecturers 
 and try making voice call work  - last thing to do

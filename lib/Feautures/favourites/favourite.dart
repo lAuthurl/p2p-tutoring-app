@@ -11,31 +11,52 @@ import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/home_contr
 
 import '../dashboard/Home/controllers/favorites_controller.dart';
 
-class FavouriteScreen extends StatelessWidget {
+class FavouriteScreen extends StatefulWidget {
   final HomeController homeController;
 
   const FavouriteScreen({super.key, required this.homeController});
 
   @override
+  State<FavouriteScreen> createState() => _FavouriteScreenState();
+}
+
+class _FavouriteScreenState extends State<FavouriteScreen>
+    with WidgetsBindingObserver {
+  final _favCtrl = FavoritesController.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Reload every time the screen is pushed — covers the login-then-open case.
+    _favCtrl.reloadForUser();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Called when the app comes back to the foreground.
+  /// Also fires when the user returns to this screen from another route
+  /// because WidgetsBindingObserver catches resumed lifecycle.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _favCtrl.reloadForUser();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final favoritesController = FavoritesController.instance;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: Obx(() {
-        // ✅ FavoritesController now owns the session objects directly.
-        //    favoritedSessions is populated during _loadFavorites() via
-        //    direct DataStore/AppSync queries — no dependency on
-        //    TutoringController or HomeController timing.
-        //
-        //    This eliminates the login race entirely:
-        //      OLD: favoriteSessions() filtered TutoringController.sessions
-        //           which was empty until DataStore synced (~5-15s after login)
-        //      NEW: favoritedSessions is ready as soon as _loadFavorites()
-        //           completes, which is awaited before dashboard navigation.
-        final isLoading = favoritesController.isLoading.value;
-        final favoriteSessions = favoritesController.favoritedSessions;
+        final isLoading = _favCtrl.isLoading.value;
+        final favoriteSessions = _favCtrl.favoritedSessions;
 
         return CustomScrollView(
           slivers: [

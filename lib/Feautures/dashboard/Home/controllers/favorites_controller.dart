@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 import '../../../../models/ModelProvider.dart';
+import '../../../Courses/controllers/tutoring_controller.dart';
+import 'home_controller.dart';
 
 /// Favorites are stored as a single UserFavorite row per user+session pair.
 ///
@@ -13,12 +15,11 @@ import '../../../../models/ModelProvider.dart';
 ///   • Re-favorite     → UPDATE the existing record (_deleted: false)
 ///   • Un-favorite     → DELETE (soft-delete via AppSync, _deleted: true)
 ///
-/// KEY DESIGN: FavoritesController now owns its own session objects.
-/// Instead of relying on TutoringController/HomeController having sessions
-/// loaded (which have unpredictable timing), we fetch the full session data
-/// ourselves during _loadFavorites(). This means the FavouriteScreen renders
-/// immediately after login with no dependency on any other controller's
-/// DataStore sync timing.
+/// favoritedSessions is kept in sync automatically:
+///   1. On login — _loadFavorites() fetches IDs + hydrates sessions directly.
+///   2. Auto-watch — workers on TutoringController.sessions and
+///      HomeController.allSessions re-hydrate favoritedSessions the moment
+///      either list populates, so the UI updates without any manual reload.
 class FavoritesController extends GetxController {
   static FavoritesController get instance {
     if (Get.isRegistered<FavoritesController>()) return Get.find();
@@ -27,7 +28,7 @@ class FavoritesController extends GetxController {
 
   // ── Public state ──────────────────────────────────────────────────────────
   final favoriteIds = <String>{}.obs;
-  final favoritedSessions = <TutoringSession>[].obs; // ✅ owned session objects
+  final favoritedSessions = <TutoringSession>[].obs;
   final isLoading = false.obs;
 
   // ── Internal ──────────────────────────────────────────────────────────────
@@ -35,15 +36,113 @@ class FavoritesController extends GetxController {
   final _inProgress = <String>{};
   String? _currentUserId;
 
+  // Workers that watch other controllers' session lists.
+  Worker? _tutoringWorker;
+  Worker? _homeWorker;
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   @override
   void onInit() {
     super.onInit();
     _loadFavorites();
+    _attachSessionWatchers();
   }
 
-  // ── Retry getUserId with backoff so calls immediately after login
-  // (when Amplify session may not be fully committed yet) still resolve.
+  @override
+  void onClose() {
+    _tutoringWorker?.dispose();
+    _homeWorker?.dispose();
+    super.onClose();
+  }
+
+  // =========================================================================
+  // AUTO-WATCH — re-hydrate favoritedSessions when any session list updates
+  // =========================================================================
+
+  void _attachSessionWatchers() {
+    // Watch TutoringController.sessions (DataStore observeQuery).
+    // Fires every time DataStore pushes a new snapshot — including the first
+    // one after login when sessions finally arrive from AppSync sync.
+    _tutoringWorker?.dispose();
+    _tutoringWorker = ever<List<TutoringSession>>(
+      TutoringController.instance.sessions,
+      (_) => _rehydrateFromExistingSources(),
+    );
+
+    // Watch HomeController.allSessions (GraphQL load).
+    // Fires when HomeController finishes its _loadAllSessionsFromGraphQL().
+    _homeWorker?.dispose();
+    if (Get.isRegistered<HomeController>()) {
+      _homeWorker = ever<List<TutoringSession>>(
+        HomeController.instance.allSessions,
+        (_) => _rehydrateFromExistingSources(),
+      );
+    }
+  }
+
+  /// Re-hydrate favoritedSessions using already-loaded sessions from other
+  /// controllers. Does NOT make any network calls — purely assembles from
+  /// what's already in memory. Called automatically by watchers.
+  void _rehydrateFromExistingSources() {
+    if (favoriteIds.isEmpty) return;
+
+    // Build a lookup map from every session source we have.
+    final pool = <String, TutoringSession>{};
+
+    try {
+      for (final s in TutoringController.instance.sessions) {
+        pool[s.id] = s;
+      }
+      for (final s in TutoringController.instance.activeSessions) {
+        pool.putIfAbsent(s.id, () => s);
+      }
+    } catch (_) {}
+
+    try {
+      if (Get.isRegistered<HomeController>()) {
+        for (final s in HomeController.instance.allSessions) {
+          pool.putIfAbsent(s.id, () => s);
+        }
+      }
+    } catch (_) {}
+
+    if (pool.isEmpty) return;
+
+    // For each favorited id that we now have a session for, update the list.
+    bool changed = false;
+    final current = {for (final s in favoritedSessions) s.id: s};
+
+    for (final id in favoriteIds) {
+      final inPool = pool[id];
+      if (inPool == null) continue;
+
+      final existing = current[id];
+      // Replace if missing or if the new version has a tutor name (more data).
+      if (existing == null ||
+          (existing.tutor?.name.isEmpty != false &&
+              inPool.tutor?.name.isNotEmpty == true)) {
+        current[id] = inPool;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      favoritedSessions.assignAll(
+        favoriteIds
+            .where((id) => current.containsKey(id))
+            .map((id) => current[id]!)
+            .toList(),
+      );
+      print(
+        '🔄 FavoritesController: re-hydrated ${favoritedSessions.length} sessions from local pool',
+      );
+    }
+  }
+
+  // =========================================================================
+  // AUTH
+  // =========================================================================
+
   Future<String?> _getUserId({int retries = 3}) async {
     if (_currentUserId != null) return _currentUserId;
 
@@ -68,8 +167,9 @@ class FavoritesController extends GetxController {
   }
 
   // =========================================================================
-  // LOAD — fetch favorite records then hydrate session objects directly
+  // LOAD
   // =========================================================================
+
   Future<void> _loadFavorites() async {
     final userId = await _getUserId();
     if (userId == null) return;
@@ -80,7 +180,6 @@ class FavoritesController extends GetxController {
     _records.clear();
 
     try {
-      // Step 1: fetch UserFavorite records for this user.
       const queryDoc = r"""
         query ListUserFavoritesByUser($userId: ID!, $limit: Int) {
           listUserFavoritesByUser(userId: $userId, limit: $limit) {
@@ -109,14 +208,15 @@ class FavoritesController extends GetxController {
 
       _parseResponse(response.data!);
 
-      // Step 2: fetch the actual TutoringSession objects for each active id.
-      // We do this ourselves so the FavouriteScreen never has to wait for
-      // TutoringController or HomeController to finish syncing.
-      await _hydrateFavoritedSessions();
+      // Step 1: Try to hydrate from already-loaded controllers (instant).
+      _rehydrateFromExistingSources();
+
+      // Step 2: For any ids still missing, fetch directly from DataStore/AppSync.
+      await _hydrateMissingSessions();
 
       print(
-        '✅ FavoritesController: loaded ${favoriteIds.length} active favorites '
-        'with ${favoritedSessions.length} sessions for user $userId',
+        '✅ FavoritesController: loaded ${favoriteIds.length} active favorites, '
+        '${favoritedSessions.length} sessions hydrated for user $userId',
       );
     } catch (e) {
       print('❌ FavoritesController._loadFavorites: $e');
@@ -156,46 +256,41 @@ class FavoritesController extends GetxController {
     }
   }
 
-  /// Fetch full TutoringSession objects for every active favoriteId.
-  /// Uses a direct GraphQL query so it doesn't depend on DataStore sync timing.
-  Future<void> _hydrateFavoritedSessions() async {
-    if (favoriteIds.isEmpty) return;
+  /// Fetch sessions for any favoriteId not yet in favoritedSessions.
+  Future<void> _hydrateMissingSessions() async {
+    final currentIds = favoritedSessions.map((s) => s.id).toSet();
+    final missing =
+        favoriteIds.where((id) => !currentIds.contains(id)).toList();
+    if (missing.isEmpty) return;
 
-    final sessions = <TutoringSession>[];
-
-    for (final sessionId in favoriteIds) {
+    for (final sessionId in missing) {
       try {
-        // Try DataStore first (fast, local cache).
+        // DataStore first (fast local cache).
         final local = await Amplify.DataStore.query(
           TutoringSession.classType,
           where: TutoringSession.ID.eq(sessionId),
         );
 
         if (local.isNotEmpty) {
-          final session = local.first;
-          // Also resolve the tutor if not already embedded.
-          final hydrated = await _resolveSessionTutor(session);
-          sessions.add(hydrated);
+          final hydrated = await _resolveSessionTutor(local.first);
+          favoritedSessions.add(hydrated);
           continue;
         }
 
-        // DataStore doesn't have it yet — fetch directly from AppSync.
-        final session = await _fetchSessionFromAppSync(sessionId);
-        if (session != null) sessions.add(session);
+        // Direct AppSync fallback.
+        final remote = await _fetchSessionFromAppSync(sessionId);
+        if (remote != null) favoritedSessions.add(remote);
       } catch (e) {
         print(
           '⚠️ FavoritesController: could not hydrate session $sessionId: $e',
         );
       }
     }
-
-    favoritedSessions.assignAll(sessions);
   }
 
   Future<TutoringSession> _resolveSessionTutor(TutoringSession session) async {
     final tutorId = session.tutor?.id;
     if (tutorId == null || tutorId.isEmpty) return session;
-    // If tutor name is already populated, nothing to do.
     if (session.tutor?.name.isNotEmpty == true) return session;
 
     try {
@@ -265,6 +360,7 @@ class FavoritesController extends GetxController {
   // =========================================================================
   // TOGGLE
   // =========================================================================
+
   Future<void> toggleFavorite(String sessionId) async {
     if (_inProgress.contains(sessionId)) {
       print(
@@ -288,12 +384,8 @@ class FavoritesController extends GetxController {
     }
   }
 
-  // ── Add ───────────────────────────────────────────────────────────────────
   Future<void> _addFavorite(String sessionId, String userId) async {
     favoriteIds.add(sessionId);
-
-    // Immediately add session object so the UI updates without waiting
-    // for a full reload.
     await _addSessionToFavoritedList(sessionId);
 
     final existing = _records[sessionId];
@@ -309,7 +401,6 @@ class FavoritesController extends GetxController {
   }
 
   Future<void> _addSessionToFavoritedList(String sessionId) async {
-    // Don't add duplicates.
     if (favoritedSessions.any((s) => s.id == sessionId)) return;
     try {
       final local = await Amplify.DataStore.query(
@@ -328,7 +419,6 @@ class FavoritesController extends GetxController {
     }
   }
 
-  // ── Revive ────────────────────────────────────────────────────────────────
   Future<void> _reviveRecord(
     String sessionId,
     _FavRecord record,
@@ -390,7 +480,6 @@ class FavoritesController extends GetxController {
     }
   }
 
-  // ── Create ────────────────────────────────────────────────────────────────
   Future<void> _createRecord(String sessionId, String userId) async {
     final recordId = amplify_core.UUID.getUUID();
 
@@ -440,7 +529,6 @@ class FavoritesController extends GetxController {
     }
   }
 
-  // ── Remove ────────────────────────────────────────────────────────────────
   Future<void> _removeFavorite(String sessionId) async {
     var record = _records[sessionId];
 
@@ -467,7 +555,6 @@ class FavoritesController extends GetxController {
     await _deleteRecord(sessionId, record);
   }
 
-  // ── Delete ────────────────────────────────────────────────────────────────
   Future<void> _deleteRecord(String sessionId, _FavRecord record) async {
     try {
       int version = record.version;
@@ -493,7 +580,6 @@ class FavoritesController extends GetxController {
       final response = await Amplify.API.mutate(request: request).response;
 
       if (response.errors.isNotEmpty) {
-        // Roll back.
         favoriteIds.add(sessionId);
         await _addSessionToFavoritedList(sessionId);
         _records[sessionId] = _FavRecord(
@@ -526,7 +612,6 @@ class FavoritesController extends GetxController {
     }
   }
 
-  // ── Fetch live _version ────────────────────────────────────────────────────
   Future<int?> _fetchLiveVersion(String recordId) async {
     try {
       const getDoc = r"""
@@ -569,14 +654,22 @@ class FavoritesController extends GetxController {
   // =========================================================================
   // PUBLIC HELPERS
   // =========================================================================
+
   bool isFavourite(String sessionId) => favoriteIds.contains(sessionId);
 
   Future<void> reloadForUser() async {
     _currentUserId = null;
+    _tutoringWorker?.dispose();
+    _homeWorker?.dispose();
     await _loadFavorites();
+    _attachSessionWatchers();
   }
 
   void clearOnLogout() {
+    _tutoringWorker?.dispose();
+    _homeWorker?.dispose();
+    _tutoringWorker = null;
+    _homeWorker = null;
     _currentUserId = null;
     favoriteIds.clear();
     favoritedSessions.clear();
