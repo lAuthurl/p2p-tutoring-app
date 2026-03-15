@@ -1,9 +1,12 @@
 // ignore_for_file: public_member_api_docs, use_build_context_synchronously
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:intl/intl.dart';
+import 'package:amplify_flutter/amplify_flutter.dart' hide Transition;
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../models/ModelProvider.dart';
@@ -24,30 +27,59 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
   List<Review> _reviews = [];
   bool _loadingReviews = true;
 
-  // Controls how many reviews are shown before "Show all"
   static const int _initialReviewCount = 5;
   bool _showAllReviews = false;
 
-  // Report reason is stored in TutoringController so it survives navigation.
+  // ✅ Reactive tutor — keeps about/skills/image in sync with DataStore
+  //    without requiring a full navigation push.
+  late final Rx<Tutor> _tutor;
+  StreamSubscription<dynamic>? _tutorSubscription;
+
   String? get _reportReason =>
       _tutoringController.getReportReason(widget.tutor.id);
 
   @override
   void initState() {
     super.initState();
+    _tutor = widget.tutor.obs;
     _fetchTutorReviews();
+    _observeTutor();
   }
 
+  @override
+  void dispose() {
+    _tutorSubscription?.cancel();
+    super.dispose();
+  }
+
+  // ── Watch DataStore for changes to this tutor ────────────────────────────
+  // observeQuery fires on ANY local DataStore.save() — unlike observe() which
+  // only fires on remote AppSync sync events. This means the screen updates
+  // the moment updateUserProfile() saves the Tutor record locally, with no
+  // navigation or manual refresh required.
+  void _observeTutor() {
+    try {
+      _tutorSubscription = Amplify.DataStore.observeQuery(
+        Tutor.classType,
+        where: Tutor.ID.eq(widget.tutor.id),
+      ).listen((snapshot) {
+        if (!mounted) return;
+        if (snapshot.items.isNotEmpty) {
+          _tutor.value = snapshot.items.first;
+        }
+      });
+    } catch (e) {
+      debugPrint('⚠️ TutorProfileScreen: could not observeQuery tutor: $e');
+    }
+  }
+
+  // ── Reviews ───────────────────────────────────────────────────────────────
   Future<void> _fetchTutorReviews() async {
     setState(() => _loadingReviews = true);
     try {
-      // ✅ fetchReviewsByTutor queries AppSync directly via GraphQL and
-      //    calls _parseReviewFkIds + _hydrateReviews so all usernames are
-      //    populated — same fix applied across the rest of the codebase.
       final reviews = await _tutoringController.fetchReviewsByTutor(
         widget.tutor.id,
       );
-      // Creator reviews pinned first, then newest first within each group.
       reviews.sort((a, b) {
         final aIsCreator =
             a.user?.email != null &&
@@ -74,11 +106,14 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
     }
   }
 
-  double get averageRating {
-    if (_reviews.isEmpty) return 0;
-    return _reviews.fold<double>(0, (sum, r) => sum + r.rating) /
-        _reviews.length;
+  // Only rated reviews count toward the average.
+  double get _averageRating {
+    final rated = _reviews.where((r) => r.rating > 0).toList();
+    if (rated.isEmpty) return 0;
+    return rated.fold<double>(0, (sum, r) => sum + r.rating) / rated.length;
   }
+
+  int get _ratedCount => _reviews.where((r) => r.rating > 0).length;
 
   void _openReportScreen() async {
     final result = await Get.to<String>(
@@ -86,25 +121,15 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
       transition: Transition.downToUp,
     );
     if (result != null && result.isNotEmpty && mounted) {
-      // Persist in controller so banner survives navigation away and back.
       _tutoringController.reportTutor(widget.tutor.id, result);
-      setState(() {}); // trigger rebuild to show banner
+      setState(() {});
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aboutText =
-        widget.tutor.about?.isNotEmpty == true
-            ? widget.tutor.about!
-            : "No information provided by this tutor.";
-    final skillsList =
-        widget.tutor.skills?.isNotEmpty == true
-            ? widget.tutor.skills!
-            : <String>[];
 
-    // How many reviews to show
     final visibleReviews =
         _showAllReviews
             ? _reviews
@@ -164,107 +189,114 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                     bottom: 20,
                     left: TSizes.defaultSpace,
                     right: TSizes.defaultSpace,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // Avatar
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.25),
-                                blurRadius: 16,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
+                    // ✅ Obx wraps the hero content so name/image/rating
+                    //    update automatically when the tutor record changes.
+                    child: Obx(() {
+                      final tutor = _tutor.value;
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          // Avatar
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.25),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: CircleAvatar(
+                              radius: 42,
+                              backgroundColor: Colors.white,
+                              backgroundImage:
+                                  tutor.image?.isNotEmpty == true
+                                      ? NetworkImage(tutor.image!)
+                                      : null,
+                              child:
+                                  tutor.image?.isNotEmpty != true
+                                      ? Text(
+                                        tutor.name[0].toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.w800,
+                                          color: TColors.primary,
+                                        ),
+                                      )
+                                      : null,
+                            ),
                           ),
-                          child: CircleAvatar(
-                            radius: 42,
-                            backgroundColor: Colors.white,
-                            backgroundImage:
-                                widget.tutor.image?.isNotEmpty == true
-                                    ? NetworkImage(widget.tutor.image!)
-                                    : null,
-                            child:
-                                widget.tutor.image?.isNotEmpty != true
-                                    ? Text(
-                                      widget.tutor.name[0].toUpperCase(),
-                                      style: TextStyle(
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.w800,
-                                        color: TColors.primary,
+                          const SizedBox(width: 14),
+                          // Name + email + rating
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  tutor.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  tutor.email,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.75),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                _loadingReviews
+                                    ? const SizedBox(
+                                      height: 18,
+                                      width: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
                                       ),
                                     )
-                                    : null,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        // Name + email + rating
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.tutor.name,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.4,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                widget.tutor.email,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.75),
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              _loadingReviews
-                                  ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                  : Row(
-                                    children: [
-                                      RatingBarIndicator(
-                                        rating: averageRating,
-                                        itemBuilder:
-                                            (context, _) => const Icon(
-                                              Icons.star_rounded,
-                                              color: Colors.amber,
-                                            ),
-                                        itemCount: 5,
-                                        itemSize: 18,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        _reviews.isNotEmpty
-                                            ? "${averageRating.toStringAsFixed(1)}  ·  ${_reviews.length} ${_reviews.length == 1 ? 'review' : 'reviews'}"
-                                            : "No reviews yet",
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.85,
-                                          ),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
+                                    : Row(
+                                      children: [
+                                        RatingBarIndicator(
+                                          rating: _averageRating,
+                                          itemBuilder:
+                                              (context, _) => const Icon(
+                                                Icons.star_rounded,
+                                                color: Colors.amber,
+                                              ),
+                                          itemCount: 5,
+                                          itemSize: 18,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                            ],
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          _ratedCount > 0
+                                              ? "${_averageRating.toStringAsFixed(1)}  ·  $_ratedCount ${_ratedCount == 1 ? 'review' : 'reviews'}"
+                                              : _reviews.isNotEmpty
+                                              ? "${_reviews.length} ${_reviews.length == 1 ? 'comment' : 'comments'}"
+                                              : "No reviews yet",
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.85,
+                                            ),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    }),
                   ),
                 ],
               ),
@@ -292,51 +324,65 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                   // ── Rating Summary Card ───────────────────────────
                   if (!_loadingReviews && _reviews.isNotEmpty) ...[
                     _RatingSummaryCard(
-                      averageRating: averageRating,
-                      reviewCount: _reviews.length,
+                      averageRating: _averageRating,
+                      ratedCount: _ratedCount,
+                      totalCount: _reviews.length,
                       isDark: isDark,
                     ),
                     const SizedBox(height: 16),
                   ],
 
-                  // ── About ─────────────────────────────────────────
-                  _SectionCard(
-                    icon: Icons.person_outline_rounded,
-                    title: 'About',
-                    child: Text(
-                      aboutText,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        height: 1.6,
-                        color: isDark ? Colors.white70 : Colors.black87,
+                  // ── About — reactive via Obx ──────────────────────
+                  Obx(() {
+                    final about = _tutor.value.about;
+                    final aboutText =
+                        about?.isNotEmpty == true
+                            ? about!
+                            : "No information provided by this tutor.";
+                    return _SectionCard(
+                      icon: Icons.person_outline_rounded,
+                      title: 'About',
+                      child: Text(
+                        aboutText,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          height: 1.6,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
 
                   const SizedBox(height: 16),
 
-                  // ── Skills ────────────────────────────────────────
-                  _SectionCard(
-                    icon: Icons.auto_awesome_rounded,
-                    title: 'Skills',
-                    child:
-                        skillsList.isNotEmpty
-                            ? Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children:
-                                  skillsList
-                                      .map((s) => _SkillChip(label: s))
-                                      .toList(),
-                            )
-                            : Text(
-                              "No skills added yet.",
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodyMedium?.copyWith(
-                                color: isDark ? Colors.white38 : Colors.black38,
+                  // ── Skills — reactive via Obx ─────────────────────
+                  Obx(() {
+                    final skills = _tutor.value.skills;
+                    final skillsList =
+                        skills?.isNotEmpty == true ? skills! : <String>[];
+                    return _SectionCard(
+                      icon: Icons.auto_awesome_rounded,
+                      title: 'Skills',
+                      child:
+                          skillsList.isNotEmpty
+                              ? Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children:
+                                    skillsList
+                                        .map((s) => _SkillChip(label: s))
+                                        .toList(),
+                              )
+                              : Text(
+                                "No skills added yet.",
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodyMedium?.copyWith(
+                                  color:
+                                      isDark ? Colors.white38 : Colors.black38,
+                                ),
                               ),
-                            ),
-                  ),
+                    );
+                  }),
 
                   const SizedBox(height: 16),
 
@@ -388,7 +434,6 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                                 ...visibleReviews.map(
                                   (r) => _ReviewTile(review: r, isDark: isDark),
                                 ),
-                                // Show more / Show less toggle
                                 if (_reviews.length > _initialReviewCount)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 8),
@@ -515,12 +560,14 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
 // ── Rating Summary Card ───────────────────────────────────────────────────────
 class _RatingSummaryCard extends StatelessWidget {
   final double averageRating;
-  final int reviewCount;
+  final int ratedCount;
+  final int totalCount;
   final bool isDark;
 
   const _RatingSummaryCard({
     required this.averageRating,
-    required this.reviewCount,
+    required this.ratedCount,
+    required this.totalCount,
     required this.isDark,
   });
 
@@ -536,31 +583,35 @@ class _RatingSummaryCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Big number
-          Text(
-            averageRating.toStringAsFixed(1),
-            style: TextStyle(
-              fontSize: 48,
-              fontWeight: FontWeight.w800,
-              color: TColors.primary,
-              height: 1,
+          if (ratedCount > 0) ...[
+            Text(
+              averageRating.toStringAsFixed(1),
+              style: TextStyle(
+                fontSize: 48,
+                fontWeight: FontWeight.w800,
+                color: TColors.primary,
+                height: 1,
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
+            const SizedBox(width: 16),
+          ],
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              RatingBarIndicator(
-                rating: averageRating,
-                itemBuilder:
-                    (context, _) =>
-                        const Icon(Icons.star_rounded, color: Colors.amber),
-                itemCount: 5,
-                itemSize: 22,
-              ),
+              if (ratedCount > 0)
+                RatingBarIndicator(
+                  rating: averageRating,
+                  itemBuilder:
+                      (context, _) =>
+                          const Icon(Icons.star_rounded, color: Colors.amber),
+                  itemCount: 5,
+                  itemSize: 22,
+                ),
               const SizedBox(height: 4),
               Text(
-                '$reviewCount ${reviewCount == 1 ? 'review' : 'reviews'} across all sessions',
+                ratedCount > 0
+                    ? '$ratedCount rated · $totalCount total across all sessions'
+                    : '$totalCount ${totalCount == 1 ? 'comment' : 'comments'} across all sessions',
                 style: TextStyle(
                   fontSize: 12,
                   color: isDark ? Colors.white54 : Colors.black45,
@@ -732,12 +783,13 @@ class _ReviewTile extends StatelessWidget {
     final username = review.user?.username ?? 'Anonymous';
     final initial = username[0].toUpperCase();
 
-    // ✅ Creator tag: reviewer is the tutor who owns the session.
-    // Compare emails since User and Tutor are separate models with separate ids.
     final isCreator =
         review.user?.email != null &&
         review.tutor?.email != null &&
         review.user!.email == review.tutor!.email;
+
+    // Creator reviews have rating == 0 — don't show empty stars.
+    final hasRating = review.rating > 0;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -809,27 +861,30 @@ class _ReviewTile extends StatelessWidget {
                             ),
                             if (isCreator) ...[
                               const SizedBox(width: 6),
-                              _CreatorTag(),
+                              const _CreatorTag(),
                             ],
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Row(
-                        children: List.generate(
-                          5,
-                          (i) => Icon(
-                            i < review.rating.round()
-                                ? Icons.star_rounded
-                                : Icons.star_outline_rounded,
-                            size: 14,
-                            color:
-                                i < review.rating.round()
-                                    ? Colors.amber
-                                    : Colors.grey.shade300,
+                      // Stars only shown when there is an actual rating.
+                      if (hasRating) ...[
+                        const SizedBox(width: 8),
+                        Row(
+                          children: List.generate(
+                            5,
+                            (i) => Icon(
+                              i < review.rating.round()
+                                  ? Icons.star_rounded
+                                  : Icons.star_outline_rounded,
+                              size: 14,
+                              color:
+                                  i < review.rating.round()
+                                      ? Colors.amber
+                                      : Colors.grey.shade300,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   if (review.comment?.isNotEmpty == true) ...[
@@ -874,9 +929,9 @@ class _CreatorTag extends StatelessWidget {
         color: TColors.primary,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
-        children: const [
+        children: [
           Icon(Icons.verified_rounded, size: 10, color: Colors.white),
           SizedBox(width: 3),
           Text(

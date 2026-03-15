@@ -72,7 +72,7 @@ class TutoringController extends GetxController {
   final isSynced = false.obs;
   final sessionMessages = <String, List<ChatMessage>>{}.obs;
 
-  // ── Unread counts ─────────────────────────────────────────────────────────
+  // ── Unread counts ────────────────────────────────────────────────────────
   final unreadCounts = <String, int>{}.obs;
   String? currentOpenChatId;
   final _chatBaselineTime = <String, DateTime>{};
@@ -104,11 +104,6 @@ class TutoringController extends GetxController {
       reportedTutors[tutorId] = reason;
   String? getReportReason(String tutorId) => reportedTutors[tutorId];
 
-  // ── Persistent user watcher ───────────────────────────────────────────────
-  // Kept alive for the controller's lifetime so it fires on EVERY login,
-  // not just the first. The old one-shot worker disposed itself after the
-  // first user load, meaning logout+login never re-triggered session/thread
-  // fetching — leaving unreadCounts empty until the inbox was opened manually.
   Worker? _userWorker;
 
   // ---------------- Lifecycle ----------------
@@ -127,24 +122,12 @@ class TutoringController extends GetxController {
 
   void _listenToUserChanges() {
     final userController = UserController.instance;
-
-    // If user is already loaded on init (app restart with active session),
-    // kick off immediately without waiting for the ever() callback.
     if (userController.currentUser.value != null) {
       _fetchSessionsAndThreads();
     }
-
-    // ✅ FIX: persistent ever() worker — never disposed on user change.
-    // The old code used a one-shot worker that called worker.dispose()
-    // inside its own callback, so after the first login it was gone.
-    // Logout+login never triggered _fetchSessionsAndThreads() again,
-    // so activeSessions stayed empty and unreadCounts was never populated —
-    // the inbox badge showed 0 until the user navigated to InboxScreen.
     _userWorker?.dispose();
     _userWorker = ever<User?>(userController.currentUser, (user) {
-      if (user != null) {
-        _fetchSessionsAndThreads();
-      }
+      if (user != null) _fetchSessionsAndThreads();
     });
   }
 
@@ -217,27 +200,198 @@ class TutoringController extends GetxController {
     );
   }
 
-  Future<List<Review>> _hydrateReviews(List<Review> raw) async {
+  // Hydrates user + tutor relations on reviews.
+  // sourceJson is the raw AppSync response — used as a last-resort fallback
+  // to extract userId/tutorId when DataStore stubs are null and FK maps are
+  // empty (the cross-account scenario).
+  Future<List<Review>> _hydrateReviews(
+    List<Review> raw, {
+    String? sourceJson,
+  }) async {
     return Future.wait(
       raw.map((review) async {
         Review hydrated = review;
-        final userId = review.user?.id ?? _reviewUserIdMap[review.id];
+
+        // Resolve userId: stub → FK map → parse from GraphQL JSON directly.
+        String? userId = review.user?.id;
+        if (userId == null || userId.isEmpty) {
+          userId = _reviewUserIdMap[review.id];
+        }
+        if ((userId == null || userId.isEmpty) && sourceJson != null) {
+          userId = _extractFieldForId(sourceJson, review.id, 'userId');
+          if (userId != null) {
+            print(
+              '🔑 _hydrateReviews: extracted userId=$userId from JSON for review ${review.id}',
+            );
+          }
+        }
         if (userId != null && userId.isNotEmpty) {
           final user = await _resolveUserById(userId);
           if (user != null) hydrated = hydrated.copyWith(user: user);
         }
-        final tutorId = review.tutor?.id ?? _reviewTutorIdMap[review.id];
+
+        // Resolve tutorId: same three-step fallback.
+        String? tutorId = review.tutor?.id;
+        if (tutorId == null || tutorId.isEmpty) {
+          tutorId = _reviewTutorIdMap[review.id];
+        }
+        if ((tutorId == null || tutorId.isEmpty) && sourceJson != null) {
+          tutorId = _extractFieldForId(sourceJson, review.id, 'tutorId');
+        }
         if (tutorId != null && tutorId.isNotEmpty) {
           final tutor = await _resolveTutorById(tutorId);
           if (tutor != null) hydrated = hydrated.copyWith(tutor: tutor);
         }
+
         return hydrated;
       }),
     );
   }
 
-  final _reviewUserIdMap = <String, String>{};
-  final _reviewTutorIdMap = <String, String>{};
+  // ============================================================
+  // JSON PARSING HELPERS
+  // ============================================================
+
+  // Extracts [fieldName] from the JSON object whose "id" equals [targetId].
+  // Position-based: finds the id occurrence then grabs the nearest { } block.
+  String? _extractFieldForId(
+    String jsonStr,
+    String targetId,
+    String fieldName,
+  ) {
+    try {
+      final idMarker = RegExp('"id"\\s*:\\s*"' + RegExp.escape(targetId) + '"');
+      final idMatch = idMarker.firstMatch(jsonStr);
+      if (idMatch == null) return null;
+      final start = jsonStr.lastIndexOf('{', idMatch.start);
+      final end = jsonStr.indexOf('}', idMatch.end);
+      if (start == -1 || end == -1) return null;
+      final block = jsonStr.substring(start, end + 1);
+      return RegExp(
+        '"' + RegExp.escape(fieldName) + r'"\s*:\s*"([^"]+)"',
+      ).firstMatch(block)?.group(1);
+    } catch (e) {
+      print('❌ _extractFieldForId($targetId, $fieldName) error: $e');
+      return null;
+    }
+  }
+
+  List<String> _parseIds(String jsonStr) {
+    final ids = <String>[];
+    for (final match in RegExp(r'"id"\s*:\s*"([^"]+)"').allMatches(jsonStr)) {
+      ids.add(match.group(1)!);
+    }
+    return ids;
+  }
+
+  // Caches userId/tutorId from a GraphQL reviews response into the FK maps.
+  void _parseReviewFkIds(String jsonStr) {
+    final allIds = RegExp(r'"id"\s*:\s*"([^"]+)"').allMatches(jsonStr).toList();
+    final allUserIds =
+        RegExp(r'"userId"\s*:\s*"([^"]+)"').allMatches(jsonStr).toList();
+    final allTutorIds =
+        RegExp(r'"tutorId"\s*:\s*"([^"]+)"').allMatches(jsonStr).toList();
+
+    for (int i = 0; i < allIds.length; i++) {
+      final idMatch = allIds[i];
+      final reviewId = idMatch.group(1)!;
+      final nextIdPos =
+          i + 1 < allIds.length ? allIds[i + 1].start : jsonStr.length;
+
+      final u = allUserIds.where(
+        (m) => m.start > idMatch.start && m.start < nextIdPos,
+      );
+      if (u.isNotEmpty) _reviewUserIdMap[reviewId] = u.first.group(1)!;
+
+      final t = allTutorIds.where(
+        (m) => m.start > idMatch.start && m.start < nextIdPos,
+      );
+      if (t.isNotEmpty) _reviewTutorIdMap[reviewId] = t.first.group(1)!;
+    }
+  }
+
+  Review? _buildMinimalReviewById(String id, String jsonStr, String sessionId) {
+    try {
+      final idMarker = RegExp('"id"\\s*:\\s*"' + RegExp.escape(id) + '"');
+      final idMatch = idMarker.firstMatch(jsonStr);
+      if (idMatch == null) return null;
+      final start = jsonStr.lastIndexOf('{', idMatch.start);
+      final end = jsonStr.indexOf('}', idMatch.end);
+      if (start == -1 || end == -1) return null;
+      final block = jsonStr.substring(start, end + 1);
+      final rating =
+          double.tryParse(
+            RegExp(r'"rating"\s*:\s*([\d.]+)').firstMatch(block)?.group(1) ??
+                '0',
+          ) ??
+          0;
+      final comment = RegExp(
+        r'"comment"\s*:\s*"([^"]*)"',
+      ).firstMatch(block)?.group(1);
+      final createdAt = RegExp(
+        r'"createdAt"\s*:\s*"([^"]+)"',
+      ).firstMatch(block)?.group(1);
+      return Review(
+        id: id,
+        sessionId: sessionId,
+        rating: rating,
+        comment: comment,
+        createdAt:
+            createdAt != null
+                ? TemporalDateTime.fromString(createdAt)
+                : TemporalDateTime.now(),
+      );
+    } catch (e) {
+      print('❌ _buildMinimalReviewById error for $id: $e');
+      return null;
+    }
+  }
+
+  String? _parseSessionIdForReview(String reviewId, String jsonStr) {
+    return _extractFieldForId(jsonStr, reviewId, 'sessionId');
+  }
+
+  List<TutoringSession> _buildMinimalSessions(String jsonStr, Tutor tutor) {
+    final sessions = <TutoringSession>[];
+    try {
+      final ids =
+          RegExp(
+            r'"id"\s*:\s*"([^"]+)"',
+          ).allMatches(jsonStr).map((m) => m.group(1)!).toList();
+      final titles =
+          RegExp(
+            r'"title"\s*:\s*"([^"]+)"',
+          ).allMatches(jsonStr).map((m) => m.group(1)!).toList();
+      final prices =
+          RegExp(r'"pricePerSession"\s*:\s*([\d.]+)')
+              .allMatches(jsonStr)
+              .map((m) => double.tryParse(m.group(1)!) ?? 0.0)
+              .toList();
+      final thumbs =
+          RegExp(
+            r'"thumbnail"\s*:\s*"([^"]+)"',
+          ).allMatches(jsonStr).map((m) => m.group(1)!).toList();
+      final descs =
+          RegExp(
+            r'"description"\s*:\s*"([^"]+)"',
+          ).allMatches(jsonStr).map((m) => m.group(1)!).toList();
+      for (int i = 0; i < ids.length; i++) {
+        sessions.add(
+          TutoringSession(
+            id: ids[i],
+            title: i < titles.length ? titles[i] : 'Session',
+            description: i < descs.length ? descs[i] : null,
+            pricePerSession: i < prices.length ? prices[i] : 0,
+            thumbnail: i < thumbs.length ? thumbs[i] : null,
+            tutor: tutor,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ _buildMinimalSessions error: $e');
+    }
+    return sessions;
+  }
 
   // ============================================================
   // SESSIONS
@@ -289,15 +443,12 @@ class TutoringController extends GetxController {
     try {
       final allMessages = await Amplify.DataStore.query(ChatMessage.classType);
       final sessionIds = activeSessions.map((s) => s.id).toSet();
-
       final chatIds =
           allMessages
               .where((m) => sessionIds.any((id) => m.sessionId.startsWith(id)))
               .map((m) => m.sessionId)
               .toSet();
-
       print('💬 fetchAllStudentThreads: found ${chatIds.length} chat threads');
-
       for (final chatId in chatIds) {
         observeChat(chatId);
       }
@@ -381,54 +532,6 @@ class TutoringController extends GetxController {
     for (final session in activeSessions) {
       observeChat(session.id);
     }
-  }
-
-  List<String> _parseIds(String jsonStr) {
-    final ids = <String>[];
-    final idPattern = RegExp(r'"id"\s*:\s*"([^"]+)"');
-    for (final match in idPattern.allMatches(jsonStr)) {
-      ids.add(match.group(1)!);
-    }
-    return ids;
-  }
-
-  List<TutoringSession> _buildMinimalSessions(String jsonStr, Tutor tutor) {
-    final sessions = <TutoringSession>[];
-    try {
-      final idPattern = RegExp(r'"id"\s*:\s*"([^"]+)"');
-      final titlePattern = RegExp(r'"title"\s*:\s*"([^"]+)"');
-      final pricePattern = RegExp(r'"pricePerSession"\s*:\s*([\d.]+)');
-      final thumbPattern = RegExp(r'"thumbnail"\s*:\s*"([^"]+)"');
-      final descPattern = RegExp(r'"description"\s*:\s*"([^"]+)"');
-      final ids =
-          idPattern.allMatches(jsonStr).map((m) => m.group(1)!).toList();
-      final titles =
-          titlePattern.allMatches(jsonStr).map((m) => m.group(1)!).toList();
-      final prices =
-          pricePattern
-              .allMatches(jsonStr)
-              .map((m) => double.tryParse(m.group(1)!) ?? 0.0)
-              .toList();
-      final thumbs =
-          thumbPattern.allMatches(jsonStr).map((m) => m.group(1)!).toList();
-      final descs =
-          descPattern.allMatches(jsonStr).map((m) => m.group(1)!).toList();
-      for (int i = 0; i < ids.length; i++) {
-        sessions.add(
-          TutoringSession(
-            id: ids[i],
-            title: i < titles.length ? titles[i] : 'Session',
-            description: i < descs.length ? descs[i] : null,
-            pricePerSession: i < prices.length ? prices[i] : 0,
-            thumbnail: i < thumbs.length ? thumbs[i] : null,
-            tutor: tutor,
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ _buildMinimalSessions error: $e');
-    }
-    return sessions;
   }
 
   // ---------------- Session Utilities ----------------
@@ -524,7 +627,6 @@ class TutoringController extends GetxController {
 
   List<TutoringSession> favoriteSessions() {
     final ids = FavoritesController.instance.favoriteIds;
-
     final all = <String, TutoringSession>{};
     for (final s in [...sessions, ...activeSessions]) {
       all[s.id] = s;
@@ -536,7 +638,6 @@ class TutoringController extends GetxController {
         }
       }
     } catch (_) {}
-
     return all.values.where((s) => ids.contains(s.id)).toList();
   }
 
@@ -580,6 +681,11 @@ class TutoringController extends GetxController {
   // REVIEWS
   // ============================================================
 
+  // FK maps — populated as a cache. _hydrateReviews also falls back to
+  // parsing sourceJson directly so cross-account display always works.
+  final _reviewUserIdMap = <String, String>{};
+  final _reviewTutorIdMap = <String, String>{};
+
   Future<Review> addReview({
     required TutoringSession session,
     required double rating,
@@ -620,7 +726,7 @@ class TutoringController extends GetxController {
           userId: \$userId, rating: \$rating, comment: \$comment,
           createdAt: \$createdAt
         }) {
-          id sessionId tutorId rating comment createdAt
+          id sessionId tutorId userId rating comment createdAt
         }
       }
     """;
@@ -643,6 +749,8 @@ class TutoringController extends GetxController {
         'GraphQL mutation failed: ${response.errors.first.message}',
       );
     }
+
+    print('✅ Review saved to AppSync: $reviewId');
     _reviewUserIdMap[reviewId] = userId;
     _reviewTutorIdMap[reviewId] = tutorId;
 
@@ -657,30 +765,82 @@ class TutoringController extends GetxController {
     );
   }
 
+  // ✅ Uses the GSI query `listReviewsBySession` generated by @index queryField.
+  //    This queries the GSI directly instead of doing a full table scan with
+  //    a filter — much faster and not affected by owner auth filtering.
+  //    Falls back to the old filter query for backwards compatibility if the
+  //    GSI query fails (e.g. before amplify push is run).
   Future<List<Review>> fetchReviews(String sessionId) async {
     if (!await _canSync()) return [];
     try {
-      const queryDoc = """
+      // ✅ PRIMARY: GSI query via listReviewsBySession (requires schema update
+      //    with queryField: "listReviewsBySession" on the @index).
+      const gsiQuery = """
         query ListReviewsBySession(\$sessionId: ID!, \$limit: Int) {
+          listReviewsBySession(sessionId: \$sessionId, limit: \$limit) {
+            items { id sessionId tutorId userId rating comment createdAt }
+          }
+        }
+      """;
+
+      // ✅ FALLBACK: old filter scan (works before schema update).
+      const filterQuery = """
+        query ListReviewsBySessionFilter(\$sessionId: ID!, \$limit: Int) {
           listReviews(filter: {sessionId: {eq: \$sessionId}}, limit: \$limit) {
             items { id sessionId tutorId userId rating comment createdAt }
           }
         }
       """;
-      final response =
+
+      String? sourceJson;
+      List<String> ids = [];
+
+      // Try GSI query first.
+      final gsiResponse =
           await Amplify.API
               .query(
                 request: GraphQLRequest<String>(
-                  document: queryDoc,
+                  document: gsiQuery,
                   variables: {'sessionId': sessionId, 'limit': 200},
                 ),
               )
               .response;
 
+      if (gsiResponse.errors.isEmpty && gsiResponse.data != null) {
+        sourceJson = gsiResponse.data!;
+        ids = _parseIds(sourceJson);
+        print(
+          '🔍 fetchReviews (GSI): ${ids.length} reviews for session $sessionId',
+        );
+      } else {
+        // GSI not available yet — fall back to filter query.
+        print(
+          '⚠️ fetchReviews: GSI query failed, falling back to filter query. '
+          'Run "amplify push" to enable the GSI. Errors: ${gsiResponse.errors}',
+        );
+        final filterResponse =
+            await Amplify.API
+                .query(
+                  request: GraphQLRequest<String>(
+                    document: filterQuery,
+                    variables: {'sessionId': sessionId, 'limit': 200},
+                  ),
+                )
+                .response;
+
+        if (filterResponse.errors.isEmpty && filterResponse.data != null) {
+          sourceJson = filterResponse.data!;
+          ids = _parseIds(sourceJson);
+          print(
+            '🔍 fetchReviews (filter fallback): ${ids.length} reviews for session $sessionId',
+          );
+        }
+      }
+
       List<Review> raw = [];
-      if (response.errors.isEmpty && response.data != null) {
-        final ids = _parseIds(response.data!);
-        _parseReviewFkIds(response.data!);
+
+      if (sourceJson != null && ids.isNotEmpty) {
+        _parseReviewFkIds(sourceJson);
         for (final id in ids) {
           final results = await Amplify.DataStore.query(
             Review.classType,
@@ -689,73 +849,118 @@ class TutoringController extends GetxController {
           if (results.isNotEmpty) {
             raw.add(results.first);
           } else {
-            final minimal = _buildMinimalReviewById(
-              id,
-              response.data!,
-              sessionId,
-            );
+            // Not in local DataStore — build from GraphQL JSON directly.
+            final minimal = _buildMinimalReviewById(id, sourceJson, sessionId);
             if (minimal != null) raw.add(minimal);
           }
         }
-      } else {
+      } else if (sourceJson == null) {
+        // Fully offline fallback.
+        print('⚠️ fetchReviews: falling back to local DataStore only');
         final local = await Amplify.DataStore.query(
           Review.classType,
           where: Review.SESSIONID.eq(sessionId),
         );
         raw = local.where((r) => r.createdAt != null).toList();
       }
-      return await _hydrateReviews(raw);
+
+      return await _hydrateReviews(raw, sourceJson: sourceJson);
     } catch (e) {
       print('❌ fetchReviews error: $e');
       return [];
     }
   }
 
-  void _parseReviewFkIds(String jsonStr) {
-    final itemPattern = RegExp(r'\{[^{}]*"id"\s*:\s*"([^"]+)"[^{}]*\}');
-    final userIdPattern = RegExp(r'"userId"\s*:\s*"([^"]+)"');
-    final tutorIdPattern = RegExp(r'"tutorId"\s*:\s*"([^"]+)"');
-    for (final match in itemPattern.allMatches(jsonStr)) {
-      final block = match.group(0)!;
-      final reviewId = match.group(1)!;
-      final u = userIdPattern.firstMatch(block);
-      if (u != null) _reviewUserIdMap[reviewId] = u.group(1)!;
-      final t = tutorIdPattern.firstMatch(block);
-      if (t != null) _reviewTutorIdMap[reviewId] = t.group(1)!;
-    }
-  }
-
-  Review? _buildMinimalReviewById(String id, String jsonStr, String sessionId) {
+  // ✅ Same GSI + fallback pattern as fetchReviews.
+  Future<List<Review>> fetchReviewsByTutor(String tutorId) async {
+    if (!await _canSync()) return [];
     try {
-      final blocks = RegExp(
-        r'\{[^{}]*"id"\s*:\s*"' + RegExp.escape(id) + r'"[^{}]*\}',
-      ).allMatches(jsonStr);
-      if (blocks.isEmpty) return null;
-      final block = blocks.first.group(0)!;
-      final rating =
-          double.tryParse(
-            RegExp(r'"rating"\s*:\s*([\d.]+)').firstMatch(block)?.group(1) ??
-                '0',
-          ) ??
-          0;
-      final comment = RegExp(
-        r'"comment"\s*:\s*"([^"]*)"',
-      ).firstMatch(block)?.group(1);
-      final createdAt = RegExp(
-        r'"createdAt"\s*:\s*"([^"]+)"',
-      ).firstMatch(block)?.group(1);
-      return Review(
-        id: id,
-        sessionId: sessionId,
-        rating: rating,
-        comment: comment,
-        createdAt:
-            createdAt != null
-                ? TemporalDateTime.fromString(createdAt)
-                : TemporalDateTime.now(),
-      );
+      const gsiQuery = """
+        query ListReviewsByTutor(\$tutorId: ID!, \$limit: Int) {
+          listReviewsByTutor(tutorId: \$tutorId, limit: \$limit) {
+            items { id sessionId tutorId userId rating comment createdAt }
+          }
+        }
+      """;
+
+      const filterQuery = """
+        query ListReviewsByTutorFilter(\$tutorId: ID!, \$limit: Int) {
+          listReviews(filter: {tutorId: {eq: \$tutorId}}, limit: \$limit) {
+            items { id sessionId tutorId userId rating comment createdAt }
+          }
+        }
+      """;
+
+      String? sourceJson;
+      List<String> ids = [];
+
+      final gsiResponse =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: gsiQuery,
+                  variables: {'tutorId': tutorId, 'limit': 200},
+                ),
+              )
+              .response;
+
+      if (gsiResponse.errors.isEmpty && gsiResponse.data != null) {
+        sourceJson = gsiResponse.data!;
+        ids = _parseIds(sourceJson);
+        print(
+          '🔍 fetchReviewsByTutor (GSI): ${ids.length} reviews for tutor $tutorId',
+        );
+      } else {
+        print(
+          '⚠️ fetchReviewsByTutor: GSI query failed, falling back to filter. '
+          'Run "amplify push" to enable the GSI. Errors: ${gsiResponse.errors}',
+        );
+        final filterResponse =
+            await Amplify.API
+                .query(
+                  request: GraphQLRequest<String>(
+                    document: filterQuery,
+                    variables: {'tutorId': tutorId, 'limit': 200},
+                  ),
+                )
+                .response;
+
+        if (filterResponse.errors.isEmpty && filterResponse.data != null) {
+          sourceJson = filterResponse.data!;
+          ids = _parseIds(sourceJson);
+          print(
+            '🔍 fetchReviewsByTutor (filter fallback): ${ids.length} reviews',
+          );
+        }
+      }
+
+      List<Review> raw = [];
+
+      if (sourceJson != null && ids.isNotEmpty) {
+        _parseReviewFkIds(sourceJson);
+        for (final id in ids) {
+          final results = await Amplify.DataStore.query(
+            Review.classType,
+            where: Review.ID.eq(id),
+          );
+          if (results.isNotEmpty) {
+            raw.add(results.first);
+          } else {
+            final sid = _parseSessionIdForReview(id, sourceJson);
+            final minimal = _buildMinimalReviewById(id, sourceJson, sid ?? '');
+            if (minimal != null) raw.add(minimal);
+          }
+        }
+      } else if (sourceJson == null) {
+        print('⚠️ fetchReviewsByTutor: falling back to local DataStore only');
+        final all = await Amplify.DataStore.query(Review.classType);
+        raw = all.where((r) => r.tutor?.id == tutorId).toList();
+      }
+
+      return await _hydrateReviews(raw, sourceJson: sourceJson);
     } catch (e) {
-      return null;
+      print('❌ fetchReviewsByTutor error: $e');
+      return [];
     }
   }
 
@@ -773,66 +978,6 @@ class TutoringController extends GetxController {
       '✅ Review created at (UTC): ${newReview.createdAt!.getDateTimeInUtc()}',
     );
     return await fetchReviews(session.id);
-  }
-
-  Future<List<Review>> fetchReviewsByTutor(String tutorId) async {
-    if (!await _canSync()) return [];
-    try {
-      const queryDoc = """
-        query ListReviewsByTutor(\$tutorId: ID!, \$limit: Int) {
-          listReviews(filter: {tutorId: {eq: \$tutorId}}, limit: \$limit) {
-            items { id sessionId tutorId userId rating comment createdAt }
-          }
-        }
-      """;
-      final response =
-          await Amplify.API
-              .query(
-                request: GraphQLRequest<String>(
-                  document: queryDoc,
-                  variables: {'tutorId': tutorId, 'limit': 200},
-                ),
-              )
-              .response;
-
-      List<Review> raw = [];
-      if (response.errors.isEmpty && response.data != null) {
-        final ids = _parseIds(response.data!);
-        _parseReviewFkIds(response.data!);
-        for (final id in ids) {
-          final results = await Amplify.DataStore.query(
-            Review.classType,
-            where: Review.ID.eq(id),
-          );
-          if (results.isNotEmpty) {
-            raw.add(results.first);
-          } else {
-            final sessionId = _parseSessionIdForReview(id, response.data!);
-            final minimal = _buildMinimalReviewById(
-              id,
-              response.data!,
-              sessionId ?? '',
-            );
-            if (minimal != null) raw.add(minimal);
-          }
-        }
-      } else {
-        final all = await Amplify.DataStore.query(Review.classType);
-        raw = all.where((r) => r.tutor?.id == tutorId).toList();
-      }
-      return await _hydrateReviews(raw);
-    } catch (e) {
-      print('❌ fetchReviewsByTutor error: $e');
-      return [];
-    }
-  }
-
-  String? _parseSessionIdForReview(String reviewId, String jsonStr) {
-    final block = RegExp(
-      r'\{[^{}]*"id"\s*:\s*"' + RegExp.escape(reviewId) + r'"[^{}]*\}',
-    ).firstMatch(jsonStr)?.group(0);
-    if (block == null) return null;
-    return RegExp(r'"sessionId"\s*:\s*"([^"]+)"').firstMatch(block)?.group(1);
   }
 
   // ============================================================
@@ -1146,10 +1291,6 @@ class TutoringController extends GetxController {
   // ============================================================
 
   void clearSessionState() {
-    // ✅ Do NOT dispose _userWorker here — it must stay alive so the next
-    //    login triggers _fetchSessionsAndThreads() automatically.
-    //    The worker watches UserController.currentUser which goes null on
-    //    logout and non-null again on the next login.
     sessions.clear();
     featuredSessions.clear();
     popularSessions.clear();

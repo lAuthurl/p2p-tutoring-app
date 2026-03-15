@@ -48,15 +48,15 @@ class UserController extends GetxController {
 
   // ---------------------------------------------------------------------------
   // FORM KEYS
-  // ✅ These are recreated fresh each time the controller is instantiated,
-  //    preventing "Multiple widgets used the same GlobalKey" after re-login
+  // ✅ Recreated fresh each time the controller is instantiated, preventing
+  //    "Multiple widgets used the same GlobalKey" after re-login.
   // ---------------------------------------------------------------------------
   late GlobalKey<FormState> updateUserProfileFormKey;
   late GlobalKey<FormState> reAuthFormKey;
 
   // ---------------------------------------------------------------------------
   // TEXT CONTROLLERS
-  // ✅ All created fresh in onInit — never reused after dispose
+  // ✅ All created fresh in onInit — never reused after dispose.
   // ---------------------------------------------------------------------------
   late TextEditingController verifyEmail;
   late TextEditingController verifyPassword;
@@ -73,7 +73,6 @@ class UserController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // ✅ Always create fresh instances — safe after logout/re-login
     updateUserProfileFormKey = GlobalKey<FormState>();
     reAuthFormKey = GlobalKey<FormState>();
 
@@ -88,7 +87,6 @@ class UserController extends GetxController {
 
   @override
   void onClose() {
-    // ✅ Safe dispose — only dispose if not already disposed
     _safeDispose(verifyEmail);
     _safeDispose(verifyPassword);
     _safeDispose(email);
@@ -168,6 +166,10 @@ class UserController extends GetxController {
 
   // ---------------------------------------------------------------------------
   // UPDATE PROFILE
+  // ✅ FIX: Also updates the Tutor record (skills, about, name, image) so
+  //    that TutorProfileScreen reflects changes immediately. Previously only
+  //    the User model was saved, leaving the Tutor record stale — which is
+  //    why the profile page always showed "No skills added yet" and no info.
   // ---------------------------------------------------------------------------
   Future<void> updateUserProfile() async {
     try {
@@ -189,24 +191,42 @@ class UserController extends GetxController {
       final user = currentUser.value;
       if (user == null) throw 'No user loaded';
 
+      // Parse the skills list from the comma-separated text field.
+      final updatedSkills =
+          skills.text
+              .trim()
+              .split(',')
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toList();
+
+      final updatedAbout = about.text.trim();
+      final updatedName = fullName.text.trim();
+
+      // ── Save User record ─────────────────────────────────────────
       final updatedUser = user.copyWith(
-        username: fullName.text.trim(),
+        username: updatedName,
         email: email.text.trim(),
         phoneNumber: phoneNo.text.trim(),
-        skills:
-            skills.text
-                .trim()
-                .split(',')
-                .map((s) => s.trim())
-                .where((s) => s.isNotEmpty)
-                .toList(),
-        about: about.text.trim(),
+        skills: updatedSkills,
+        about: updatedAbout,
       );
 
       await Amplify.DataStore.save(updatedUser);
-
       currentUser.value = updatedUser;
       assignDataToProfile();
+
+      // ── Sync matching Tutor record ───────────────────────────────
+      // The Tutor record is a separate model that holds the public-facing
+      // tutor profile. It must be updated separately because DataStore does
+      // not cascade saves across model boundaries.
+      await _syncTutorRecord(
+        userEmail: updatedUser.email,
+        name: updatedName,
+        skills: updatedSkills,
+        about: updatedAbout,
+        image: updatedUser.profilePicture,
+      );
 
       TFullScreenLoader.stopLoading();
 
@@ -222,8 +242,63 @@ class UserController extends GetxController {
     }
   }
 
+  // Finds the Tutor record that matches [userEmail] and updates its
+  // skills, about, name, and image to stay in sync with the User record.
+  Future<void> _syncTutorRecord({
+    required String userEmail,
+    required String name,
+    required List<String> skills,
+    required String about,
+    String? image,
+  }) async {
+    try {
+      // Look up by email — the same strategy used in currentUserTutorId.
+      final tutors = await Amplify.DataStore.query(
+        Tutor.classType,
+        where: Tutor.EMAIL.eq(userEmail),
+      );
+
+      if (tutors.isEmpty) {
+        if (kDebugMode) {
+          print(
+            '⚠️ _syncTutorRecord: no Tutor found for email $userEmail — skipping sync',
+          );
+        }
+        return;
+      }
+
+      final tutor = tutors.first;
+
+      final updatedTutor = tutor.copyWith(
+        name: name.isNotEmpty ? name : tutor.name,
+        skills: skills.isNotEmpty ? skills : tutor.skills,
+        about: about.isNotEmpty ? about : tutor.about,
+        // Only update image if one is set — avoids wiping a tutor avatar
+        // when the user hasn't changed their picture.
+        image: (image != null && image.isNotEmpty) ? image : tutor.image,
+      );
+
+      await Amplify.DataStore.save(updatedTutor);
+
+      // Warm the cache in TutoringController so any open screen that holds
+      // a reference to this tutor gets the fresh data without re-fetching.
+      if (Get.isRegistered<TutoringController>()) {
+        TutoringController.instance.warmTutorCache(updatedTutor);
+      }
+
+      if (kDebugMode) {
+        print('✅ _syncTutorRecord: Tutor ${tutor.id} updated');
+      }
+    } catch (e) {
+      // Non-fatal — the User was already saved successfully.
+      if (kDebugMode) print('⚠️ _syncTutorRecord failed: $e');
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // PROFILE IMAGE UPLOAD
+  // ✅ FIX: Also updates the Tutor record's image field after upload so that
+  //    the tutor avatar on TutorProfileScreen updates immediately.
   // ---------------------------------------------------------------------------
   Future<void> uploadUserProfilePicture() async {
     try {
@@ -241,12 +316,20 @@ class UserController extends GetxController {
 
       final uploadedUrl = await _uploadImageToS3('Users/Images/Profile', image);
 
+      // ── Update User record ───────────────────────────────────────
       final updatedUser = user.copyWith(profilePicture: uploadedUrl);
-
       await Amplify.DataStore.save(updatedUser);
-
       currentUser.value = updatedUser;
       profileImageUrl.value = uploadedUrl;
+
+      // ── Sync image to Tutor record ───────────────────────────────
+      await _syncTutorRecord(
+        userEmail: updatedUser.email,
+        name: updatedUser.username,
+        skills: updatedUser.skills ?? [],
+        about: updatedUser.about ?? '',
+        image: uploadedUrl,
+      );
 
       TLoaders.successSnackBar(
         title: 'Success',

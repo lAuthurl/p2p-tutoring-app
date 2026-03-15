@@ -30,11 +30,26 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
   bool _loading = true;
   bool _submitting = false;
 
+  // Whether the currently signed-in user is the creator of this session.
+  bool _isCreator = false;
+
   @override
   void initState() {
     super.initState();
     _currentSession = widget.session;
     _fetchReviews();
+    _checkIfCreator();
+  }
+
+  // ── Determine if the current user is the session creator ─────────────────
+  Future<void> _checkIfCreator() async {
+    try {
+      final tutorId = await _tutoringController.currentUserTutorId;
+      if (!mounted) return;
+      setState(() {
+        _isCreator = tutorId != null && tutorId == _currentSession.tutor?.id;
+      });
+    } catch (_) {}
   }
 
   Future<void> _fetchReviews() async {
@@ -43,7 +58,6 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
       final reviews = await _tutoringController.fetchReviews(
         _currentSession.id,
       );
-      // Creator reviews pinned first, then newest first within each group.
       reviews.sort((a, b) {
         final aIsCreator =
             a.user?.email != null &&
@@ -75,10 +89,23 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
   }
 
   Future<void> _submitReview() async {
-    if (_rating == 0 || _commentController.text.trim().isEmpty) {
+    final comment = _commentController.text.trim();
+
+    // ✅ Creators don't need a star rating — a comment alone is enough.
+    //    Everyone else must supply both a rating and a comment.
+    if (!_isCreator && _rating == 0) {
       Get.snackbar(
-        "Incomplete",
-        "Please provide a rating and a comment",
+        "Rating required",
+        "Please select a star rating before submitting",
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    if (comment.isEmpty) {
+      Get.snackbar(
+        "Comment required",
+        "Please write a comment before submitting",
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
@@ -87,7 +114,7 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
     setState(() => _submitting = true);
 
     try {
-      // ✅ FIX: Resolve tutor if the lazy BelongsTo stub is null.
+      // Resolve tutor if the lazy BelongsTo stub is null.
       if (_currentSession.tutor == null) {
         final tutorId = _currentSession.tutor?.id;
         if (tutorId != null && tutorId.isNotEmpty) {
@@ -105,15 +132,14 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
         }
       }
 
-      // addReview now returns a fully hydrated Review (user.username populated).
+      // Creators submit with rating = 0 (no stars shown/required).
+      // Regular reviewers submit with the rating they selected.
       await _tutoringController.addReview(
         session: _currentSession,
-        rating: _rating,
-        comment: _commentController.text.trim(),
+        rating: _isCreator ? 0 : _rating,
+        comment: comment,
       );
 
-      // ✅ FIX: Re-fetch the full list so the reviews shown on this screen
-      //    also have hydrated user names — not just the one we just added.
       final updatedReviews = await _tutoringController.fetchReviews(
         _currentSession.id,
       );
@@ -131,7 +157,6 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
         snackPosition: SnackPosition.BOTTOM,
       );
 
-      // ✅ FIX: Always pop with result: true so the detail screen refreshes.
       Get.back(result: true);
     } catch (e) {
       setState(() => _submitting = false);
@@ -152,10 +177,15 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
   }
 
   double get _averageRating {
-    if (_reviews.isEmpty) return 0;
-    return _reviews.fold<double>(0, (sum, r) => sum + r.rating) /
-        _reviews.length;
+    // Exclude creator reviews (rating == 0) from the average.
+    final ratedReviews = _reviews.where((r) => r.rating > 0).toList();
+    if (ratedReviews.isEmpty) return 0;
+    return ratedReviews.fold<double>(0, (sum, r) => sum + r.rating) /
+        ratedReviews.length;
   }
+
+  // Count only reviews that have a rating for the summary display.
+  int get _ratedReviewCount => _reviews.where((r) => r.rating > 0).length;
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +211,8 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
                     // ── Summary hero ──────────────────────────────────────
                     _RatingSummaryCard(
                       averageRating: _averageRating,
-                      reviewCount: _reviews.length,
+                      reviewCount: _ratedReviewCount,
+                      totalReviewCount: _reviews.length,
                       colorScheme: colorScheme,
                       theme: theme,
                     ),
@@ -192,6 +223,7 @@ class _SessionReviewScreenState extends State<SessionReviewScreen> {
                       rating: _rating,
                       commentController: _commentController,
                       submitting: _submitting,
+                      isCreator: _isCreator,
                       colorScheme: colorScheme,
                       theme: theme,
                       onRatingUpdate: (r) => setState(() => _rating = r),
@@ -231,12 +263,16 @@ class _RatingSummaryCard extends StatelessWidget {
   const _RatingSummaryCard({
     required this.averageRating,
     required this.reviewCount,
+    required this.totalReviewCount,
     required this.colorScheme,
     required this.theme,
   });
 
   final double averageRating;
+  // Number of reviews that carry a star rating.
   final int reviewCount;
+  // Total reviews including creator comments with no rating.
+  final int totalReviewCount;
   final ColorScheme colorScheme;
   final ThemeData theme;
 
@@ -251,7 +287,7 @@ class _RatingSummaryCard extends StatelessWidget {
         border: Border.all(color: colorScheme.primary.withValues(alpha: 0.15)),
       ),
       child:
-          reviewCount == 0
+          totalReviewCount == 0
               ? Column(
                 children: [
                   Icon(
@@ -277,31 +313,37 @@ class _RatingSummaryCard extends StatelessWidget {
               )
               : Row(
                 children: [
-                  Text(
-                    averageRating.toStringAsFixed(1),
-                    style: theme.textTheme.displayMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: colorScheme.primary,
-                      height: 1,
+                  // Show average only if there are rated reviews.
+                  if (reviewCount > 0) ...[
+                    Text(
+                      averageRating.toStringAsFixed(1),
+                      style: theme.textTheme.displayMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.primary,
+                        height: 1,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
+                    const SizedBox(width: 16),
+                  ],
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      RatingBarIndicator(
-                        rating: averageRating,
-                        itemBuilder:
-                            (context, _) => Icon(
-                              Icons.star_rounded,
-                              color: Colors.amber.shade600,
-                            ),
-                        itemCount: 5,
-                        itemSize: 22,
-                      ),
+                      if (reviewCount > 0)
+                        RatingBarIndicator(
+                          rating: averageRating,
+                          itemBuilder:
+                              (context, _) => Icon(
+                                Icons.star_rounded,
+                                color: Colors.amber.shade600,
+                              ),
+                          itemCount: 5,
+                          itemSize: 22,
+                        ),
                       const SizedBox(height: 4),
                       Text(
-                        "$reviewCount ${reviewCount == 1 ? 'review' : 'reviews'}",
+                        reviewCount > 0
+                            ? "$reviewCount rated · $totalReviewCount total ${totalReviewCount == 1 ? 'review' : 'reviews'}"
+                            : "$totalReviewCount ${totalReviewCount == 1 ? 'review' : 'reviews'}",
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurface.withValues(alpha: 0.55),
                         ),
@@ -323,6 +365,7 @@ class _WriteReviewCard extends StatelessWidget {
     required this.rating,
     required this.commentController,
     required this.submitting,
+    required this.isCreator,
     required this.colorScheme,
     required this.theme,
     required this.onRatingUpdate,
@@ -332,6 +375,8 @@ class _WriteReviewCard extends StatelessWidget {
   final double rating;
   final TextEditingController commentController;
   final bool submitting;
+  // When true, the star rating row is hidden and not required.
+  final bool isCreator;
   final ColorScheme colorScheme;
   final ThemeData theme;
   final ValueChanged<double> onRatingUpdate;
@@ -373,54 +418,97 @@ class _WriteReviewCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            "Share your experience with other students.",
+            isCreator
+                ? "Share a note about your session with students."
+                : "Share your experience with other students.",
             style: theme.textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 20),
 
-          // Star rating + label
-          Row(
-            children: [
-              RatingBar.builder(
-                initialRating: rating,
-                minRating: 1,
-                allowHalfRating: true,
-                itemCount: 5,
-                itemSize: 36,
-                unratedColor: colorScheme.onSurface.withValues(alpha: 0.15),
-                itemBuilder:
-                    (context, _) =>
-                        Icon(Icons.star_rounded, color: Colors.amber.shade600),
-                onRatingUpdate: onRatingUpdate,
-              ),
-              const SizedBox(width: 12),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: Text(
-                  _ratingLabel,
-                  key: ValueKey(_ratingLabel),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color:
-                        rating > 0
-                            ? colorScheme.primary
-                            : colorScheme.onSurface.withValues(alpha: 0.4),
-                    fontWeight:
-                        rating > 0 ? FontWeight.w600 : FontWeight.normal,
+          // ── Star rating row — hidden for creators ─────────────────────
+          if (!isCreator) ...[
+            Row(
+              children: [
+                RatingBar.builder(
+                  initialRating: rating,
+                  minRating: 1,
+                  allowHalfRating: true,
+                  itemCount: 5,
+                  itemSize: 36,
+                  unratedColor: colorScheme.onSurface.withValues(alpha: 0.15),
+                  itemBuilder:
+                      (context, _) => Icon(
+                        Icons.star_rounded,
+                        color: Colors.amber.shade600,
+                      ),
+                  onRatingUpdate: onRatingUpdate,
+                ),
+                const SizedBox(width: 12),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: Text(
+                    _ratingLabel,
+                    key: ValueKey(_ratingLabel),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color:
+                          rating > 0
+                              ? colorScheme.primary
+                              : colorScheme.onSurface.withValues(alpha: 0.4),
+                      fontWeight:
+                          rating > 0 ? FontWeight.w600 : FontWeight.normal,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
 
-          // Comment field
+          // ── Creator badge note ────────────────────────────────────────
+          if (isCreator) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: TColors.primary.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: TColors.primary.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.verified_rounded,
+                    size: 15,
+                    color: TColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "As the session creator, your comment will be pinned at the top.",
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: TColors.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Comment field ─────────────────────────────────────────────
           TextField(
             controller: commentController,
             maxLines: 4,
             decoration: InputDecoration(
-              hintText: "What did you think of this session?",
+              hintText:
+                  isCreator
+                      ? "Add a note for your students..."
+                      : "What did you think of this session?",
               hintStyle: TextStyle(
                 color: colorScheme.onSurface.withValues(alpha: 0.35),
                 fontSize: 14,
@@ -445,7 +533,7 @@ class _WriteReviewCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Submit button
+          // ── Submit button ─────────────────────────────────────────────
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -510,11 +598,13 @@ class _ReviewTile extends StatelessWidget {
     final initial = username.isNotEmpty ? username[0].toUpperCase() : "?";
     final hasAvatar = review.user?.profilePicture?.isNotEmpty ?? false;
 
-    // ✅ Creator tag: reviewer is the tutor who owns the session.
     final isCreator =
         review.user?.email != null &&
         review.tutor?.email != null &&
         review.user!.email == review.tutor!.email;
+
+    // A creator review has no star rating (stored as 0).
+    final hasRating = review.rating > 0;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -600,20 +690,23 @@ class _ReviewTile extends StatelessWidget {
                   ),
                 ),
 
-                // Stars (compact)
-                Row(
-                  children: List.generate(5, (i) {
-                    final filled = i < review.rating.round();
-                    return Icon(
-                      filled ? Icons.star_rounded : Icons.star_outline_rounded,
-                      size: 16,
-                      color:
-                          filled
-                              ? Colors.amber.shade600
-                              : colorScheme.onSurface.withValues(alpha: 0.2),
-                    );
-                  }),
-                ),
+                // Stars — only shown when there is an actual rating.
+                if (hasRating)
+                  Row(
+                    children: List.generate(5, (i) {
+                      final filled = i < review.rating.round();
+                      return Icon(
+                        filled
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        size: 16,
+                        color:
+                            filled
+                                ? Colors.amber.shade600
+                                : colorScheme.onSurface.withValues(alpha: 0.2),
+                      );
+                    }),
+                  ),
               ],
             ),
 
@@ -660,9 +753,9 @@ class _CreatorTag extends StatelessWidget {
         color: TColors.primary,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
-        children: const [
+        children: [
           Icon(Icons.verified_rounded, size: 10, color: Colors.white),
           SizedBox(width: 3),
           Text(

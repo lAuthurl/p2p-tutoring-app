@@ -5,14 +5,16 @@ flutter pub get
 amplify codegen models
 
 
-
-favorite button on logout problem
-fix the review system to work accross multiple accounts not just one 
 implement payment 
-Make session load faster using cache
-messages and booking clears if app is ran in a different device or deleted and rebuilt 
-logout details still there when logout button is initiated , i need the details clared for privacy 
+
 make vc work 
 make image upload work
 make algorithm for feautured lecturers 
+
+Make session MESSAGES, REVIEWS and favorite load faster using cache
+fix failed to load review snackbar problem when exit a detail screen too fast
+messages and booking clears if app is ran in a different device or deleted and rebuilt 
+logout details still there when logout button is initiated , i need the details clared for privacy 
+
+
 and try making voice call work  - last thing to do

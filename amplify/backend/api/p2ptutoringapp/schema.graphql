@@ -195,26 +195,20 @@ type SessionAttribute @model
   updatedAt: AWSDateTime
 }
 
-# -------------------------------
-# Review
-# -------------------------------
 type Review @model
   @auth(rules: [
-    { allow: owner, operations: [create, read, update, delete] },
+    { allow: owner, operations: [create, update, delete] },
+    { allow: private, operations: [read] },
     { allow: public, operations: [read] }
-  ])
-{
+  ]) {
   id: ID!
 
-  # Who wrote it
-  userId: ID! @index(name: "byUser")
+  userId: ID! @index(name: "byUser", queryField: "listReviewsByUser")
   user: User @belongsTo(fields: ["userId"])
 
-  # Session reviewed
-  sessionId: ID! @index(name: "bySession")
+  sessionId: ID! @index(name: "bySession", queryField: "listReviewsBySession")
 
-  # Tutor reviewed (same tutor who owns session)
-  tutorId: ID! @index(name: "byTutor")
+  tutorId: ID! @index(name: "byTutor", queryField: "listReviewsByTutor")
   tutor: Tutor @belongsTo(fields: ["tutorId"])
 
   rating: Float!

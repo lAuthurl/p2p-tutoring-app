@@ -23,6 +23,7 @@ import 'ModelProvider.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 import 'package:collection/collection.dart';
 
+
 /** This is an auto generated class representing the SessionAttribute type in your schema. */
 class SessionAttribute extends amplify_core.Model {
   static const classType = const _SessionAttributeModelType();
@@ -36,91 +37,62 @@ class SessionAttribute extends amplify_core.Model {
 
   @override
   getInstanceType() => classType;
-
-  @Deprecated(
-    '[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.',
-  )
+  
+  @Deprecated('[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.')
   @override
   String getId() => id;
-
+  
   SessionAttributeModelIdentifier get modelIdentifier {
-    return SessionAttributeModelIdentifier(id: id);
+      return SessionAttributeModelIdentifier(
+        id: id
+      );
   }
-
+  
   String get tutorId {
     try {
       return _tutorId!;
-    } catch (e) {
+    } catch(e) {
       throw amplify_core.AmplifyCodeGenModelException(
-        amplify_core
-            .AmplifyExceptionMessages
-            .codeGenRequiredFieldForceCastExceptionMessage,
-        recoverySuggestion:
-            amplify_core
-                .AmplifyExceptionMessages
-                .codeGenRequiredFieldForceCastRecoverySuggestion,
-        underlyingException: e.toString(),
-      );
+          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
+          recoverySuggestion:
+            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
+          underlyingException: e.toString()
+          );
     }
   }
-
+  
   String get name {
     try {
       return _name!;
-    } catch (e) {
+    } catch(e) {
       throw amplify_core.AmplifyCodeGenModelException(
-        amplify_core
-            .AmplifyExceptionMessages
-            .codeGenRequiredFieldForceCastExceptionMessage,
-        recoverySuggestion:
-            amplify_core
-                .AmplifyExceptionMessages
-                .codeGenRequiredFieldForceCastRecoverySuggestion,
-        underlyingException: e.toString(),
-      );
+          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
+          recoverySuggestion:
+            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
+          underlyingException: e.toString()
+          );
     }
   }
-
+  
   List<String>? get values {
     return _values;
   }
-
+  
   TutoringSession? get session {
     return _session;
   }
-
+  
   amplify_core.TemporalDateTime? get createdAt {
     return _createdAt;
   }
-
+  
   amplify_core.TemporalDateTime? get updatedAt {
     return _updatedAt;
   }
-
-  const SessionAttribute._internal({
-    required this.id,
-    required tutorId,
-    required name,
-    values,
-    session,
-    createdAt,
-    updatedAt,
-  }) : _tutorId = tutorId,
-       _name = name,
-       _values = values,
-       _session = session,
-       _createdAt = createdAt,
-       _updatedAt = updatedAt;
-
-  factory SessionAttribute({
-    String? id,
-    required String tutorId,
-    required String name,
-    List<String>? values,
-    TutoringSession? session,
-    amplify_core.TemporalDateTime? createdAt,
-    amplify_core.TemporalDateTime? updatedAt,
-  }) {
+  
+  const SessionAttribute._internal({required this.id, required tutorId, required name, values, session, createdAt, updatedAt}): _tutorId = tutorId, _name = name, _values = values, _session = session, _createdAt = createdAt, _updatedAt = updatedAt;
+  
+  factory SessionAttribute({String? id, required String tutorId, required String name, List<String>? values, TutoringSession? session, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return SessionAttribute._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       tutorId: tutorId,
@@ -128,63 +100,47 @@ class SessionAttribute extends amplify_core.Model {
       values: values != null ? List<String>.unmodifiable(values) : values,
       session: session,
       createdAt: createdAt,
-      updatedAt: updatedAt,
-    );
+      updatedAt: updatedAt);
   }
-
+  
   bool equals(Object other) {
     return this == other;
   }
-
+  
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
     return other is SessionAttribute &&
-        id == other.id &&
-        _tutorId == other._tutorId &&
-        _name == other._name &&
-        DeepCollectionEquality().equals(_values, other._values) &&
-        _session == other._session &&
-        _createdAt == other._createdAt &&
-        _updatedAt == other._updatedAt;
+      id == other.id &&
+      _tutorId == other._tutorId &&
+      _name == other._name &&
+      DeepCollectionEquality().equals(_values, other._values) &&
+      _session == other._session &&
+      _createdAt == other._createdAt &&
+      _updatedAt == other._updatedAt;
   }
-
+  
   @override
   int get hashCode => toString().hashCode;
-
+  
   @override
   String toString() {
     var buffer = new StringBuffer();
-
+    
     buffer.write("SessionAttribute {");
     buffer.write("id=" + "$id" + ", ");
     buffer.write("tutorId=" + "$_tutorId" + ", ");
     buffer.write("name=" + "$_name" + ", ");
-    buffer.write(
-      "values=" + (_values != null ? _values.toString() : "null") + ", ",
-    );
-    buffer.write(
-      "session=" + (_session != null ? _session.toString() : "null") + ", ",
-    );
-    buffer.write(
-      "createdAt=" + (_createdAt != null ? _createdAt.format() : "null") + ", ",
-    );
-    buffer.write(
-      "updatedAt=" + (_updatedAt != null ? _updatedAt.format() : "null"),
-    );
+    buffer.write("values=" + (_values != null ? _values!.toString() : "null") + ", ");
+    buffer.write("session=" + (_session != null ? _session!.toString() : "null") + ", ");
+    buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
+    buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
     buffer.write("}");
-
+    
     return buffer.toString();
   }
-
-  SessionAttribute copyWith({
-    String? tutorId,
-    String? name,
-    List<String>? values,
-    TutoringSession? session,
-    amplify_core.TemporalDateTime? createdAt,
-    amplify_core.TemporalDateTime? updatedAt,
-  }) {
+  
+  SessionAttribute copyWith({String? tutorId, String? name, List<String>? values, TutoringSession? session, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return SessionAttribute._internal(
       id: id,
       tutorId: tutorId ?? this.tutorId,
@@ -192,17 +148,16 @@ class SessionAttribute extends amplify_core.Model {
       values: values ?? this.values,
       session: session ?? this.session,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
+      updatedAt: updatedAt ?? this.updatedAt);
   }
-
+  
   SessionAttribute copyWithModelFieldValues({
     ModelFieldValue<String>? tutorId,
     ModelFieldValue<String>? name,
     ModelFieldValue<List<String>?>? values,
     ModelFieldValue<TutoringSession?>? session,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
-    ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt,
+    ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt
   }) {
     return SessionAttribute._internal(
       id: id,
@@ -211,46 +166,27 @@ class SessionAttribute extends amplify_core.Model {
       values: values == null ? this.values : values.value,
       session: session == null ? this.session : session.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
-      updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value,
+      updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value
     );
   }
-
-  SessionAttribute.fromJson(Map<String, dynamic> json)
+  
+  SessionAttribute.fromJson(Map<String, dynamic> json)  
     : id = json['id'],
       _tutorId = json['tutorId'],
       _name = json['name'],
       _values = json['values']?.cast<String>(),
-      _session =
-          json['session'] != null
-              ? json['session']['serializedData'] != null
-                  ? TutoringSession.fromJson(
-                    new Map<String, dynamic>.from(
-                      json['session']['serializedData'],
-                    ),
-                  )
-                  : TutoringSession.fromJson(
-                    new Map<String, dynamic>.from(json['session']),
-                  )
-              : null,
-      _createdAt =
-          json['createdAt'] != null
-              ? amplify_core.TemporalDateTime.fromString(json['createdAt'])
-              : null,
-      _updatedAt =
-          json['updatedAt'] != null
-              ? amplify_core.TemporalDateTime.fromString(json['updatedAt'])
-              : null;
-
+      _session = json['session'] != null
+        ? json['session']['serializedData'] != null
+          ? TutoringSession.fromJson(new Map<String, dynamic>.from(json['session']['serializedData']))
+          : TutoringSession.fromJson(new Map<String, dynamic>.from(json['session']))
+        : null,
+      _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
+      _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
+  
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'tutorId': _tutorId,
-    'name': _name,
-    'values': _values,
-    'session': _session?.toJson(),
-    'createdAt': _createdAt?.format(),
-    'updatedAt': _updatedAt?.format(),
+    'id': id, 'tutorId': _tutorId, 'name': _name, 'values': _values, 'session': _session?.toJson(), 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
-
+  
   Map<String, Object?> toMap() => {
     'id': id,
     'tutorId': _tutorId,
@@ -258,130 +194,96 @@ class SessionAttribute extends amplify_core.Model {
     'values': _values,
     'session': _session,
     'createdAt': _createdAt,
-    'updatedAt': _updatedAt,
+    'updatedAt': _updatedAt
   };
 
-  static final amplify_core.QueryModelIdentifier<
-    SessionAttributeModelIdentifier
-  >
-  MODEL_IDENTIFIER =
-      amplify_core.QueryModelIdentifier<SessionAttributeModelIdentifier>();
+  static final amplify_core.QueryModelIdentifier<SessionAttributeModelIdentifier> MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<SessionAttributeModelIdentifier>();
   static final ID = amplify_core.QueryField(fieldName: "id");
   static final TUTORID = amplify_core.QueryField(fieldName: "tutorId");
   static final NAME = amplify_core.QueryField(fieldName: "name");
   static final VALUES = amplify_core.QueryField(fieldName: "values");
   static final SESSION = amplify_core.QueryField(
     fieldName: "session",
-    fieldType: amplify_core.ModelFieldType(
-      amplify_core.ModelFieldTypeEnum.model,
-      ofModelName: 'TutoringSession',
-    ),
-  );
+    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'TutoringSession'));
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
   static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
-  static var schema = amplify_core.Model.defineSchema(
-    define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
-      modelSchemaDefinition.name = "SessionAttribute";
-      modelSchemaDefinition.pluralName = "SessionAttributes";
-
-      modelSchemaDefinition.authRules = [
-        amplify_core.AuthRule(
-          authStrategy: amplify_core.AuthStrategy.OWNER,
-          ownerField: "owner",
-          identityClaim: "cognito:username",
-          provider: amplify_core.AuthRuleProvider.USERPOOLS,
-          operations: const [
-            amplify_core.ModelOperation.CREATE,
-            amplify_core.ModelOperation.READ,
-            amplify_core.ModelOperation.UPDATE,
-            amplify_core.ModelOperation.DELETE,
-          ],
-        ),
-        amplify_core.AuthRule(
-          authStrategy: amplify_core.AuthStrategy.PUBLIC,
-          operations: const [amplify_core.ModelOperation.READ],
-        ),
-      ];
-
-      modelSchemaDefinition.indexes = [
-        amplify_core.ModelIndex(fields: const ["sessionId"], name: "bySession"),
-      ];
-
-      modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: SessionAttribute.TUTORID,
-          isRequired: true,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: SessionAttribute.NAME,
-          isRequired: true,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: SessionAttribute.VALUES,
-          isRequired: false,
-          isArray: true,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.collection,
-            ofModelName: amplify_core.ModelFieldTypeEnum.string.name,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.belongsTo(
-          key: SessionAttribute.SESSION,
-          isRequired: false,
-          targetNames: ['sessionId'],
-          ofModelName: 'TutoringSession',
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: SessionAttribute.CREATEDAT,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.dateTime,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: SessionAttribute.UPDATEDAT,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.dateTime,
-          ),
-        ),
-      );
-    },
-  );
+  static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
+    modelSchemaDefinition.name = "SessionAttribute";
+    modelSchemaDefinition.pluralName = "SessionAttributes";
+    
+    modelSchemaDefinition.authRules = [
+      amplify_core.AuthRule(
+        authStrategy: amplify_core.AuthStrategy.OWNER,
+        ownerField: "owner",
+        identityClaim: "cognito:username",
+        provider: amplify_core.AuthRuleProvider.USERPOOLS,
+        operations: const [
+          amplify_core.ModelOperation.CREATE,
+          amplify_core.ModelOperation.READ,
+          amplify_core.ModelOperation.UPDATE,
+          amplify_core.ModelOperation.DELETE
+        ]),
+      amplify_core.AuthRule(
+        authStrategy: amplify_core.AuthStrategy.PUBLIC,
+        operations: const [
+          amplify_core.ModelOperation.READ
+        ])
+    ];
+    
+    modelSchemaDefinition.indexes = [
+      amplify_core.ModelIndex(fields: const ["sessionId"], name: "bySession")
+    ];
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: SessionAttribute.TUTORID,
+      isRequired: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: SessionAttribute.NAME,
+      isRequired: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: SessionAttribute.VALUES,
+      isRequired: false,
+      isArray: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.collection, ofModelName: amplify_core.ModelFieldTypeEnum.string.name)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.belongsTo(
+      key: SessionAttribute.SESSION,
+      isRequired: false,
+      targetNames: ['sessionId'],
+      ofModelName: 'TutoringSession'
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: SessionAttribute.CREATEDAT,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: SessionAttribute.UPDATEDAT,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
+    ));
+  });
 }
 
-class _SessionAttributeModelType
-    extends amplify_core.ModelType<SessionAttribute> {
+class _SessionAttributeModelType extends amplify_core.ModelType<SessionAttribute> {
   const _SessionAttributeModelType();
-
+  
   @override
   SessionAttribute fromJson(Map<String, dynamic> jsonData) {
     return SessionAttribute.fromJson(jsonData);
   }
-
+  
   @override
   String modelName() {
     return 'SessionAttribute';
@@ -392,37 +294,41 @@ class _SessionAttributeModelType
  * This is an auto generated class representing the model identifier
  * of [SessionAttribute] in your schema.
  */
-class SessionAttributeModelIdentifier
-    implements amplify_core.ModelIdentifier<SessionAttribute> {
+class SessionAttributeModelIdentifier implements amplify_core.ModelIdentifier<SessionAttribute> {
   final String id;
 
   /** Create an instance of SessionAttributeModelIdentifier using [id] the primary key. */
-  const SessionAttributeModelIdentifier({required this.id});
-
+  const SessionAttributeModelIdentifier({
+    required this.id});
+  
   @override
-  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{'id': id});
-
+  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{
+    'id': id
+  });
+  
   @override
-  List<Map<String, dynamic>> serializeAsList() =>
-      serializeAsMap().entries
-          .map((entry) => (<String, dynamic>{entry.key: entry.value}))
-          .toList();
-
+  List<Map<String, dynamic>> serializeAsList() => serializeAsMap()
+    .entries
+    .map((entry) => (<String, dynamic>{ entry.key: entry.value }))
+    .toList();
+  
   @override
   String serializeAsString() => serializeAsMap().values.join('#');
-
+  
   @override
   String toString() => 'SessionAttributeModelIdentifier(id: $id)';
-
+  
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) {
       return true;
     }
-
-    return other is SessionAttributeModelIdentifier && id == other.id;
+    
+    return other is SessionAttributeModelIdentifier &&
+      id == other.id;
   }
-
+  
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode =>
+    id.hashCode;
 }
