@@ -1,11 +1,13 @@
+// ignore_for_file: avoid_print, unnecessary_null_comparison
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../../../utils/constants/colors.dart';
+import '../../checkout/screens/checkout.dart';
 import '../controllers/booking_controller.dart';
 import 'widgets/booking_items.dart';
-import '../../checkout/screens/checkout.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -14,14 +16,20 @@ class BookingScreen extends StatefulWidget {
   State<BookingScreen> createState() => _BookingScreenState();
 }
 
-class _BookingScreenState extends State<BookingScreen> {
+class _BookingScreenState extends State<BookingScreen> with RouteAware {
   late final BookingController controller;
 
   @override
   void initState() {
     super.initState();
     controller = Get.find<BookingController>();
-    controller.fetchBookings();
+    // ✅ Always refresh from DataStore when the screen opens so newly
+    //    created bookings appear immediately even before sync completes.
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    await controller.fetchBookings();
   }
 
   @override
@@ -47,8 +55,13 @@ class _BookingScreenState extends State<BookingScreen> {
           ),
         ),
         centerTitle: true,
-        // Live count badge in actions
         actions: [
+          // ✅ Manual refresh button in case auto-refresh misses a sync gap
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, size: 20),
+            onPressed: _refresh,
+            tooltip: 'Refresh',
+          ),
           Obx(() {
             final count = controller.bookingItems.length;
             if (count == 0) return const SizedBox.shrink();
@@ -71,31 +84,35 @@ class _BookingScreenState extends State<BookingScreen> {
           }),
         ],
       ),
-      body: Obx(() {
-        if (controller.bookingItems.isEmpty) {
-          return _EmptyState();
-        }
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Section label
-              Text(
-                'YOUR SESSIONS',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurface.withValues(alpha: 0.4),
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
+      body: RefreshIndicator(
+        // ✅ Pull-to-refresh as a second safety net
+        onRefresh: _refresh,
+        child: Obx(() {
+          if (controller.bookingItems.isEmpty) {
+            return _EmptyState(onRefresh: _refresh);
+          }
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'YOUR SESSIONS',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              TBookingItems(),
-              const SizedBox(height: 100),
-            ],
-          ),
-        );
-      }),
+                const SizedBox(height: 10),
+                const TBookingItems(),
+                const SizedBox(height: 100),
+              ],
+            ),
+          );
+        }),
+      ),
 
       // ── Checkout bar ──────────────────────────────────────────
       bottomNavigationBar: Obx(() {
@@ -151,64 +168,86 @@ class _BookingScreenState extends State<BookingScreen> {
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.onRefresh});
+  final VoidCallback onRefresh;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Stack(
-            alignment: Alignment.center,
+    // ✅ Wrapped in ListView so RefreshIndicator works on empty state too
+    return ListView(
+      children: [
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.65,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: TColors.primary.withValues(alpha: 0.05),
-                  shape: BoxShape.circle,
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: TColors.primary.withValues(alpha: 0.05),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Container(
+                    width: 68,
+                    height: 68,
+                    decoration: BoxDecoration(
+                      color: TColors.primary.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Icon(Iconsax.shopping_bag, size: 30, color: TColors.primary),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'No bookings yet',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
                 ),
               ),
-              Container(
-                width: 68,
-                height: 68,
-                decoration: BoxDecoration(
-                  color: TColors.primary.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+              const SizedBox(height: 8),
+              Text(
+                'Sessions you book will appear here',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurface.withValues(alpha: 0.4),
                 ),
               ),
-              Icon(Iconsax.shopping_bag, size: 30, color: TColors.primary),
+              const SizedBox(height: 16),
+              // ✅ Tap to force-refresh if bookings still not showing
+              TextButton.icon(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Tap to refresh'),
+                style: TextButton.styleFrom(
+                  foregroundColor: colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => Get.back(),
+                icon: const Icon(Iconsax.discover_1, size: 16),
+                label: const Text('Browse Sessions'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 24),
-          Text(
-            'No bookings yet',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.3,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Sessions you book will appear here',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurface.withValues(alpha: 0.4),
-            ),
-          ),
-          const SizedBox(height: 28),
-          OutlinedButton.icon(
-            onPressed: () => Get.back(),
-            icon: const Icon(Iconsax.discover_1, size: 16),
-            label: const Text('Browse Sessions'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

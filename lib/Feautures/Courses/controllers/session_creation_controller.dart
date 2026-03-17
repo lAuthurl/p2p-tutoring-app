@@ -1,3 +1,4 @@
+// lib/Features/Sessions/controllers/session_creation_controller.dart
 // ignore_for_file: public_member_api_docs, use_build_context_synchronously
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 
 import '../../../../models/ModelProvider.dart';
 import '../../../personalization/controllers/user_controller.dart';
+import '../../checkout/controllers/paystack_card_controller.dart';
+import '../../checkout/screens/paystack_card_entry_screen.dart';
 import '../../dashboard/Home/controllers/home_controller.dart';
 
 class SessionCreationController extends GetxController {
@@ -13,7 +16,7 @@ class SessionCreationController extends GetxController {
 
   late GlobalKey<FormState> formKey;
 
-  // ---------------- Form fields ----------------
+  // ── Form fields ──────────────────────────────────────────────────
   late TextEditingController title;
   late TextEditingController description;
   late TextEditingController price;
@@ -42,14 +45,11 @@ class SessionCreationController extends GetxController {
     title = TextEditingController();
     description = TextEditingController();
     price = TextEditingController();
-
     enabledAttributes.clear();
     selectedAttributes.clear();
   }
 
-  // ─────────────────────────────────────────────
-  // Attribute Groups
-  // ─────────────────────────────────────────────
+  // ── Attribute helpers ────────────────────────────────────────────
 
   List<String> get allAttributeKeys =>
       _defaultAttributeOptions.keys.toList(growable: false);
@@ -79,32 +79,24 @@ class SessionCreationController extends GetxController {
     if (selectedAttributes.containsKey(groupKey)) {
       return selectedAttributes[groupKey];
     }
-
     final options = optionsFor(groupKey);
     return options.isNotEmpty ? options.first : null;
   }
 
-  // ─────────────────────────────────────────────
-  // Dynamic Pricing
-  // ─────────────────────────────────────────────
+  // ── Dynamic Pricing ──────────────────────────────────────────────
 
   double calculateDynamicPrice(TutoringSession session) {
     double adjusted = session.pricePerSession ?? 0;
-
     final mode = selectedAttributes['Mode'];
     final duration = selectedAttributes['Duration'];
     final payment = selectedAttributes['Payment'];
-
     if (mode == 'Offline') adjusted += adjusted * 0.10;
     if (duration == '2hr') adjusted *= 2;
     if (payment == 'After Session') adjusted += adjusted * 0.05;
-
     return adjusted;
   }
 
-  // ─────────────────────────────────────────────
-  // Thumbnail
-  // ─────────────────────────────────────────────
+  // ── Thumbnail ────────────────────────────────────────────────────
 
   String? get selectedThumbnail =>
       subjectId.value.isNotEmpty ? _seededThumbnails[subjectId.value] : null;
@@ -131,18 +123,13 @@ class SessionCreationController extends GetxController {
         'https://p2p-tutoring-assets.s3.amazonaws.com/images/courses/others.png',
   };
 
-  // ─────────────────────────────────────────────
-  // Tutor Resolution
-  // ─────────────────────────────────────────────
+  // ── Tutor resolution ─────────────────────────────────────────────
 
   Future<Tutor> getOrCreateTutor() async {
     if (_cachedTutor != null) return _cachedTutor!;
 
     final user = UserController.instance.currentUser.value;
-
-    if (user == null) {
-      throw Exception('User not signed in');
-    }
+    if (user == null) throw Exception('User not signed in');
 
     final byEmail = await Amplify.DataStore.query(
       Tutor.classType,
@@ -162,16 +149,27 @@ class SessionCreationController extends GetxController {
     );
 
     await Amplify.DataStore.save(newTutor);
-
     _cachedTutor = newTutor;
     return _cachedTutor!;
   }
 
-  // ─────────────────────────────────────────────
-  // Create Session
-  // ─────────────────────────────────────────────
+  // ── Create Session ───────────────────────────────────────────────
 
   Future<void> createSession() async {
+    // ── GATE: Tutor must have a saved Paystack card ──────────────
+    final cardCtrl = Get.put(PaystackCardController());
+    if (!cardCtrl.hasCard) {
+      Get.snackbar(
+        '💳 Card Required',
+        'Add a payment card before creating a session',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
+      );
+      await Get.to(() => const PaystackCardEntryScreen());
+      // Abort session creation so user can re-tap after adding card
+      return;
+    }
+
     if (!formKey.currentState!.validate()) return;
 
     if (subjectId.value.isEmpty) {
@@ -189,20 +187,11 @@ class SessionCreationController extends GetxController {
       final priceVal =
           isFree.value ? 0.0 : double.tryParse(price.text.trim()) ?? 0.0;
 
-      final mutationDoc = """
+      const mutationDoc = """
 mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
   createTutoringSession(input: \$input) {
-    id
-    title
-    description
-    pricePerSession
-    thumbnail
-    tutorId
-    subjectId
-    isFeatured
-    hasPaid
-    createdAt
-    updatedAt
+    id title description pricePerSession thumbnail
+    tutorId subjectId isFeatured hasPaid createdAt updatedAt
   }
 }
 """;
@@ -259,7 +248,7 @@ mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
         await Amplify.DataStore.save(attr);
       }
 
-      // ─── Optimistic UI update ─────────────────────────────────────────
+      // Optimistic UI update
       if (Get.isRegistered<HomeController>()) {
         final subjects = await Amplify.DataStore.query(
           Subject.classType,
@@ -277,11 +266,6 @@ mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
         );
 
         final home = Get.find<HomeController>();
-
-        // ✅ FIX: Register the subjectId in HomeController's map so
-        //    _applyFilters() can match this session to its subject
-        //    immediately — without this, the new session is invisible
-        //    whenever any subject filter is active.
         home.warmSessionSubjectMap(sessionId, capturedSubjectId);
         home.warmTutorCache(tutor);
         home.allSessions.insert(0, optimisticSession);
@@ -298,9 +282,7 @@ mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // Detail Screen Initialization
-  // ─────────────────────────────────────────────
+  // ── Detail Screen init ───────────────────────────────────────────
 
   void initializeAttributesForSession(Map<String, List<String>> attrs) {
     enabledAttributes.clear();
@@ -314,9 +296,7 @@ mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
     });
   }
 
-  // ─────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────
 
   Map<String, String> get effectiveSelections =>
       Map<String, String>.from(selectedAttributes);

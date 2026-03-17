@@ -206,8 +206,6 @@ class _OptionButton extends StatelessWidget {
     'In-Person': Icons.location_on_outlined,
     '1hr': Icons.hourglass_bottom_rounded,
     '2hr': Icons.hourglass_full_rounded,
-    'Before Session': Icons.lock_clock_outlined,
-    'After Session': Icons.check_circle_outline_rounded,
     'Beginner': Icons.looks_one_outlined,
     'Intermediate': Icons.looks_two_outlined,
     'Advanced': Icons.looks_3_outlined,

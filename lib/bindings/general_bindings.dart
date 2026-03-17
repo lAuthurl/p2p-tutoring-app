@@ -4,6 +4,7 @@ import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/home_contr
 import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/subject_controller.dart';
 import 'package:p2p_tutoring_app/personalization/controllers/theme_controller.dart';
 
+import '../Feautures/checkout/controllers/paystack_card_controller.dart';
 import '../Feautures/dashboard/Home/controllers/favorites_controller.dart';
 import '../utils/helpers/network_manager.dart';
 import '../data/services/notifications/notification_service.dart';
@@ -53,21 +54,22 @@ class GeneralBindings extends Bindings {
     Get.put(OnBoardingController(), permanent: true);
 
     // ================= PERSISTENT APP CONTROLLERS =================
-    // These must be permanent so they survive navigation and are
-    // available immediately when the user reaches the dashboard.
     Get.put(SubjectController(), permanent: true);
     Get.put(HomeController(), permanent: true);
     Get.put(BookingController(), permanent: true);
 
-    // ✅ FavoritesController: registered here so it loads the current
-    //    user's favorites from AppSync on startup — before the home
-    //    screen renders. permanent: true keeps it alive across all
-    //    navigation so heart icons stay in sync everywhere.
+    // FavoritesController: permanent so heart icons stay in sync everywhere
     Get.put(FavoritesController(), permanent: true);
 
+    // PaystackCardController: fenix: true so it auto-recreates if GetX
+    // disposes it during navigation, and loads the saved card from
+    // SharedPreferences whenever it is first accessed.
+    Get.lazyPut<PaystackCardController>(
+      () => PaystackCardController(),
+      fenix: true,
+    );
+
     // ================= AUTH FLOW =================
-    // lazyPut / fenix: true — created only when navigated to,
-    // recreated automatically if GetX disposes them.
     Get.lazyPut(() => LoginController(), fenix: true);
     Get.lazyPut(() => SignUpController(), fenix: true);
     Get.lazyPut(() => OTPController(), fenix: true);

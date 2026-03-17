@@ -23,7 +23,6 @@ import 'ModelProvider.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 import 'package:collection/collection.dart';
 
-
 /** This is an auto generated class representing the User type in your schema. */
 class User extends amplify_core.Model {
   static const classType = const _UserModelType();
@@ -48,106 +47,168 @@ class User extends amplify_core.Model {
 
   @override
   getInstanceType() => classType;
-  
-  @Deprecated('[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.')
+
+  @Deprecated(
+    '[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.',
+  )
   @override
   String getId() => id;
-  
+
   UserModelIdentifier get modelIdentifier {
-      return UserModelIdentifier(
-        id: id
-      );
+    return UserModelIdentifier(id: id);
   }
-  
+
   String get username {
     try {
       return _username!;
-    } catch(e) {
+    } catch (e) {
       throw amplify_core.AmplifyCodeGenModelException(
-          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
-          recoverySuggestion:
-            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
-          underlyingException: e.toString()
-          );
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
     }
   }
-  
+
   String get email {
     try {
       return _email!;
-    } catch(e) {
+    } catch (e) {
       throw amplify_core.AmplifyCodeGenModelException(
-          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
-          recoverySuggestion:
-            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
-          underlyingException: e.toString()
-          );
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
     }
   }
-  
+
   String? get phoneNumber {
     return _phoneNumber;
   }
-  
+
   String? get profilePicture {
     return _profilePicture;
   }
-  
+
   String? get deviceToken {
     return _deviceToken;
   }
-  
+
   bool? get isEmailVerified {
     return _isEmailVerified;
   }
-  
+
   bool? get isProfileActive {
     return _isProfileActive;
   }
-  
+
   String? get role {
     return _role;
   }
-  
+
   String? get verificationStatus {
     return _verificationStatus;
   }
-  
+
   amplify_core.TemporalDateTime? get createdAt {
     return _createdAt;
   }
-  
+
   amplify_core.TemporalDateTime? get updatedAt {
     return _updatedAt;
   }
-  
+
   List<String>? get skills {
     return _skills;
   }
-  
+
   String? get about {
     return _about;
   }
-  
+
   bool? get profileCompleted {
     return _profileCompleted;
   }
-  
+
   List<Booking>? get bookings {
     return _bookings;
   }
-  
+
   List<BookingItem>? get bookingItems {
     return _bookingItems;
   }
-  
+
   List<Review>? get reviews {
     return _reviews;
   }
-  
-  const User._internal({required this.id, required username, required email, phoneNumber, profilePicture, deviceToken, isEmailVerified, isProfileActive, role, verificationStatus, createdAt, updatedAt, skills, about, profileCompleted, bookings, bookingItems, reviews}): _username = username, _email = email, _phoneNumber = phoneNumber, _profilePicture = profilePicture, _deviceToken = deviceToken, _isEmailVerified = isEmailVerified, _isProfileActive = isProfileActive, _role = role, _verificationStatus = verificationStatus, _createdAt = createdAt, _updatedAt = updatedAt, _skills = skills, _about = about, _profileCompleted = profileCompleted, _bookings = bookings, _bookingItems = bookingItems, _reviews = reviews;
-  
-  factory User({String? id, required String username, required String email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<String>? skills, String? about, bool? profileCompleted, List<Booking>? bookings, List<BookingItem>? bookingItems, List<Review>? reviews}) {
+
+  const User._internal({
+    required this.id,
+    required username,
+    required email,
+    phoneNumber,
+    profilePicture,
+    deviceToken,
+    isEmailVerified,
+    isProfileActive,
+    role,
+    verificationStatus,
+    createdAt,
+    updatedAt,
+    skills,
+    about,
+    profileCompleted,
+    bookings,
+    bookingItems,
+    reviews,
+  }) : _username = username,
+       _email = email,
+       _phoneNumber = phoneNumber,
+       _profilePicture = profilePicture,
+       _deviceToken = deviceToken,
+       _isEmailVerified = isEmailVerified,
+       _isProfileActive = isProfileActive,
+       _role = role,
+       _verificationStatus = verificationStatus,
+       _createdAt = createdAt,
+       _updatedAt = updatedAt,
+       _skills = skills,
+       _about = about,
+       _profileCompleted = profileCompleted,
+       _bookings = bookings,
+       _bookingItems = bookingItems,
+       _reviews = reviews;
+
+  factory User({
+    String? id,
+    required String username,
+    required String email,
+    String? phoneNumber,
+    String? profilePicture,
+    String? deviceToken,
+    bool? isEmailVerified,
+    bool? isProfileActive,
+    String? role,
+    String? verificationStatus,
+    amplify_core.TemporalDateTime? createdAt,
+    amplify_core.TemporalDateTime? updatedAt,
+    List<String>? skills,
+    String? about,
+    bool? profileCompleted,
+    List<Booking>? bookings,
+    List<BookingItem>? bookingItems,
+    List<Review>? reviews,
+  }) {
     return User._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       username: username,
@@ -164,46 +225,51 @@ class User extends amplify_core.Model {
       skills: skills != null ? List<String>.unmodifiable(skills) : skills,
       about: about,
       profileCompleted: profileCompleted,
-      bookings: bookings != null ? List<Booking>.unmodifiable(bookings) : bookings,
-      bookingItems: bookingItems != null ? List<BookingItem>.unmodifiable(bookingItems) : bookingItems,
-      reviews: reviews != null ? List<Review>.unmodifiable(reviews) : reviews);
+      bookings:
+          bookings != null ? List<Booking>.unmodifiable(bookings) : bookings,
+      bookingItems:
+          bookingItems != null
+              ? List<BookingItem>.unmodifiable(bookingItems)
+              : bookingItems,
+      reviews: reviews != null ? List<Review>.unmodifiable(reviews) : reviews,
+    );
   }
-  
+
   bool equals(Object other) {
     return this == other;
   }
-  
+
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
     return other is User &&
-      id == other.id &&
-      _username == other._username &&
-      _email == other._email &&
-      _phoneNumber == other._phoneNumber &&
-      _profilePicture == other._profilePicture &&
-      _deviceToken == other._deviceToken &&
-      _isEmailVerified == other._isEmailVerified &&
-      _isProfileActive == other._isProfileActive &&
-      _role == other._role &&
-      _verificationStatus == other._verificationStatus &&
-      _createdAt == other._createdAt &&
-      _updatedAt == other._updatedAt &&
-      DeepCollectionEquality().equals(_skills, other._skills) &&
-      _about == other._about &&
-      _profileCompleted == other._profileCompleted &&
-      DeepCollectionEquality().equals(_bookings, other._bookings) &&
-      DeepCollectionEquality().equals(_bookingItems, other._bookingItems) &&
-      DeepCollectionEquality().equals(_reviews, other._reviews);
+        id == other.id &&
+        _username == other._username &&
+        _email == other._email &&
+        _phoneNumber == other._phoneNumber &&
+        _profilePicture == other._profilePicture &&
+        _deviceToken == other._deviceToken &&
+        _isEmailVerified == other._isEmailVerified &&
+        _isProfileActive == other._isProfileActive &&
+        _role == other._role &&
+        _verificationStatus == other._verificationStatus &&
+        _createdAt == other._createdAt &&
+        _updatedAt == other._updatedAt &&
+        DeepCollectionEquality().equals(_skills, other._skills) &&
+        _about == other._about &&
+        _profileCompleted == other._profileCompleted &&
+        DeepCollectionEquality().equals(_bookings, other._bookings) &&
+        DeepCollectionEquality().equals(_bookingItems, other._bookingItems) &&
+        DeepCollectionEquality().equals(_reviews, other._reviews);
   }
-  
+
   @override
   int get hashCode => toString().hashCode;
-  
+
   @override
   String toString() {
     var buffer = new StringBuffer();
-    
+
     buffer.write("User {");
     buffer.write("id=" + "$id" + ", ");
     buffer.write("username=" + "$_username" + ", ");
@@ -211,21 +277,56 @@ class User extends amplify_core.Model {
     buffer.write("phoneNumber=" + "$_phoneNumber" + ", ");
     buffer.write("profilePicture=" + "$_profilePicture" + ", ");
     buffer.write("deviceToken=" + "$_deviceToken" + ", ");
-    buffer.write("isEmailVerified=" + (_isEmailVerified != null ? _isEmailVerified!.toString() : "null") + ", ");
-    buffer.write("isProfileActive=" + (_isProfileActive != null ? _isProfileActive!.toString() : "null") + ", ");
+    buffer.write(
+      "isEmailVerified=" +
+          (_isEmailVerified != null ? _isEmailVerified.toString() : "null") +
+          ", ",
+    );
+    buffer.write(
+      "isProfileActive=" +
+          (_isProfileActive != null ? _isProfileActive.toString() : "null") +
+          ", ",
+    );
     buffer.write("role=" + "$_role" + ", ");
     buffer.write("verificationStatus=" + "$_verificationStatus" + ", ");
-    buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
-    buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null") + ", ");
-    buffer.write("skills=" + (_skills != null ? _skills!.toString() : "null") + ", ");
+    buffer.write(
+      "createdAt=" + (_createdAt != null ? _createdAt.format() : "null") + ", ",
+    );
+    buffer.write(
+      "updatedAt=" + (_updatedAt != null ? _updatedAt.format() : "null") + ", ",
+    );
+    buffer.write(
+      "skills=" + (_skills != null ? _skills.toString() : "null") + ", ",
+    );
     buffer.write("about=" + "$_about" + ", ");
-    buffer.write("profileCompleted=" + (_profileCompleted != null ? _profileCompleted!.toString() : "null"));
+    buffer.write(
+      "profileCompleted=" +
+          (_profileCompleted != null ? _profileCompleted.toString() : "null"),
+    );
     buffer.write("}");
-    
+
     return buffer.toString();
   }
-  
-  User copyWith({String? username, String? email, String? phoneNumber, String? profilePicture, String? deviceToken, bool? isEmailVerified, bool? isProfileActive, String? role, String? verificationStatus, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt, List<String>? skills, String? about, bool? profileCompleted, List<Booking>? bookings, List<BookingItem>? bookingItems, List<Review>? reviews}) {
+
+  User copyWith({
+    String? username,
+    String? email,
+    String? phoneNumber,
+    String? profilePicture,
+    String? deviceToken,
+    bool? isEmailVerified,
+    bool? isProfileActive,
+    String? role,
+    String? verificationStatus,
+    amplify_core.TemporalDateTime? createdAt,
+    amplify_core.TemporalDateTime? updatedAt,
+    List<String>? skills,
+    String? about,
+    bool? profileCompleted,
+    List<Booking>? bookings,
+    List<BookingItem>? bookingItems,
+    List<Review>? reviews,
+  }) {
     return User._internal(
       id: id,
       username: username ?? this.username,
@@ -244,9 +345,10 @@ class User extends amplify_core.Model {
       profileCompleted: profileCompleted ?? this.profileCompleted,
       bookings: bookings ?? this.bookings,
       bookingItems: bookingItems ?? this.bookingItems,
-      reviews: reviews ?? this.reviews);
+      reviews: reviews ?? this.reviews,
+    );
   }
-  
+
   User copyWithModelFieldValues({
     ModelFieldValue<String>? username,
     ModelFieldValue<String>? email,
@@ -264,31 +366,45 @@ class User extends amplify_core.Model {
     ModelFieldValue<bool?>? profileCompleted,
     ModelFieldValue<List<Booking>?>? bookings,
     ModelFieldValue<List<BookingItem>?>? bookingItems,
-    ModelFieldValue<List<Review>?>? reviews
+    ModelFieldValue<List<Review>?>? reviews,
   }) {
     return User._internal(
       id: id,
       username: username == null ? this.username : username.value,
       email: email == null ? this.email : email.value,
       phoneNumber: phoneNumber == null ? this.phoneNumber : phoneNumber.value,
-      profilePicture: profilePicture == null ? this.profilePicture : profilePicture.value,
+      profilePicture:
+          profilePicture == null ? this.profilePicture : profilePicture.value,
       deviceToken: deviceToken == null ? this.deviceToken : deviceToken.value,
-      isEmailVerified: isEmailVerified == null ? this.isEmailVerified : isEmailVerified.value,
-      isProfileActive: isProfileActive == null ? this.isProfileActive : isProfileActive.value,
+      isEmailVerified:
+          isEmailVerified == null
+              ? this.isEmailVerified
+              : isEmailVerified.value,
+      isProfileActive:
+          isProfileActive == null
+              ? this.isProfileActive
+              : isProfileActive.value,
       role: role == null ? this.role : role.value,
-      verificationStatus: verificationStatus == null ? this.verificationStatus : verificationStatus.value,
+      verificationStatus:
+          verificationStatus == null
+              ? this.verificationStatus
+              : verificationStatus.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
       updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value,
       skills: skills == null ? this.skills : skills.value,
       about: about == null ? this.about : about.value,
-      profileCompleted: profileCompleted == null ? this.profileCompleted : profileCompleted.value,
+      profileCompleted:
+          profileCompleted == null
+              ? this.profileCompleted
+              : profileCompleted.value,
       bookings: bookings == null ? this.bookings : bookings.value,
-      bookingItems: bookingItems == null ? this.bookingItems : bookingItems.value,
-      reviews: reviews == null ? this.reviews : reviews.value
+      bookingItems:
+          bookingItems == null ? this.bookingItems : bookingItems.value,
+      reviews: reviews == null ? this.reviews : reviews.value,
     );
   }
-  
-  User.fromJson(Map<String, dynamic> json)  
+
+  User.fromJson(Map<String, dynamic> json)
     : id = json['id'],
       _username = json['username'],
       _email = json['email'],
@@ -299,55 +415,104 @@ class User extends amplify_core.Model {
       _isProfileActive = json['isProfileActive'],
       _role = json['role'],
       _verificationStatus = json['verificationStatus'],
-      _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
-      _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null,
+      _createdAt =
+          json['createdAt'] != null
+              ? amplify_core.TemporalDateTime.fromString(json['createdAt'])
+              : null,
+      _updatedAt =
+          json['updatedAt'] != null
+              ? amplify_core.TemporalDateTime.fromString(json['updatedAt'])
+              : null,
       _skills = json['skills']?.cast<String>(),
       _about = json['about'],
       _profileCompleted = json['profileCompleted'],
-      _bookings = json['bookings']  is Map
-        ? (json['bookings']['items'] is List
-          ? (json['bookings']['items'] as List)
-              .where((e) => e != null)
-              .map((e) => Booking.fromJson(new Map<String, dynamic>.from(e)))
-              .toList()
-          : null)
-        : (json['bookings'] is List
-          ? (json['bookings'] as List)
-              .where((e) => e?['serializedData'] != null)
-              .map((e) => Booking.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
-              .toList()
-          : null),
-      _bookingItems = json['bookingItems']  is Map
-        ? (json['bookingItems']['items'] is List
-          ? (json['bookingItems']['items'] as List)
-              .where((e) => e != null)
-              .map((e) => BookingItem.fromJson(new Map<String, dynamic>.from(e)))
-              .toList()
-          : null)
-        : (json['bookingItems'] is List
-          ? (json['bookingItems'] as List)
-              .where((e) => e?['serializedData'] != null)
-              .map((e) => BookingItem.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
-              .toList()
-          : null),
-      _reviews = json['reviews']  is Map
-        ? (json['reviews']['items'] is List
-          ? (json['reviews']['items'] as List)
-              .where((e) => e != null)
-              .map((e) => Review.fromJson(new Map<String, dynamic>.from(e)))
-              .toList()
-          : null)
-        : (json['reviews'] is List
-          ? (json['reviews'] as List)
-              .where((e) => e?['serializedData'] != null)
-              .map((e) => Review.fromJson(new Map<String, dynamic>.from(e?['serializedData'])))
-              .toList()
-          : null);
-  
+      _bookings =
+          json['bookings'] is Map
+              ? (json['bookings']['items'] is List
+                  ? (json['bookings']['items'] as List)
+                      .where((e) => e != null)
+                      .map(
+                        (e) =>
+                            Booking.fromJson(new Map<String, dynamic>.from(e)),
+                      )
+                      .toList()
+                  : null)
+              : (json['bookings'] is List
+                  ? (json['bookings'] as List)
+                      .where((e) => e?['serializedData'] != null)
+                      .map(
+                        (e) => Booking.fromJson(
+                          new Map<String, dynamic>.from(e?['serializedData']),
+                        ),
+                      )
+                      .toList()
+                  : null),
+      _bookingItems =
+          json['bookingItems'] is Map
+              ? (json['bookingItems']['items'] is List
+                  ? (json['bookingItems']['items'] as List)
+                      .where((e) => e != null)
+                      .map(
+                        (e) => BookingItem.fromJson(
+                          new Map<String, dynamic>.from(e),
+                        ),
+                      )
+                      .toList()
+                  : null)
+              : (json['bookingItems'] is List
+                  ? (json['bookingItems'] as List)
+                      .where((e) => e?['serializedData'] != null)
+                      .map(
+                        (e) => BookingItem.fromJson(
+                          new Map<String, dynamic>.from(e?['serializedData']),
+                        ),
+                      )
+                      .toList()
+                  : null),
+      _reviews =
+          json['reviews'] is Map
+              ? (json['reviews']['items'] is List
+                  ? (json['reviews']['items'] as List)
+                      .where((e) => e != null)
+                      .map(
+                        (e) =>
+                            Review.fromJson(new Map<String, dynamic>.from(e)),
+                      )
+                      .toList()
+                  : null)
+              : (json['reviews'] is List
+                  ? (json['reviews'] as List)
+                      .where((e) => e?['serializedData'] != null)
+                      .map(
+                        (e) => Review.fromJson(
+                          new Map<String, dynamic>.from(e?['serializedData']),
+                        ),
+                      )
+                      .toList()
+                  : null);
+
   Map<String, dynamic> toJson() => {
-    'id': id, 'username': _username, 'email': _email, 'phoneNumber': _phoneNumber, 'profilePicture': _profilePicture, 'deviceToken': _deviceToken, 'isEmailVerified': _isEmailVerified, 'isProfileActive': _isProfileActive, 'role': _role, 'verificationStatus': _verificationStatus, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format(), 'skills': _skills, 'about': _about, 'profileCompleted': _profileCompleted, 'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(), 'bookingItems': _bookingItems?.map((BookingItem? e) => e?.toJson()).toList(), 'reviews': _reviews?.map((Review? e) => e?.toJson()).toList()
+    'id': id,
+    'username': _username,
+    'email': _email,
+    'phoneNumber': _phoneNumber,
+    'profilePicture': _profilePicture,
+    'deviceToken': _deviceToken,
+    'isEmailVerified': _isEmailVerified,
+    'isProfileActive': _isProfileActive,
+    'role': _role,
+    'verificationStatus': _verificationStatus,
+    'createdAt': _createdAt?.format(),
+    'updatedAt': _updatedAt?.format(),
+    'skills': _skills,
+    'about': _about,
+    'profileCompleted': _profileCompleted,
+    'bookings': _bookings?.map((Booking? e) => e?.toJson()).toList(),
+    'bookingItems':
+        _bookingItems?.map((BookingItem? e) => e?.toJson()).toList(),
+    'reviews': _reviews?.map((Review? e) => e?.toJson()).toList(),
   };
-  
+
   Map<String, Object?> toMap() => {
     'id': id,
     'username': _username,
@@ -366,175 +531,263 @@ class User extends amplify_core.Model {
     'profileCompleted': _profileCompleted,
     'bookings': _bookings,
     'bookingItems': _bookingItems,
-    'reviews': _reviews
+    'reviews': _reviews,
   };
 
-  static final amplify_core.QueryModelIdentifier<UserModelIdentifier> MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<UserModelIdentifier>();
+  static final amplify_core.QueryModelIdentifier<UserModelIdentifier>
+  MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<UserModelIdentifier>();
   static final ID = amplify_core.QueryField(fieldName: "id");
   static final USERNAME = amplify_core.QueryField(fieldName: "username");
   static final EMAIL = amplify_core.QueryField(fieldName: "email");
   static final PHONENUMBER = amplify_core.QueryField(fieldName: "phoneNumber");
-  static final PROFILEPICTURE = amplify_core.QueryField(fieldName: "profilePicture");
+  static final PROFILEPICTURE = amplify_core.QueryField(
+    fieldName: "profilePicture",
+  );
   static final DEVICETOKEN = amplify_core.QueryField(fieldName: "deviceToken");
-  static final ISEMAILVERIFIED = amplify_core.QueryField(fieldName: "isEmailVerified");
-  static final ISPROFILEACTIVE = amplify_core.QueryField(fieldName: "isProfileActive");
+  static final ISEMAILVERIFIED = amplify_core.QueryField(
+    fieldName: "isEmailVerified",
+  );
+  static final ISPROFILEACTIVE = amplify_core.QueryField(
+    fieldName: "isProfileActive",
+  );
   static final ROLE = amplify_core.QueryField(fieldName: "role");
-  static final VERIFICATIONSTATUS = amplify_core.QueryField(fieldName: "verificationStatus");
+  static final VERIFICATIONSTATUS = amplify_core.QueryField(
+    fieldName: "verificationStatus",
+  );
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
   static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
   static final SKILLS = amplify_core.QueryField(fieldName: "skills");
   static final ABOUT = amplify_core.QueryField(fieldName: "about");
-  static final PROFILECOMPLETED = amplify_core.QueryField(fieldName: "profileCompleted");
+  static final PROFILECOMPLETED = amplify_core.QueryField(
+    fieldName: "profileCompleted",
+  );
   static final BOOKINGS = amplify_core.QueryField(
     fieldName: "bookings",
-    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'Booking'));
+    fieldType: amplify_core.ModelFieldType(
+      amplify_core.ModelFieldTypeEnum.model,
+      ofModelName: 'Booking',
+    ),
+  );
   static final BOOKINGITEMS = amplify_core.QueryField(
     fieldName: "bookingItems",
-    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'BookingItem'));
+    fieldType: amplify_core.ModelFieldType(
+      amplify_core.ModelFieldTypeEnum.model,
+      ofModelName: 'BookingItem',
+    ),
+  );
   static final REVIEWS = amplify_core.QueryField(
     fieldName: "reviews",
-    fieldType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.model, ofModelName: 'Review'));
-  static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
-    modelSchemaDefinition.name = "User";
-    modelSchemaDefinition.pluralName = "Users";
-    
-    modelSchemaDefinition.authRules = [
-      amplify_core.AuthRule(
-        authStrategy: amplify_core.AuthStrategy.OWNER,
-        ownerField: "owner",
-        identityClaim: "cognito:username",
-        provider: amplify_core.AuthRuleProvider.USERPOOLS,
-        operations: const [
-          amplify_core.ModelOperation.CREATE,
-          amplify_core.ModelOperation.READ,
-          amplify_core.ModelOperation.UPDATE,
-          amplify_core.ModelOperation.DELETE
-        ]),
-      amplify_core.AuthRule(
-        authStrategy: amplify_core.AuthStrategy.PUBLIC,
-        operations: const [
-          amplify_core.ModelOperation.READ
-        ])
-    ];
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.USERNAME,
-      isRequired: true,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.EMAIL,
-      isRequired: true,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.PHONENUMBER,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.PROFILEPICTURE,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.DEVICETOKEN,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.ISEMAILVERIFIED,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.ISPROFILEACTIVE,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.ROLE,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.VERIFICATIONSTATUS,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.CREATEDAT,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.UPDATEDAT,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.SKILLS,
-      isRequired: false,
-      isArray: true,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.collection, ofModelName: amplify_core.ModelFieldTypeEnum.string.name)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.ABOUT,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
-      key: User.PROFILECOMPLETED,
-      isRequired: false,
-      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
-      key: User.BOOKINGS,
-      isRequired: false,
-      ofModelName: 'Booking',
-      associatedKey: Booking.USER
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
-      key: User.BOOKINGITEMS,
-      isRequired: false,
-      ofModelName: 'BookingItem',
-      associatedKey: BookingItem.USER
-    ));
-    
-    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.hasMany(
-      key: User.REVIEWS,
-      isRequired: false,
+    fieldType: amplify_core.ModelFieldType(
+      amplify_core.ModelFieldTypeEnum.model,
       ofModelName: 'Review',
-      associatedKey: Review.USER
-    ));
-  });
+    ),
+  );
+  static var schema = amplify_core.Model.defineSchema(
+    define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
+      modelSchemaDefinition.name = "User";
+      modelSchemaDefinition.pluralName = "Users";
+
+      modelSchemaDefinition.authRules = [
+        amplify_core.AuthRule(
+          authStrategy: amplify_core.AuthStrategy.OWNER,
+          ownerField: "owner",
+          identityClaim: "cognito:username",
+          provider: amplify_core.AuthRuleProvider.USERPOOLS,
+          operations: const [
+            amplify_core.ModelOperation.CREATE,
+            amplify_core.ModelOperation.READ,
+            amplify_core.ModelOperation.UPDATE,
+            amplify_core.ModelOperation.DELETE,
+          ],
+        ),
+        amplify_core.AuthRule(
+          authStrategy: amplify_core.AuthStrategy.PUBLIC,
+          operations: const [amplify_core.ModelOperation.READ],
+        ),
+      ];
+
+      modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.USERNAME,
+          isRequired: true,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.EMAIL,
+          isRequired: true,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.PHONENUMBER,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.PROFILEPICTURE,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.DEVICETOKEN,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.ISEMAILVERIFIED,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.bool,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.ISPROFILEACTIVE,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.bool,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.ROLE,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.VERIFICATIONSTATUS,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.CREATEDAT,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.dateTime,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.UPDATEDAT,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.dateTime,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.SKILLS,
+          isRequired: false,
+          isArray: true,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.collection,
+            ofModelName: amplify_core.ModelFieldTypeEnum.string.name,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.ABOUT,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: User.PROFILECOMPLETED,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.bool,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.hasMany(
+          key: User.BOOKINGS,
+          isRequired: false,
+          ofModelName: 'Booking',
+          associatedKey: Booking.USER,
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.hasMany(
+          key: User.BOOKINGITEMS,
+          isRequired: false,
+          ofModelName: 'BookingItem',
+          associatedKey: BookingItem.USER,
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.hasMany(
+          key: User.REVIEWS,
+          isRequired: false,
+          ofModelName: 'Review',
+          associatedKey: Review.USER,
+        ),
+      );
+    },
+  );
 }
 
 class _UserModelType extends amplify_core.ModelType<User> {
   const _UserModelType();
-  
+
   @override
   User fromJson(Map<String, dynamic> jsonData) {
     return User.fromJson(jsonData);
   }
-  
+
   @override
   String modelName() {
     return 'User';
@@ -549,37 +802,32 @@ class UserModelIdentifier implements amplify_core.ModelIdentifier<User> {
   final String id;
 
   /** Create an instance of UserModelIdentifier using [id] the primary key. */
-  const UserModelIdentifier({
-    required this.id});
-  
+  const UserModelIdentifier({required this.id});
+
   @override
-  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{
-    'id': id
-  });
-  
+  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{'id': id});
+
   @override
-  List<Map<String, dynamic>> serializeAsList() => serializeAsMap()
-    .entries
-    .map((entry) => (<String, dynamic>{ entry.key: entry.value }))
-    .toList();
-  
+  List<Map<String, dynamic>> serializeAsList() =>
+      serializeAsMap().entries
+          .map((entry) => (<String, dynamic>{entry.key: entry.value}))
+          .toList();
+
   @override
   String serializeAsString() => serializeAsMap().values.join('#');
-  
+
   @override
   String toString() => 'UserModelIdentifier(id: $id)';
-  
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) {
       return true;
     }
-    
-    return other is UserModelIdentifier &&
-      id == other.id;
+
+    return other is UserModelIdentifier && id == other.id;
   }
-  
+
   @override
-  int get hashCode =>
-    id.hashCode;
+  int get hashCode => id.hashCode;
 }

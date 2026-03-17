@@ -8,18 +8,6 @@ import '../../../../models/ModelProvider.dart';
 import '../../../Courses/controllers/tutoring_controller.dart';
 import 'home_controller.dart';
 
-/// Favorites are stored as a single UserFavorite row per user+session pair.
-///
-/// Add/Remove strategy:
-///   • First favorite  → CREATE a new record (_version: 1)
-///   • Re-favorite     → UPDATE the existing record (_deleted: false)
-///   • Un-favorite     → DELETE (soft-delete via AppSync, _deleted: true)
-///
-/// favoritedSessions is kept in sync automatically:
-///   1. On login — _loadFavorites() fetches IDs + hydrates sessions directly.
-///   2. Auto-watch — workers on TutoringController.sessions and
-///      HomeController.allSessions re-hydrate favoritedSessions the moment
-///      either list populates, so the UI updates without any manual reload.
 class FavoritesController extends GetxController {
   static FavoritesController get instance {
     if (Get.isRegistered<FavoritesController>()) return Get.find();
@@ -33,10 +21,11 @@ class FavoritesController extends GetxController {
 
   // ── Internal ──────────────────────────────────────────────────────────────
   final _records = <String, _FavRecord>{};
-  final _inProgress = <String>{};
-  String? _currentUserId;
 
-  // Workers that watch other controllers' session lists.
+  // RxSet so Obx in TFavouriteIcon rebuilds when toggle starts/finishes.
+  final _inProgress = <String>{}.obs;
+
+  String? _currentUserId;
   Worker? _tutoringWorker;
   Worker? _homeWorker;
 
@@ -56,21 +45,15 @@ class FavoritesController extends GetxController {
   }
 
   // =========================================================================
-  // AUTO-WATCH — re-hydrate favoritedSessions when any session list updates
+  // AUTO-WATCH
   // =========================================================================
 
   void _attachSessionWatchers() {
-    // Watch TutoringController.sessions (DataStore observeQuery).
-    // Fires every time DataStore pushes a new snapshot — including the first
-    // one after login when sessions finally arrive from AppSync sync.
     _tutoringWorker?.dispose();
     _tutoringWorker = ever<List<TutoringSession>>(
       TutoringController.instance.sessions,
       (_) => _rehydrateFromExistingSources(),
     );
-
-    // Watch HomeController.allSessions (GraphQL load).
-    // Fires when HomeController finishes its _loadAllSessionsFromGraphQL().
     _homeWorker?.dispose();
     if (Get.isRegistered<HomeController>()) {
       _homeWorker = ever<List<TutoringSession>>(
@@ -80,15 +63,10 @@ class FavoritesController extends GetxController {
     }
   }
 
-  /// Re-hydrate favoritedSessions using already-loaded sessions from other
-  /// controllers. Does NOT make any network calls — purely assembles from
-  /// what's already in memory. Called automatically by watchers.
   void _rehydrateFromExistingSources() {
     if (favoriteIds.isEmpty) return;
 
-    // Build a lookup map from every session source we have.
     final pool = <String, TutoringSession>{};
-
     try {
       for (final s in TutoringController.instance.sessions) {
         pool[s.id] = s;
@@ -97,7 +75,6 @@ class FavoritesController extends GetxController {
         pool.putIfAbsent(s.id, () => s);
       }
     } catch (_) {}
-
     try {
       if (Get.isRegistered<HomeController>()) {
         for (final s in HomeController.instance.allSessions) {
@@ -108,16 +85,12 @@ class FavoritesController extends GetxController {
 
     if (pool.isEmpty) return;
 
-    // For each favorited id that we now have a session for, update the list.
     bool changed = false;
     final current = {for (final s in favoritedSessions) s.id: s};
-
     for (final id in favoriteIds) {
       final inPool = pool[id];
       if (inPool == null) continue;
-
       final existing = current[id];
-      // Replace if missing or if the new version has a tutor name (more data).
       if (existing == null ||
           (existing.tutor?.name.isEmpty != false &&
               inPool.tutor?.name.isNotEmpty == true)) {
@@ -125,7 +98,6 @@ class FavoritesController extends GetxController {
         changed = true;
       }
     }
-
     if (changed) {
       favoritedSessions.assignAll(
         favoriteIds
@@ -133,10 +105,26 @@ class FavoritesController extends GetxController {
             .map((id) => current[id]!)
             .toList(),
       );
-      print(
-        '🔄 FavoritesController: re-hydrated ${favoritedSessions.length} sessions from local pool',
-      );
     }
+  }
+
+  // =========================================================================
+  // VERSION PARSING
+  // =========================================================================
+
+  int? _parseVersion(String jsonStr, String operationKey) {
+    try {
+      final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+      final obj = root[operationKey] as Map<String, dynamic>?;
+      if (obj != null) {
+        final v = obj['_version'];
+        if (v != null) return (v as num).toInt();
+      }
+    } catch (e) {
+      print('⚠️ FavoritesController._parseVersion: $e');
+    }
+    return null;
   }
 
   // =========================================================================
@@ -145,7 +133,6 @@ class FavoritesController extends GetxController {
 
   Future<String?> _getUserId({int retries = 3}) async {
     if (_currentUserId != null) return _currentUserId;
-
     for (int attempt = 0; attempt < retries; attempt++) {
       try {
         final user = await Amplify.Auth.getCurrentUser();
@@ -154,15 +141,10 @@ class FavoritesController extends GetxController {
           return _currentUserId;
         }
       } catch (_) {}
-
       if (attempt < retries - 1) {
         await Future.delayed(Duration(milliseconds: 300 * (attempt + 1)));
       }
     }
-
-    print(
-      '⚠️ FavoritesController: could not resolve userId after $retries attempts',
-    );
     return null;
   }
 
@@ -194,12 +176,15 @@ class FavoritesController extends GetxController {
         }
       """;
 
-      final request = GraphQLRequest<String>(
-        document: queryDoc,
-        variables: {'userId': userId, 'limit': 1000},
-      );
-
-      final response = await Amplify.API.query(request: request).response;
+      final response =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: queryDoc,
+                  variables: {'userId': userId, 'limit': 1000},
+                ),
+              )
+              .response;
 
       if (response.errors.isNotEmpty || response.data == null) {
         print('⚠️ FavoritesController: load failed — ${response.errors}');
@@ -207,16 +192,12 @@ class FavoritesController extends GetxController {
       }
 
       _parseResponse(response.data!);
-
-      // Step 1: Try to hydrate from already-loaded controllers (instant).
       _rehydrateFromExistingSources();
-
-      // Step 2: For any ids still missing, fetch directly from DataStore/AppSync.
       await _hydrateMissingSessions();
 
       print(
-        '✅ FavoritesController: loaded ${favoriteIds.length} active favorites, '
-        '${favoritedSessions.length} sessions hydrated for user $userId',
+        '✅ FavoritesController: loaded ${favoriteIds.length} active, '
+        '${_records.length} total for user $userId',
       );
     } catch (e) {
       print('❌ FavoritesController._loadFavorites: $e');
@@ -228,11 +209,9 @@ class FavoritesController extends GetxController {
   void _parseResponse(String jsonStr) {
     try {
       final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
-      final items =
-          (decoded['listUserFavoritesByUser']
-                  as Map<String, dynamic>?)?['items']
-              as List<dynamic>? ??
-          [];
+      final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+      final listObj = root['listUserFavoritesByUser'] as Map<String, dynamic>?;
+      final items = listObj?['items'] as List<dynamic>? ?? [];
 
       for (final raw in items) {
         final item = raw as Map<String, dynamic>;
@@ -256,7 +235,6 @@ class FavoritesController extends GetxController {
     }
   }
 
-  /// Fetch sessions for any favoriteId not yet in favoritedSessions.
   Future<void> _hydrateMissingSessions() async {
     final currentIds = favoritedSessions.map((s) => s.id).toSet();
     final missing =
@@ -265,25 +243,18 @@ class FavoritesController extends GetxController {
 
     for (final sessionId in missing) {
       try {
-        // DataStore first (fast local cache).
         final local = await Amplify.DataStore.query(
           TutoringSession.classType,
           where: TutoringSession.ID.eq(sessionId),
         );
-
         if (local.isNotEmpty) {
-          final hydrated = await _resolveSessionTutor(local.first);
-          favoritedSessions.add(hydrated);
+          favoritedSessions.add(await _resolveSessionTutor(local.first));
           continue;
         }
-
-        // Direct AppSync fallback.
         final remote = await _fetchSessionFromAppSync(sessionId);
         if (remote != null) favoritedSessions.add(remote);
       } catch (e) {
-        print(
-          '⚠️ FavoritesController: could not hydrate session $sessionId: $e',
-        );
+        print('⚠️ FavoritesController: could not hydrate $sessionId: $e');
       }
     }
   }
@@ -292,7 +263,6 @@ class FavoritesController extends GetxController {
     final tutorId = session.tutor?.id;
     if (tutorId == null || tutorId.isEmpty) return session;
     if (session.tutor?.name.isNotEmpty == true) return session;
-
     try {
       final tutors = await Amplify.DataStore.query(
         Tutor.classType,
@@ -313,7 +283,6 @@ class FavoritesController extends GetxController {
           }
         }
       """;
-
       final response =
           await Amplify.API
               .query(
@@ -323,11 +292,11 @@ class FavoritesController extends GetxController {
                 ),
               )
               .response;
-
       if (response.errors.isNotEmpty || response.data == null) return null;
 
       final decoded = jsonDecode(response.data!) as Map<String, dynamic>;
-      final data = decoded['getTutoringSession'] as Map<String, dynamic>?;
+      final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+      final data = root['getTutoringSession'] as Map<String, dynamic>?;
       if (data == null) return null;
 
       final tutorId = data['tutorId'] as String?;
@@ -341,7 +310,6 @@ class FavoritesController extends GetxController {
           if (tutors.isNotEmpty) tutor = tutors.first;
         } catch (_) {}
       }
-
       return TutoringSession(
         id: data['id'] as String,
         title: data['title'] as String? ?? 'Session',
@@ -362,12 +330,7 @@ class FavoritesController extends GetxController {
   // =========================================================================
 
   Future<void> toggleFavorite(String sessionId) async {
-    if (_inProgress.contains(sessionId)) {
-      print(
-        '⚠️ FavoritesController: toggle in progress for $sessionId, ignoring',
-      );
-      return;
-    }
+    if (_inProgress.contains(sessionId)) return;
 
     final userId = await _getUserId();
     if (userId == null) return;
@@ -384,20 +347,29 @@ class FavoritesController extends GetxController {
     }
   }
 
+  // ── Add ───────────────────────────────────────────────────────────────────
+
   Future<void> _addFavorite(String sessionId, String userId) async {
     favoriteIds.add(sessionId);
     await _addSessionToFavoritedList(sessionId);
 
     final existing = _records[sessionId];
-    if (existing != null) {
+
+    if (existing != null && !existing.isDeleted) {
+      // Already active — nothing to do.
       print(
-        '🔄 FavoritesController: reviving existing record for $sessionId '
-        '(id=${existing.id}, wasDeleted=${existing.isDeleted})',
+        '⚠️ FavoritesController: active record already exists for $sessionId',
       );
-      await _reviveRecord(sessionId, existing, userId);
-    } else {
-      await _createRecord(sessionId, userId);
+      return;
     }
+
+    // Always create a fresh record — avoids all soft-delete version conflicts.
+    if (existing != null && existing.isDeleted) {
+      print(
+        '🔄 FavoritesController: creating fresh record for $sessionId (old was soft-deleted)',
+      );
+    }
+    await _createRecord(sessionId, userId);
   }
 
   Future<void> _addSessionToFavoritedList(String sessionId) async {
@@ -408,8 +380,7 @@ class FavoritesController extends GetxController {
         where: TutoringSession.ID.eq(sessionId),
       );
       if (local.isNotEmpty) {
-        final hydrated = await _resolveSessionTutor(local.first);
-        favoritedSessions.add(hydrated);
+        favoritedSessions.add(await _resolveSessionTutor(local.first));
         return;
       }
       final remote = await _fetchSessionFromAppSync(sessionId);
@@ -419,70 +390,8 @@ class FavoritesController extends GetxController {
     }
   }
 
-  Future<void> _reviveRecord(
-    String sessionId,
-    _FavRecord record,
-    String userId,
-  ) async {
-    try {
-      int version = record.version;
-      final liveVersion = await _fetchLiveVersion(record.id);
-      if (liveVersion != null) version = liveVersion;
-
-      const mutationDoc = r"""
-        mutation UpdateUserFavorite($input: UpdateUserFavoriteInput!) {
-          updateUserFavorite(input: $input) {
-            id
-            sessionId
-            _version
-            _deleted
-          }
-        }
-      """;
-
-      final request = GraphQLRequest<String>(
-        document: mutationDoc,
-        variables: {
-          'input': {
-            'id': record.id,
-            'userId': userId,
-            'sessionId': sessionId,
-            '_version': version,
-          },
-        },
-      );
-
-      final response = await Amplify.API.mutate(request: request).response;
-
-      if (response.errors.isNotEmpty) {
-        favoriteIds.remove(sessionId);
-        favoritedSessions.removeWhere((s) => s.id == sessionId);
-        print('❌ FavoritesController._reviveRecord: ${response.errors}');
-        return;
-      }
-
-      final newVersion = _parseVersion(
-        response.data ?? '',
-        'updateUserFavorite',
-      );
-      _records[sessionId] = _FavRecord(
-        id: record.id,
-        version: newVersion ?? version + 1,
-        isDeleted: false,
-      );
-      print(
-        '✅ FavoritesController: revived $sessionId (v=${newVersion ?? version + 1})',
-      );
-    } catch (e) {
-      favoriteIds.remove(sessionId);
-      favoritedSessions.removeWhere((s) => s.id == sessionId);
-      print('❌ FavoritesController._reviveRecord: $e');
-    }
-  }
-
   Future<void> _createRecord(String sessionId, String userId) async {
     final recordId = amplify_core.UUID.getUUID();
-
     try {
       const mutationDoc = r"""
         mutation CreateUserFavorite($input: CreateUserFavoriteInput!) {
@@ -494,19 +403,22 @@ class FavoritesController extends GetxController {
         }
       """;
 
-      final request = GraphQLRequest<String>(
-        document: mutationDoc,
-        variables: {
-          'input': {
-            'id': recordId,
-            'userId': userId,
-            'sessionId': sessionId,
-            '_version': 1,
-          },
-        },
-      );
-
-      final response = await Amplify.API.mutate(request: request).response;
+      final response =
+          await Amplify.API
+              .mutate(
+                request: GraphQLRequest<String>(
+                  document: mutationDoc,
+                  variables: {
+                    'input': {
+                      'id': recordId,
+                      'userId': userId,
+                      'sessionId': sessionId,
+                      '_version': 1,
+                    },
+                  },
+                ),
+              )
+              .response;
 
       if (response.errors.isNotEmpty) {
         favoriteIds.remove(sessionId);
@@ -515,13 +427,18 @@ class FavoritesController extends GetxController {
         return;
       }
 
-      final version = _parseVersion(response.data ?? '', 'createUserFavorite');
+      final version =
+          _parseVersion(response.data ?? '', 'createUserFavorite') ?? 1;
+      // Overwrite _records with the new record so future deletes use the
+      // correct ID and version.
       _records[sessionId] = _FavRecord(
         id: recordId,
-        version: version ?? 1,
+        version: version,
         isDeleted: false,
       );
-      print('✅ FavoritesController: created $sessionId (v=${version ?? 1})');
+      print(
+        '✅ FavoritesController: created $sessionId id=$recordId v=$version',
+      );
     } catch (e) {
       favoriteIds.remove(sessionId);
       favoritedSessions.removeWhere((s) => s.id == sessionId);
@@ -529,23 +446,24 @@ class FavoritesController extends GetxController {
     }
   }
 
+  // ── Remove ────────────────────────────────────────────────────────────────
+
   Future<void> _removeFavorite(String sessionId) async {
     var record = _records[sessionId];
 
+    // Optimistic update.
     favoriteIds.remove(sessionId);
     favoritedSessions.removeWhere((s) => s.id == sessionId);
 
-    if (record == null) {
+    if (record == null || record.isDeleted) {
+      // Nothing active to delete — already gone.
       print(
-        '⚠️ FavoritesController: no record cached for $sessionId, reloading...',
+        '⚠️ FavoritesController: no active record to delete for $sessionId',
       );
-      await _loadFavorites();
-      record = _records[sessionId];
-      if (record == null) return;
-      favoriteIds.remove(sessionId);
-      favoritedSessions.removeWhere((s) => s.id == sessionId);
+      return;
     }
 
+    // Mark locally as deleted.
     _records[sessionId] = _FavRecord(
       id: record.id,
       version: record.version,
@@ -556,39 +474,44 @@ class FavoritesController extends GetxController {
   }
 
   Future<void> _deleteRecord(String sessionId, _FavRecord record) async {
-    try {
-      int version = record.version;
-      final liveVersion = await _fetchLiveVersion(record.id);
-      if (liveVersion != null) version = liveVersion;
-
-      const mutationDoc = r"""
-        mutation DeleteUserFavorite($input: DeleteUserFavoriteInput!) {
-          deleteUserFavorite(input: $input) {
-            id
-            _version
-          }
+    const mutationDoc = r"""
+      mutation DeleteUserFavorite($input: DeleteUserFavoriteInput!) {
+        deleteUserFavorite(input: $input) {
+          id
+          _version
         }
-      """;
+      }
+    """;
 
-      final request = GraphQLRequest<String>(
-        document: mutationDoc,
-        variables: {
-          'input': {'id': record.id, '_version': version},
-        },
+    // ✅ FIX: Try the live version from AppSync first. If AppSync returns
+    // null (record not yet synced — common when deleting immediately after
+    // creating), fall back to the cached version we stored in _createRecord.
+    // This handles the "favorite then immediately unfavorite" case.
+    int version = record.version;
+    final liveVersion = await _fetchLiveVersion(record.id);
+    if (liveVersion != null) {
+      version = liveVersion;
+    } else {
+      print(
+        '⚠️ FavoritesController: AppSync returned null for ${record.id} '
+        '(not synced yet) — using cached version $version',
       );
+    }
 
-      final response = await Amplify.API.mutate(request: request).response;
+    for (int attempt = 0; attempt < 2; attempt++) {
+      final response =
+          await Amplify.API
+              .mutate(
+                request: GraphQLRequest<String>(
+                  document: mutationDoc,
+                  variables: {
+                    'input': {'id': record.id, '_version': version},
+                  },
+                ),
+              )
+              .response;
 
-      if (response.errors.isNotEmpty) {
-        favoriteIds.add(sessionId);
-        await _addSessionToFavoritedList(sessionId);
-        _records[sessionId] = _FavRecord(
-          id: record.id,
-          version: version,
-          isDeleted: false,
-        );
-        print('❌ FavoritesController._deleteRecord: ${response.errors}');
-      } else {
+      if (response.errors.isEmpty) {
         final newVersion = _parseVersion(
           response.data ?? '',
           'deleteUserFavorite',
@@ -598,20 +521,44 @@ class FavoritesController extends GetxController {
           version: newVersion ?? version + 1,
           isDeleted: true,
         );
-        print('✅ FavoritesController: un-favorited $sessionId');
+        print(
+          '✅ FavoritesController: deleted $sessionId (attempt ${attempt + 1})',
+        );
+        return;
       }
-    } catch (e) {
+
+      final isConflict = response.errors.any(
+        (e) =>
+            e.extensions?['errorType']?.toString().contains('Conflict') == true,
+      );
+
+      if (isConflict && attempt == 0) {
+        // Version was wrong — fetch fresh and retry once.
+        final fresh = await _fetchLiveVersion(record.id);
+        if (fresh == null) {
+          // Already deleted by the time we retried — that's fine.
+          print('✅ FavoritesController: $sessionId already deleted on retry');
+          return;
+        }
+        version = fresh;
+        continue;
+      }
+
+      // Roll back on non-conflict error or second failure.
+      print('❌ FavoritesController._deleteRecord: ${response.errors}');
       favoriteIds.add(sessionId);
       await _addSessionToFavoritedList(sessionId);
       _records[sessionId] = _FavRecord(
         id: record.id,
-        version: record.version,
+        version: version,
         isDeleted: false,
       );
-      print('❌ FavoritesController._deleteRecord: $e');
+      return;
     }
   }
 
+  /// Returns the live _version from AppSync for an active (non-deleted) record.
+  /// Returns null if the record doesn't exist yet on AppSync or is soft-deleted.
   Future<int?> _fetchLiveVersion(String recordId) async {
     try {
       const getDoc = r"""
@@ -619,10 +566,10 @@ class FavoritesController extends GetxController {
           getUserFavorite(id: $id) {
             id
             _version
+            _deleted
           }
         }
       """;
-
       final response =
           await Amplify.API
               .query(
@@ -632,9 +579,13 @@ class FavoritesController extends GetxController {
                 ),
               )
               .response;
-
       if (response.errors.isEmpty && response.data != null) {
-        return _parseVersion(response.data!, 'getUserFavorite');
+        final decoded = jsonDecode(response.data!) as Map<String, dynamic>;
+        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+        final obj = root['getUserFavorite'] as Map<String, dynamic>?;
+        if (obj == null || obj['_deleted'] == true) return null;
+        final v = obj['_version'];
+        if (v != null) return (v as num).toInt();
       }
     } catch (e) {
       print('⚠️ FavoritesController._fetchLiveVersion: $e');
@@ -642,20 +593,12 @@ class FavoritesController extends GetxController {
     return null;
   }
 
-  int? _parseVersion(String jsonStr, String operationKey) {
-    try {
-      final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
-      return (decoded[operationKey]?['_version'] as num?)?.toInt();
-    } catch (_) {
-      return null;
-    }
-  }
-
   // =========================================================================
   // PUBLIC HELPERS
   // =========================================================================
 
   bool isFavourite(String sessionId) => favoriteIds.contains(sessionId);
+  bool isToggling(String sessionId) => _inProgress.contains(sessionId);
 
   Future<void> reloadForUser() async {
     _currentUserId = null;
@@ -679,7 +622,6 @@ class FavoritesController extends GetxController {
   }
 }
 
-// ── Internal record model ─────────────────────────────────────────────────────
 class _FavRecord {
   final String id;
   final int version;

@@ -1,3 +1,4 @@
+// lib/Features/Sessions/screens/session_detail_screen.dart
 // ignore_for_file: public_member_api_docs, use_build_context_synchronously
 
 import 'package:amplify_flutter/amplify_flutter.dart';
@@ -102,7 +103,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     const defaultAttrs = {
       "Mode": ["Online", "Offline"],
       "Duration": ["1hr", "2hr"],
-      "Payment": ["Before Session", "After Session"],
     };
 
     final merged = {...defaultAttrs, ...sessionAttrs};
@@ -197,14 +197,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       backgroundColor: colorScheme.surface,
       body: Stack(
         children: [
-          // ── Scrollable content ─────────────────────────────────────
+          // ── Scrollable content ───────────────────────────────────
           SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 96),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Image slider — favourite heart is in TSessionImageSlider's AppBar
-                // via TFavouriteIcon which reads FavoritesController directly.
                 TSessionImageSlider(session: session),
 
                 Padding(
@@ -225,6 +223,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       TSessionAttributes(session: session),
                       const SizedBox(height: TSizes.spaceBtwSections / 2),
 
+                      // ── Action row (Tutor Profile + Chat) ──────────
                       _ActionRow(
                         isOwner: _isOwner,
                         currentUserId: _currentUserId,
@@ -238,7 +237,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       ),
                       const SizedBox(height: TSizes.spaceBtwSections),
 
-                      _SectionLabel(title: "Description"),
+                      const _SectionLabel(title: "Description"),
                       const SizedBox(height: TSizes.spaceBtwItems),
                       Container(
                         width: double.infinity,
@@ -277,7 +276,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          _SectionLabel(title: "Reviews"),
+                          const _SectionLabel(title: "Reviews"),
                           TextButton.icon(
                             onPressed: _openReviewScreen,
                             icon: Icon(
@@ -360,7 +359,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             ),
           ),
 
-          // ── Sticky Book Session bar ────────────────────────────────
+          // ── Sticky Book Session bar ──────────────────────────────
           Positioned(
             bottom: 0,
             left: 0,
@@ -419,9 +418,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Section label
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Section label ─────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.title});
@@ -433,11 +430,9 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tutor Profile + Chat action row
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Action row — Tutor Profile + Chat (with payment gate) ────────────────────
 
-class _ActionRow extends StatelessWidget {
+class _ActionRow extends StatefulWidget {
   const _ActionRow({
     required this.isOwner,
     required this.currentUserId,
@@ -451,10 +446,55 @@ class _ActionRow extends StatelessWidget {
   final VoidCallback onTutorTap;
 
   @override
+  State<_ActionRow> createState() => _ActionRowState();
+}
+
+class _ActionRowState extends State<_ActionRow> {
+  bool _hasPaid = false;
+  bool _checking = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPaymentStatus();
+  }
+
+  Future<void> _checkPaymentStatus() async {
+    // Owners (tutors) always have chat access — skip query
+    if (widget.isOwner || widget.currentUserId == null) {
+      if (mounted) setState(() => _checking = false);
+      return;
+    }
+
+    try {
+      final results = await Amplify.DataStore.query(
+        UserSessionPayment.classType,
+        where: UserSessionPayment.USERID
+            .eq(widget.currentUserId!)
+            .and(UserSessionPayment.SESSIONID.eq(widget.session.id))
+            .and(UserSessionPayment.HASPAID.eq(true)),
+      );
+
+      if (mounted) {
+        setState(() {
+          _hasPaid = results.isNotEmpty;
+          _checking = false;
+        });
+      }
+    } catch (e) {
+      safePrint('_ActionRow: payment check error – $e');
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final buttonStyle = OutlinedButton.styleFrom(
+    // Chat is enabled if: viewer is the tutor (owner) OR student has paid
+    final chatEnabled = widget.isOwner || _hasPaid;
+
+    final activeButtonStyle = OutlinedButton.styleFrom(
       padding: const EdgeInsets.symmetric(vertical: 13),
       foregroundColor: colorScheme.primary,
       side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.38)),
@@ -462,49 +502,129 @@ class _ActionRow extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
 
-    return Row(
+    final disabledButtonStyle = OutlinedButton.styleFrom(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      foregroundColor: colorScheme.onSurface.withValues(alpha: 0.35),
+      side: BorderSide(color: colorScheme.outline.withValues(alpha: 0.2)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onTutorTap,
-            icon: const Icon(Iconsax.profile_circle, size: 17),
-            label: const Text("Tutor Profile"),
-            style: buttonStyle,
-          ),
-        ),
-        const SizedBox(width: TSizes.spaceBtwItems),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () {
-              if (isOwner) {
-                Get.to(() => const InboxScreen());
-              } else {
-                if (currentUserId == null) return;
-                Get.to(
-                  () => ChatScreen(
-                    sessionId: '${session.id}_$currentUserId',
-                    sessionTitle: session.title,
-                    otherUserName: session.tutor?.name ?? 'Tutor',
-                  ),
-                );
-              }
-            },
-            icon: Icon(
-              isOwner ? Iconsax.message_text : Iconsax.message,
-              size: 17,
+        Row(
+          children: [
+            // ── Tutor Profile ──────────────────────────────────────
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: widget.onTutorTap,
+                icon: const Icon(Iconsax.profile_circle, size: 17),
+                label: const Text("Tutor Profile"),
+                style: activeButtonStyle,
+              ),
             ),
-            label: Text(isOwner ? "Inbox" : "Chat"),
-            style: buttonStyle,
-          ),
+            const SizedBox(width: TSizes.spaceBtwItems),
+
+            // ── Chat (gated) ───────────────────────────────────────
+            Expanded(
+              child: Tooltip(
+                message:
+                    (!chatEnabled && !_checking)
+                        ? 'Book & pay to unlock chat'
+                        : '',
+                preferBelow: false,
+                child: OutlinedButton.icon(
+                  onPressed:
+                      chatEnabled
+                          ? () {
+                            if (widget.isOwner) {
+                              Get.to(() => const InboxScreen());
+                            } else {
+                              if (widget.currentUserId == null) return;
+                              Get.to(
+                                () => ChatScreen(
+                                  sessionId:
+                                      '${widget.session.id}_${widget.currentUserId}',
+                                  sessionTitle: widget.session.title,
+                                  otherUserName:
+                                      widget.session.tutor?.name ?? 'Tutor',
+                                ),
+                              );
+                            }
+                          }
+                          : null,
+                  icon:
+                      _checking
+                          ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 1.5),
+                          )
+                          : Icon(
+                            widget.isOwner
+                                ? Iconsax.message_text
+                                : chatEnabled
+                                ? Iconsax.message
+                                : Iconsax.lock_1,
+                            size: 17,
+                          ),
+                  label: Text(
+                    widget.isOwner
+                        ? 'Inbox'
+                        : _checking
+                        ? 'Checking…'
+                        : chatEnabled
+                        ? 'Chat'
+                        : 'Chat 🔒',
+                  ),
+                  style: chatEnabled ? activeButtonStyle : disabledButtonStyle,
+                ),
+              ),
+            ),
+          ],
         ),
+
+        // ── "Pay to unlock" hint banner ────────────────────────────
+        if (!widget.isOwner && !_checking && !_hasPaid) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: colorScheme.primary.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Iconsax.lock_1,
+                  size: 15,
+                  color: colorScheme.primary.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Book and complete payment to unlock chat with this tutor.',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurface.withValues(alpha: 0.65),
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Empty reviews placeholder
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Empty reviews ─────────────────────────────────────────────────────────────
 
 class _EmptyReviews extends StatelessWidget {
   const _EmptyReviews({required this.theme, required this.colorScheme});
@@ -548,9 +668,7 @@ class _EmptyReviews extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Review card
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Review card ───────────────────────────────────────────────────────────────
 
 class _ReviewCard extends StatelessWidget {
   const _ReviewCard({

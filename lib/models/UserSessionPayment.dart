@@ -22,16 +22,16 @@
 import 'ModelProvider.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 
-/** This is an auto generated class representing the ChatMessage type in your schema. */
-class ChatMessage extends amplify_core.Model {
-  static const classType = const _ChatMessageModelType();
+/** This is an auto generated class representing the UserSessionPayment type in your schema. */
+class UserSessionPayment extends amplify_core.Model {
+  static const classType = const _UserSessionPaymentModelType();
   final String id;
+  final String? _userId;
   final String? _sessionId;
-  final String? _senderId;
-  final String? _senderName;
-  final String? _text;
-  final bool? _isVoice;
-  final String? _audioUrl;
+  final bool? _hasPaid;
+  final amplify_core.TemporalDateTime? _paidAt;
+  final double? _amountPaid;
+  final String? _reference;
   final amplify_core.TemporalDateTime? _createdAt;
   final amplify_core.TemporalDateTime? _updatedAt;
 
@@ -44,8 +44,25 @@ class ChatMessage extends amplify_core.Model {
   @override
   String getId() => id;
 
-  ChatMessageModelIdentifier get modelIdentifier {
-    return ChatMessageModelIdentifier(id: id);
+  UserSessionPaymentModelIdentifier get modelIdentifier {
+    return UserSessionPaymentModelIdentifier(id: id);
+  }
+
+  String get userId {
+    try {
+      return _userId!;
+    } catch (e) {
+      throw amplify_core.AmplifyCodeGenModelException(
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
+    }
   }
 
   String get sessionId {
@@ -65,9 +82,9 @@ class ChatMessage extends amplify_core.Model {
     }
   }
 
-  String get senderId {
+  bool get hasPaid {
     try {
-      return _senderId!;
+      return _hasPaid!;
     } catch (e) {
       throw amplify_core.AmplifyCodeGenModelException(
         amplify_core
@@ -82,20 +99,16 @@ class ChatMessage extends amplify_core.Model {
     }
   }
 
-  String? get senderName {
-    return _senderName;
+  amplify_core.TemporalDateTime? get paidAt {
+    return _paidAt;
   }
 
-  String? get text {
-    return _text;
+  double? get amountPaid {
+    return _amountPaid;
   }
 
-  bool? get isVoice {
-    return _isVoice;
-  }
-
-  String? get audioUrl {
-    return _audioUrl;
+  String? get reference {
+    return _reference;
   }
 
   amplify_core.TemporalDateTime? get createdAt {
@@ -106,44 +119,46 @@ class ChatMessage extends amplify_core.Model {
     return _updatedAt;
   }
 
-  const ChatMessage._internal({
+  const UserSessionPayment._internal({
     required this.id,
+    required userId,
     required sessionId,
-    required senderId,
-    senderName,
-    text,
-    isVoice,
-    audioUrl,
+    required hasPaid,
+    paidAt,
+    amountPaid,
+    reference,
     createdAt,
     updatedAt,
-  }) : _sessionId = sessionId,
-       _senderId = senderId,
-       _senderName = senderName,
-       _text = text,
-       _isVoice = isVoice,
-       _audioUrl = audioUrl,
+  }) : _userId = userId,
+       _sessionId = sessionId,
+       _hasPaid = hasPaid,
+       _paidAt = paidAt,
+       _amountPaid = amountPaid,
+       _reference = reference,
        _createdAt = createdAt,
        _updatedAt = updatedAt;
 
-  factory ChatMessage({
+  factory UserSessionPayment({
     String? id,
+    required String userId,
     required String sessionId,
-    required String senderId,
-    String? senderName,
-    String? text,
-    bool? isVoice,
-    String? audioUrl,
+    required bool hasPaid,
+    amplify_core.TemporalDateTime? paidAt,
+    double? amountPaid,
+    String? reference,
     amplify_core.TemporalDateTime? createdAt,
+    amplify_core.TemporalDateTime? updatedAt,
   }) {
-    return ChatMessage._internal(
+    return UserSessionPayment._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
+      userId: userId,
       sessionId: sessionId,
-      senderId: senderId,
-      senderName: senderName,
-      text: text,
-      isVoice: isVoice,
-      audioUrl: audioUrl,
+      hasPaid: hasPaid,
+      paidAt: paidAt,
+      amountPaid: amountPaid,
+      reference: reference,
       createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 
@@ -154,15 +169,16 @@ class ChatMessage extends amplify_core.Model {
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
-    return other is ChatMessage &&
+    return other is UserSessionPayment &&
         id == other.id &&
+        _userId == other._userId &&
         _sessionId == other._sessionId &&
-        _senderId == other._senderId &&
-        _senderName == other._senderName &&
-        _text == other._text &&
-        _isVoice == other._isVoice &&
-        _audioUrl == other._audioUrl &&
-        _createdAt == other._createdAt;
+        _hasPaid == other._hasPaid &&
+        _paidAt == other._paidAt &&
+        _amountPaid == other._amountPaid &&
+        _reference == other._reference &&
+        _createdAt == other._createdAt &&
+        _updatedAt == other._updatedAt;
   }
 
   @override
@@ -172,16 +188,22 @@ class ChatMessage extends amplify_core.Model {
   String toString() {
     var buffer = new StringBuffer();
 
-    buffer.write("ChatMessage {");
+    buffer.write("UserSessionPayment {");
     buffer.write("id=" + "$id" + ", ");
+    buffer.write("userId=" + "$_userId" + ", ");
     buffer.write("sessionId=" + "$_sessionId" + ", ");
-    buffer.write("senderId=" + "$_senderId" + ", ");
-    buffer.write("senderName=" + "$_senderName" + ", ");
-    buffer.write("text=" + "$_text" + ", ");
     buffer.write(
-      "isVoice=" + (_isVoice != null ? _isVoice.toString() : "null") + ", ",
+      "hasPaid=" + (_hasPaid != null ? _hasPaid.toString() : "null") + ", ",
     );
-    buffer.write("audioUrl=" + "$_audioUrl" + ", ");
+    buffer.write(
+      "paidAt=" + (_paidAt != null ? _paidAt.format() : "null") + ", ",
+    );
+    buffer.write(
+      "amountPaid=" +
+          (_amountPaid != null ? _amountPaid.toString() : "null") +
+          ", ",
+    );
+    buffer.write("reference=" + "$_reference" + ", ");
     buffer.write(
       "createdAt=" + (_createdAt != null ? _createdAt.format() : "null") + ", ",
     );
@@ -193,56 +215,63 @@ class ChatMessage extends amplify_core.Model {
     return buffer.toString();
   }
 
-  ChatMessage copyWith({
+  UserSessionPayment copyWith({
+    String? userId,
     String? sessionId,
-    String? senderId,
-    String? senderName,
-    String? text,
-    bool? isVoice,
-    String? audioUrl,
+    bool? hasPaid,
+    amplify_core.TemporalDateTime? paidAt,
+    double? amountPaid,
+    String? reference,
     amplify_core.TemporalDateTime? createdAt,
+    amplify_core.TemporalDateTime? updatedAt,
   }) {
-    return ChatMessage._internal(
+    return UserSessionPayment._internal(
       id: id,
+      userId: userId ?? this.userId,
       sessionId: sessionId ?? this.sessionId,
-      senderId: senderId ?? this.senderId,
-      senderName: senderName ?? this.senderName,
-      text: text ?? this.text,
-      isVoice: isVoice ?? this.isVoice,
-      audioUrl: audioUrl ?? this.audioUrl,
+      hasPaid: hasPaid ?? this.hasPaid,
+      paidAt: paidAt ?? this.paidAt,
+      amountPaid: amountPaid ?? this.amountPaid,
+      reference: reference ?? this.reference,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
-  ChatMessage copyWithModelFieldValues({
+  UserSessionPayment copyWithModelFieldValues({
+    ModelFieldValue<String>? userId,
     ModelFieldValue<String>? sessionId,
-    ModelFieldValue<String>? senderId,
-    ModelFieldValue<String?>? senderName,
-    ModelFieldValue<String?>? text,
-    ModelFieldValue<bool?>? isVoice,
-    ModelFieldValue<String?>? audioUrl,
+    ModelFieldValue<bool>? hasPaid,
+    ModelFieldValue<amplify_core.TemporalDateTime?>? paidAt,
+    ModelFieldValue<double?>? amountPaid,
+    ModelFieldValue<String?>? reference,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
+    ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt,
   }) {
-    return ChatMessage._internal(
+    return UserSessionPayment._internal(
       id: id,
+      userId: userId == null ? this.userId : userId.value,
       sessionId: sessionId == null ? this.sessionId : sessionId.value,
-      senderId: senderId == null ? this.senderId : senderId.value,
-      senderName: senderName == null ? this.senderName : senderName.value,
-      text: text == null ? this.text : text.value,
-      isVoice: isVoice == null ? this.isVoice : isVoice.value,
-      audioUrl: audioUrl == null ? this.audioUrl : audioUrl.value,
+      hasPaid: hasPaid == null ? this.hasPaid : hasPaid.value,
+      paidAt: paidAt == null ? this.paidAt : paidAt.value,
+      amountPaid: amountPaid == null ? this.amountPaid : amountPaid.value,
+      reference: reference == null ? this.reference : reference.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
+      updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value,
     );
   }
 
-  ChatMessage.fromJson(Map<String, dynamic> json)
+  UserSessionPayment.fromJson(Map<String, dynamic> json)
     : id = json['id'],
+      _userId = json['userId'],
       _sessionId = json['sessionId'],
-      _senderId = json['senderId'],
-      _senderName = json['senderName'],
-      _text = json['text'],
-      _isVoice = json['isVoice'],
-      _audioUrl = json['audioUrl'],
+      _hasPaid = json['hasPaid'],
+      _paidAt =
+          json['paidAt'] != null
+              ? amplify_core.TemporalDateTime.fromString(json['paidAt'])
+              : null,
+      _amountPaid = (json['amountPaid'] as num?)?.toDouble(),
+      _reference = json['reference'],
       _createdAt =
           json['createdAt'] != null
               ? amplify_core.TemporalDateTime.fromString(json['createdAt'])
@@ -254,43 +283,46 @@ class ChatMessage extends amplify_core.Model {
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'userId': _userId,
     'sessionId': _sessionId,
-    'senderId': _senderId,
-    'senderName': _senderName,
-    'text': _text,
-    'isVoice': _isVoice,
-    'audioUrl': _audioUrl,
+    'hasPaid': _hasPaid,
+    'paidAt': _paidAt?.format(),
+    'amountPaid': _amountPaid,
+    'reference': _reference,
     'createdAt': _createdAt?.format(),
     'updatedAt': _updatedAt?.format(),
   };
 
   Map<String, Object?> toMap() => {
     'id': id,
+    'userId': _userId,
     'sessionId': _sessionId,
-    'senderId': _senderId,
-    'senderName': _senderName,
-    'text': _text,
-    'isVoice': _isVoice,
-    'audioUrl': _audioUrl,
+    'hasPaid': _hasPaid,
+    'paidAt': _paidAt,
+    'amountPaid': _amountPaid,
+    'reference': _reference,
     'createdAt': _createdAt,
     'updatedAt': _updatedAt,
   };
 
-  static final amplify_core.QueryModelIdentifier<ChatMessageModelIdentifier>
+  static final amplify_core.QueryModelIdentifier<
+    UserSessionPaymentModelIdentifier
+  >
   MODEL_IDENTIFIER =
-      amplify_core.QueryModelIdentifier<ChatMessageModelIdentifier>();
+      amplify_core.QueryModelIdentifier<UserSessionPaymentModelIdentifier>();
   static final ID = amplify_core.QueryField(fieldName: "id");
+  static final USERID = amplify_core.QueryField(fieldName: "userId");
   static final SESSIONID = amplify_core.QueryField(fieldName: "sessionId");
-  static final SENDERID = amplify_core.QueryField(fieldName: "senderId");
-  static final SENDERNAME = amplify_core.QueryField(fieldName: "senderName");
-  static final TEXT = amplify_core.QueryField(fieldName: "text");
-  static final ISVOICE = amplify_core.QueryField(fieldName: "isVoice");
-  static final AUDIOURL = amplify_core.QueryField(fieldName: "audioUrl");
+  static final HASPAID = amplify_core.QueryField(fieldName: "hasPaid");
+  static final PAIDAT = amplify_core.QueryField(fieldName: "paidAt");
+  static final AMOUNTPAID = amplify_core.QueryField(fieldName: "amountPaid");
+  static final REFERENCE = amplify_core.QueryField(fieldName: "reference");
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
+  static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
   static var schema = amplify_core.Model.defineSchema(
     define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
-      modelSchemaDefinition.name = "ChatMessage";
-      modelSchemaDefinition.pluralName = "ChatMessages";
+      modelSchemaDefinition.name = "UserSessionPayment";
+      modelSchemaDefinition.pluralName = "UserSessionPayments";
 
       modelSchemaDefinition.authRules = [
         amplify_core.AuthRule(
@@ -301,6 +333,8 @@ class ChatMessage extends amplify_core.Model {
           operations: const [
             amplify_core.ModelOperation.CREATE,
             amplify_core.ModelOperation.READ,
+            amplify_core.ModelOperation.UPDATE,
+            amplify_core.ModelOperation.DELETE,
           ],
         ),
         amplify_core.AuthRule(
@@ -309,11 +343,16 @@ class ChatMessage extends amplify_core.Model {
         ),
       ];
 
+      modelSchemaDefinition.indexes = [
+        amplify_core.ModelIndex(fields: const ["userId"], name: "byUser"),
+        amplify_core.ModelIndex(fields: const ["sessionId"], name: "bySession"),
+      ];
+
       modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: ChatMessage.SESSIONID,
+          key: UserSessionPayment.USERID,
           isRequired: true,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.string,
@@ -323,7 +362,7 @@ class ChatMessage extends amplify_core.Model {
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: ChatMessage.SENDERID,
+          key: UserSessionPayment.SESSIONID,
           isRequired: true,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.string,
@@ -333,28 +372,8 @@ class ChatMessage extends amplify_core.Model {
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: ChatMessage.SENDERNAME,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: ChatMessage.TEXT,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: ChatMessage.ISVOICE,
-          isRequired: false,
+          key: UserSessionPayment.HASPAID,
+          isRequired: true,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.bool,
           ),
@@ -363,7 +382,27 @@ class ChatMessage extends amplify_core.Model {
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: ChatMessage.AUDIOURL,
+          key: UserSessionPayment.PAIDAT,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.dateTime,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: UserSessionPayment.AMOUNTPAID,
+          isRequired: false,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.double,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: UserSessionPayment.REFERENCE,
           isRequired: false,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.string,
@@ -373,7 +412,7 @@ class ChatMessage extends amplify_core.Model {
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: ChatMessage.CREATEDAT,
+          key: UserSessionPayment.CREATEDAT,
           isRequired: false,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.dateTime,
@@ -382,10 +421,9 @@ class ChatMessage extends amplify_core.Model {
       );
 
       modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.nonQueryField(
-          fieldName: 'updatedAt',
+        amplify_core.ModelFieldDefinition.field(
+          key: UserSessionPayment.UPDATEDAT,
           isRequired: false,
-          isReadOnly: true,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.dateTime,
           ),
@@ -395,30 +433,31 @@ class ChatMessage extends amplify_core.Model {
   );
 }
 
-class _ChatMessageModelType extends amplify_core.ModelType<ChatMessage> {
-  const _ChatMessageModelType();
+class _UserSessionPaymentModelType
+    extends amplify_core.ModelType<UserSessionPayment> {
+  const _UserSessionPaymentModelType();
 
   @override
-  ChatMessage fromJson(Map<String, dynamic> jsonData) {
-    return ChatMessage.fromJson(jsonData);
+  UserSessionPayment fromJson(Map<String, dynamic> jsonData) {
+    return UserSessionPayment.fromJson(jsonData);
   }
 
   @override
   String modelName() {
-    return 'ChatMessage';
+    return 'UserSessionPayment';
   }
 }
 
 /**
  * This is an auto generated class representing the model identifier
- * of [ChatMessage] in your schema.
+ * of [UserSessionPayment] in your schema.
  */
-class ChatMessageModelIdentifier
-    implements amplify_core.ModelIdentifier<ChatMessage> {
+class UserSessionPaymentModelIdentifier
+    implements amplify_core.ModelIdentifier<UserSessionPayment> {
   final String id;
 
-  /** Create an instance of ChatMessageModelIdentifier using [id] the primary key. */
-  const ChatMessageModelIdentifier({required this.id});
+  /** Create an instance of UserSessionPaymentModelIdentifier using [id] the primary key. */
+  const UserSessionPaymentModelIdentifier({required this.id});
 
   @override
   Map<String, dynamic> serializeAsMap() => (<String, dynamic>{'id': id});
@@ -433,7 +472,7 @@ class ChatMessageModelIdentifier
   String serializeAsString() => serializeAsMap().values.join('#');
 
   @override
-  String toString() => 'ChatMessageModelIdentifier(id: $id)';
+  String toString() => 'UserSessionPaymentModelIdentifier(id: $id)';
 
   @override
   bool operator ==(Object other) {
@@ -441,7 +480,7 @@ class ChatMessageModelIdentifier
       return true;
     }
 
-    return other is ChatMessageModelIdentifier && id == other.id;
+    return other is UserSessionPaymentModelIdentifier && id == other.id;
   }
 
   @override

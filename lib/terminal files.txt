@@ -5,16 +5,18 @@ flutter pub get
 amplify codegen models
 
 
-implement payment 
+SESSION ONLY LOADS FOR THE PERSON THAT CREATED IT
+review BLOCK BEFORE PAYMENY
+TUTOR ONLY NEED TO ADD CARD ONCE AND CAN ADD MORE AND EDIT IN PROFILE SCREEN
 
 make vc work 
 make image upload work
 make algorithm for feautured lecturers 
 
-Make session MESSAGES, REVIEWS and favorite load faster using cache
 fix failed to load review snackbar problem when exit a detail screen too fast
-messages and booking clears if app is ran in a different device or deleted and rebuilt 
+messages DONT APPEAR
 logout details still there when logout button is initiated , i need the details clared for privacy 
+SLIGHT SHOW OF HOMEPAGE ON LOAD APP
 
 
 and try making voice call work  - last thing to do

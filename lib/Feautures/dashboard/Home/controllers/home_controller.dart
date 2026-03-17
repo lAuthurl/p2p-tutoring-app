@@ -121,10 +121,10 @@ class HomeController extends GetxController {
 
     try {
       await completer.future.timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 2),
         onTimeout: () {
           debugPrint(
-            'HomeController: syncQueriesReady timed out after 15s — proceeding',
+            'HomeController: syncQueriesReady timed out after 2s — proceeding',
           );
           sub.cancel();
         },

@@ -1,6 +1,7 @@
 // ignore_for_file: public_member_api_docs, avoid_print, unnecessary_null_comparison
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:amplify_flutter/amplify_flutter.dart';
@@ -38,6 +39,11 @@ class _InboxScreenState extends State<InboxScreen> {
   Future<void> _load() async {
     await controller.fetchTutorSessions();
     await controller.fetchAllStudentThreads();
+
+    // 👇 Subscribe to chat updates for every session
+    for (final session in controller.activeSessions) {
+      controller.observeChat(session.id);
+    }
     if (mounted) setState(() => _loading = false);
   }
 
@@ -83,9 +89,7 @@ class _InboxScreenState extends State<InboxScreen> {
                 final baseSessions = controller.activeSessions;
                 final baseIds = baseSessions.map((s) => s.id).toSet();
 
-                // ✅ FIX: Subscribe to unreadCounts directly so the list
-                // rebuilds whenever any count changes — not just when a new
-                // message arrives and sessionMessages.refresh() happens.
+                // Subscribe to unreadCounts so list rebuilds on count changes.
                 // ignore: unnecessary_statement
                 controller.unreadCounts.entries;
 
@@ -98,9 +102,7 @@ class _InboxScreenState extends State<InboxScreen> {
                         .where((chatId) => sessionMap[chatId]!.isNotEmpty)
                         .toList();
 
-                if (chatIds.isEmpty) {
-                  return _EmptyInbox();
-                }
+                if (chatIds.isEmpty) return _EmptyInbox();
 
                 chatIds.sort((a, b) {
                   final aTime =
@@ -124,12 +126,8 @@ class _InboxScreenState extends State<InboxScreen> {
                     final messages = sessionMap[chatId] ?? [];
                     final lastMessage = messages.last;
                     final lastTime = lastMessage.createdAt?.getDateTimeInUtc();
-
-                    // ✅ Read directly from unreadCounts RxMap — reactive,
-                    // no manual refresh needed.
                     final unreadCount = controller.unreadCounts[chatId] ?? 0;
                     final hasUnread = unreadCount > 0;
-
                     final lastText =
                         (lastMessage.isVoice == true)
                             ? '🎤 Voice message'
@@ -180,7 +178,6 @@ class _InboxScreenState extends State<InboxScreen> {
                         ),
                         child: Row(
                           children: [
-                            // Avatar
                             Container(
                               width: 48,
                               height: 48,
@@ -199,10 +196,7 @@ class _InboxScreenState extends State<InboxScreen> {
                                 ),
                               ),
                             ),
-
                             const SizedBox(width: 12),
-
-                            // Content
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,9 +239,7 @@ class _InboxScreenState extends State<InboxScreen> {
                                         ),
                                     ],
                                   ),
-
                                   const SizedBox(height: 4),
-
                                   Row(
                                     children: [
                                       Expanded(
@@ -317,7 +309,7 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 }
 
-// ── Empty inbox state ─────────────────────────────────────────────────────────
+// ── Empty inbox ───────────────────────────────────────────────────────────────
 class _EmptyInbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -396,22 +388,25 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription? _playerSubscription;
 
   bool _isRecording = false;
+  bool _loadingMessages = true;
   String? _currentUserId;
   String? _currentlyPlayingId;
   final Map<String, double> _playbackProgress = {};
+
+  // Local list of messages fetched directly from AppSync.
+  // Soft-deleted messages (_deleted=true) are filtered out on load and
+  // after every delete operation.
+  final RxList<ChatMessage> _messages = <ChatMessage>[].obs;
 
   @override
   void initState() {
     super.initState();
     _initAudio();
     _fetchCurrentUser();
+    _fetchMessagesFromAppSync();
     controller.observeChat(widget.sessionId);
     _textController.addListener(() => setState(() {}));
 
-    // ✅ Defer markSessionRead to after the first frame.
-    // Calling it directly in initState triggers Obx widgets (the inbox
-    // badge, the inbox list) to setState() while the widget tree is still
-    // being built — causing "setState called during build" errors.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       controller.markSessionRead(widget.sessionId);
     });
@@ -419,7 +414,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    // ✅ Clear the open chat so future messages count as unread again.
     controller.clearCurrentOpenSession();
     _playerSubscription?.cancel();
     _recorder?.closeRecorder();
@@ -439,6 +433,251 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // ── Fetch messages directly from AppSync and filter soft-deleted ──────────
+  Future<void> _fetchMessagesFromAppSync() async {
+    if (mounted) setState(() => _loadingMessages = true);
+    try {
+      const queryDoc = r"""
+        query ListMessagesBySession($sessionId: String!, $limit: Int) {
+          listChatMessagesBySession(sessionId: $sessionId, limit: $limit) {
+            items {
+              id
+              sessionId
+              senderId
+              senderName
+              text
+              audioUrl
+              isVoice
+              createdAt
+              _version
+              _deleted
+            }
+          }
+        }
+      """;
+
+      final response =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: queryDoc,
+                  variables: {'sessionId': widget.sessionId, 'limit': 500},
+                ),
+              )
+              .response;
+
+      if (response.errors.isNotEmpty || response.data == null) {
+        // Fallback to DataStore if AppSync query fails.
+        _loadFromDataStore();
+        return;
+      }
+
+      final parsed = _parseMessages(response.data!);
+      parsed.sort(
+        (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now()).compareTo(
+          b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
+        ),
+      );
+      _messages.assignAll(parsed);
+    } catch (e) {
+      print('❌ ChatScreen._fetchMessagesFromAppSync: $e');
+      _loadFromDataStore();
+    } finally {
+      if (mounted) setState(() => _loadingMessages = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    }
+  }
+
+  void _loadFromDataStore() {
+    final ds = controller.sessionMessages[widget.sessionId] ?? [];
+    // Filter soft-deleted items from DataStore fallback too.
+    _messages.assignAll(ds.where((m) => true).toList());
+  }
+
+  /// Parse ChatMessage list from AppSync response, filtering out _deleted=true.
+  List<ChatMessage> _parseMessages(String responseData) {
+    final result = <ChatMessage>[];
+    try {
+      final decoded = jsonDecode(responseData) as Map<String, dynamic>;
+      final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+      final listObj =
+          root['listChatMessagesBySession'] as Map<String, dynamic>?;
+      final items = listObj?['items'] as List<dynamic>? ?? [];
+
+      for (final raw in items) {
+        final item = raw as Map<String, dynamic>;
+        // ✅ Filter out soft-deleted messages — AppSync sets _deleted=true
+        // on delete mutations. Without this filter they reappear on refresh.
+        if (item['_deleted'] == true) continue;
+
+        final id = item['id'] as String?;
+        if (id == null) continue;
+
+        final createdAtStr = item['createdAt'] as String?;
+        result.add(
+          ChatMessage(
+            id: id,
+            sessionId: item['sessionId'] as String? ?? widget.sessionId,
+            senderId: item['senderId'] as String? ?? '',
+            senderName: item['senderName'] as String?,
+            text: item['text'] as String?,
+            audioUrl: item['audioUrl'] as String?,
+            isVoice: item['isVoice'] as bool? ?? false,
+            createdAt:
+                createdAtStr != null
+                    ? TemporalDateTime.fromString(createdAtStr)
+                    : null,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ ChatScreen._parseMessages: $e');
+    }
+    return result;
+  }
+
+  // ── Delete a single message ───────────────────────────────────────────────
+  Future<void> _deleteMessage(ChatMessage message) async {
+    // Optimistic removal.
+    _messages.removeWhere((m) => m.id == message.id);
+
+    try {
+      // Step 1: fetch live _version (required for AppSync conflict detection).
+      const getDoc = r"""
+        query GetChatMessage($id: ID!) {
+          getChatMessage(id: $id) {
+            id
+            _version
+            _deleted
+          }
+        }
+      """;
+
+      final getResponse =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: getDoc,
+                  variables: {'id': message.id},
+                ),
+              )
+              .response;
+
+      int version = 1;
+      if (getResponse.errors.isEmpty && getResponse.data != null) {
+        final decoded = jsonDecode(getResponse.data!) as Map<String, dynamic>;
+        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+        final obj = root['getChatMessage'] as Map<String, dynamic>?;
+        if (obj == null || obj['_deleted'] == true) {
+          // Already deleted on AppSync — optimistic removal is correct.
+          return;
+        }
+        final v = obj['_version'];
+        if (v != null) version = (v as num).toInt();
+      }
+
+      // Step 2: send delete mutation with correct _version.
+      const mutationDoc = r"""
+        mutation DeleteChatMessage($input: DeleteChatMessageInput!) {
+          deleteChatMessage(input: $input) {
+            id
+            _version
+          }
+        }
+      """;
+
+      final response =
+          await Amplify.API
+              .mutate(
+                request: GraphQLRequest<String>(
+                  document: mutationDoc,
+                  variables: {
+                    'input': {'id': message.id, '_version': version},
+                  },
+                ),
+              )
+              .response;
+
+      if (response.errors.isNotEmpty) {
+        // Conflict — re-fetch and retry once.
+        final isConflict = response.errors.any(
+          (e) =>
+              e.extensions?['errorType']?.toString().contains('Conflict') ==
+              true,
+        );
+        if (isConflict) {
+          await _fetchMessagesFromAppSync();
+          // Try delete again with fresh data — find the message again.
+          final fresh = _messages.firstWhereOrNull((m) => m.id == message.id);
+          if (fresh != null) await _deleteMessage(fresh);
+          return;
+        }
+
+        // Non-conflict error — roll back.
+        print('❌ ChatScreen._deleteMessage error: ${response.errors}');
+        _messages.add(message);
+        _messages.sort(
+          (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now())
+              .compareTo(b.createdAt?.getDateTimeInUtc() ?? DateTime.now()),
+        );
+      } else {
+        print('✅ ChatScreen: deleted message ${message.id}');
+        // Also remove from TutoringController's DataStore cache.
+        final chatMessages = controller.sessionMessages[widget.sessionId] ?? [];
+        controller.sessionMessages[widget.sessionId] =
+            chatMessages.where((m) => m.id != message.id).toList();
+        controller.sessionMessages.refresh();
+      }
+    } catch (e) {
+      print('❌ ChatScreen._deleteMessage: $e');
+      // Roll back on exception.
+      if (!_messages.any((m) => m.id == message.id)) {
+        _messages.add(message);
+        _messages.sort(
+          (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now())
+              .compareTo(b.createdAt?.getDateTimeInUtc() ?? DateTime.now()),
+        );
+      }
+    }
+  }
+
+  // ── Show delete confirmation ──────────────────────────────────────────────
+  void _showDeleteDialog(ChatMessage message) {
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text(
+              'Delete message?',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            content: const Text(
+              'This message will be permanently deleted.',
+              style: TextStyle(fontSize: 14),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _deleteMessage(message);
+                },
+                child: Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.red.shade600),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
   Future<void> _initAudio() async {
     _recorder = FlutterSoundRecorder();
     _player = FlutterSoundPlayer();
@@ -451,6 +690,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty || _currentUserId == null) return;
     await controller.sendMessage(widget.sessionId, text);
     _textController.clear();
+    // Refresh from AppSync after sending so new message appears.
+    await _fetchMessagesFromAppSync();
     _scrollToBottom();
   }
 
@@ -468,6 +709,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() => _isRecording = false);
       if (path != null && _currentUserId != null) {
         await controller.sendVoiceMessage(widget.sessionId, File(path));
+        await _fetchMessagesFromAppSync();
       }
     }
   }
@@ -589,6 +831,15 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           IconButton(
             icon: Icon(
+              Iconsax.refresh,
+              size: 18,
+              color: colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+            onPressed: _fetchMessagesFromAppSync,
+            tooltip: 'Refresh',
+          ),
+          IconButton(
+            icon: Icon(
               Iconsax.call,
               size: 18,
               color: colorScheme.onSurface.withValues(alpha: 0.6),
@@ -609,121 +860,153 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: Obx(() {
-              final messages =
-                  controller.sessionMessages[widget.sessionId] ??
-                  <ChatMessage>[];
-
-              WidgetsBinding.instance.addPostFrameCallback(
-                (_) => _scrollToBottom(),
-              );
-
-              if (messages.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Iconsax.message_add,
-                        size: 40,
-                        color: colorScheme.onSurface.withValues(alpha: 0.15),
+            child:
+                _loadingMessages
+                    ? Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: TColors.primary,
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No messages yet',
-                        style: TextStyle(
-                          color: colorScheme.onSurface.withValues(alpha: 0.4),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Say hello 👋',
-                        style: TextStyle(
-                          color: colorScheme.onSurface.withValues(alpha: 0.25),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
+                    )
+                    : Obx(() {
+                      final messages = _messages;
 
-              return ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                itemCount: messages.length,
-                itemBuilder: (_, index) {
-                  final message = messages[index];
-                  final isMe = message.senderId == _currentUserId;
-                  final isPlaying = _currentlyPlayingId == message.id;
-
-                  final showDate =
-                      index == 0 ||
-                      _isDifferentDay(
-                        messages[index - 1].createdAt?.getDateTimeInUtc(),
-                        message.createdAt?.getDateTimeInUtc(),
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _scrollToBottom(),
                       );
 
-                  return Column(
-                    children: [
-                      if (showDate)
-                        _DateSeparator(
-                          time: message.createdAt?.getDateTimeInUtc(),
-                        ),
-                      Align(
-                        alignment:
-                            isMe ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          margin: EdgeInsets.only(
-                            bottom: 6,
-                            left: isMe ? 48 : 0,
-                            right: isMe ? 0 : 48,
+                      if (messages.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Iconsax.message_add,
+                                size: 40,
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.15,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No messages yet',
+                                style: TextStyle(
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Say hello 👋',
+                                style: TextStyle(
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.25,
+                                  ),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isMe ? TColors.primary : colorScheme.surface,
-                            borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(16),
-                              topRight: const Radius.circular(16),
-                              bottomLeft: Radius.circular(isMe ? 16 : 4),
-                              bottomRight: Radius.circular(isMe ? 4 : 16),
-                            ),
-                            border:
-                                isMe
-                                    ? null
-                                    : Border.all(
-                                      color: colorScheme.outline.withValues(
-                                        alpha: 0.1,
-                                      ),
-                                      width: 0.5,
+                        );
+                      }
+
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        itemCount: messages.length,
+                        itemBuilder: (_, index) {
+                          final message = messages[index];
+                          final isMe = message.senderId == _currentUserId;
+                          final isPlaying = _currentlyPlayingId == message.id;
+
+                          final showDate =
+                              index == 0 ||
+                              _isDifferentDay(
+                                messages[index - 1].createdAt
+                                    ?.getDateTimeInUtc(),
+                                message.createdAt?.getDateTimeInUtc(),
+                              );
+
+                          return Column(
+                            children: [
+                              if (showDate)
+                                _DateSeparator(
+                                  time: message.createdAt?.getDateTimeInUtc(),
+                                ),
+                              // ✅ Long-press to delete (own messages only)
+                              GestureDetector(
+                                onLongPress:
+                                    isMe
+                                        ? () => _showDeleteDialog(message)
+                                        : null,
+                                child: Align(
+                                  alignment:
+                                      isMe
+                                          ? Alignment.centerRight
+                                          : Alignment.centerLeft,
+                                  child: Container(
+                                    margin: EdgeInsets.only(
+                                      bottom: 6,
+                                      left: isMe ? 48 : 0,
+                                      right: isMe ? 0 : 48,
                                     ),
-                          ),
-                          child:
-                              (message.isVoice ?? false)
-                                  ? _voiceBubble(message, isMe, isPlaying)
-                                  : Text(
-                                    message.text ?? '',
-                                    style: TextStyle(
-                                      fontSize: 14,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
                                       color:
                                           isMe
-                                              ? Colors.white
-                                              : colorScheme.onSurface,
-                                      height: 1.4,
+                                              ? TColors.primary
+                                              : colorScheme.surface,
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: const Radius.circular(16),
+                                        topRight: const Radius.circular(16),
+                                        bottomLeft: Radius.circular(
+                                          isMe ? 16 : 4,
+                                        ),
+                                        bottomRight: Radius.circular(
+                                          isMe ? 4 : 16,
+                                        ),
+                                      ),
+                                      border:
+                                          isMe
+                                              ? null
+                                              : Border.all(
+                                                color: colorScheme.outline
+                                                    .withValues(alpha: 0.1),
+                                                width: 0.5,
+                                              ),
                                     ),
+                                    child:
+                                        (message.isVoice ?? false)
+                                            ? _voiceBubble(
+                                              message,
+                                              isMe,
+                                              isPlaying,
+                                            )
+                                            : Text(
+                                              message.text ?? '',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color:
+                                                    isMe
+                                                        ? Colors.white
+                                                        : colorScheme.onSurface,
+                                                height: 1.4,
+                                              ),
+                                            ),
                                   ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            }),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    }),
           ),
 
           if (_isRecording)

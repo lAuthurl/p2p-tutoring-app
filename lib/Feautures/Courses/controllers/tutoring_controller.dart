@@ -1,17 +1,22 @@
 // ignore_for_file: avoid_print, unnecessary_null_comparison
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
+import 'package:iconsax/iconsax.dart';
 import 'package:path/path.dart' as p;
 import '../../../personalization/controllers/user_controller.dart';
 import '../../Booking/controllers/booking_controller.dart';
 import '../../../../models/ModelProvider.dart';
+import '../../checkout/screens/checkout.dart';
 import '../../dashboard/Home/controllers/favorites_controller.dart';
 import '../../dashboard/Home/controllers/home_controller.dart';
+import '../../../../utils/constants/colors.dart';
 import 'session_creation_controller.dart';
 
 class TutoringController extends GetxController {
@@ -72,7 +77,7 @@ class TutoringController extends GetxController {
   final isSynced = false.obs;
   final sessionMessages = <String, List<ChatMessage>>{}.obs;
 
-  // ── Unread counts ────────────────────────────────────────────────────────
+  // ── Unread counts ─────────────────────────────────────────────────────────
   final unreadCounts = <String, int>{}.obs;
   String? currentOpenChatId;
   final _chatBaselineTime = <String, DateTime>{};
@@ -200,10 +205,6 @@ class TutoringController extends GetxController {
     );
   }
 
-  // Hydrates user + tutor relations on reviews.
-  // sourceJson is the raw AppSync response — used as a last-resort fallback
-  // to extract userId/tutorId when DataStore stubs are null and FK maps are
-  // empty (the cross-account scenario).
   Future<List<Review>> _hydrateReviews(
     List<Review> raw, {
     String? sourceJson,
@@ -212,7 +213,6 @@ class TutoringController extends GetxController {
       raw.map((review) async {
         Review hydrated = review;
 
-        // Resolve userId: stub → FK map → parse from GraphQL JSON directly.
         String? userId = review.user?.id;
         if (userId == null || userId.isEmpty) {
           userId = _reviewUserIdMap[review.id];
@@ -230,7 +230,6 @@ class TutoringController extends GetxController {
           if (user != null) hydrated = hydrated.copyWith(user: user);
         }
 
-        // Resolve tutorId: same three-step fallback.
         String? tutorId = review.tutor?.id;
         if (tutorId == null || tutorId.isEmpty) {
           tutorId = _reviewTutorIdMap[review.id];
@@ -252,15 +251,13 @@ class TutoringController extends GetxController {
   // JSON PARSING HELPERS
   // ============================================================
 
-  // Extracts [fieldName] from the JSON object whose "id" equals [targetId].
-  // Position-based: finds the id occurrence then grabs the nearest { } block.
   String? _extractFieldForId(
     String jsonStr,
     String targetId,
     String fieldName,
   ) {
     try {
-      final idMarker = RegExp('"id"\\s*:\\s*"' + RegExp.escape(targetId) + '"');
+      final idMarker = RegExp('"id"\\s*:\\s*"${RegExp.escape(targetId)}"');
       final idMatch = idMarker.firstMatch(jsonStr);
       if (idMatch == null) return null;
       final start = jsonStr.lastIndexOf('{', idMatch.start);
@@ -268,6 +265,7 @@ class TutoringController extends GetxController {
       if (start == -1 || end == -1) return null;
       final block = jsonStr.substring(start, end + 1);
       return RegExp(
+        // ignore: prefer_interpolation_to_compose_strings
         '"' + RegExp.escape(fieldName) + r'"\s*:\s*"([^"]+)"',
       ).firstMatch(block)?.group(1);
     } catch (e) {
@@ -284,7 +282,6 @@ class TutoringController extends GetxController {
     return ids;
   }
 
-  // Caches userId/tutorId from a GraphQL reviews response into the FK maps.
   void _parseReviewFkIds(String jsonStr) {
     final allIds = RegExp(r'"id"\s*:\s*"([^"]+)"').allMatches(jsonStr).toList();
     final allUserIds =
@@ -312,7 +309,7 @@ class TutoringController extends GetxController {
 
   Review? _buildMinimalReviewById(String id, String jsonStr, String sessionId) {
     try {
-      final idMarker = RegExp('"id"\\s*:\\s*"' + RegExp.escape(id) + '"');
+      final idMarker = RegExp('"id"\\s*:\\s*"${RegExp.escape(id)}"');
       final idMatch = idMarker.firstMatch(jsonStr);
       if (idMatch == null) return null;
       final start = jsonStr.lastIndexOf('{', idMatch.start);
@@ -400,6 +397,9 @@ class TutoringController extends GetxController {
   void _observeSessions() async {
     if (!await _canSync()) return;
     try {
+      // ✅ observeQuery populates `sessions` with ALL sessions from DataStore
+      //    — this is the source for home grid widgets. It must NOT be
+      //    replaced by fetchTutorSessions which only loads the tutor's own.
       Amplify.DataStore.observeQuery(TutoringSession.classType).listen((
         snapshot,
       ) async {
@@ -461,7 +461,17 @@ class TutoringController extends GetxController {
     if (!await _canSync()) return;
     try {
       final tutorId = await currentUserTutorId;
-      if (tutorId == null) return;
+      // ✅ If the user is not a tutor (no tutorId), skip entirely.
+      //    This was previously triggering _fetchTutorSessionsFallback which
+      //    loaded ALL sessions into activeSessions then the observeQuery
+      //    _mergeSessions overwrote `sessions` with the same list —
+      //    but the key issue was fetchTutorSessions being called for students
+      //    who have no tutor record, causing the fallback to accidentally
+      //    pollute activeSessions with every session.
+      if (tutorId == null) {
+        print('ℹ️ fetchTutorSessions: no tutor record for this user — skip');
+        return;
+      }
 
       const queryDoc = """
         query ListSessionsByTutor(\$tutorId: ID!, \$limit: Int) {
@@ -488,7 +498,8 @@ class TutoringController extends GetxController {
       final resolvedTutor = await _resolveTutorById(tutorId);
       final sessionIds = _parseIds(response.data!);
       if (sessionIds.isEmpty) {
-        await _fetchTutorSessionsFallback(tutorId);
+        // Tutor has no sessions yet — activeSessions should be empty, not all
+        activeSessions.clear();
         return;
       }
 
@@ -522,15 +533,26 @@ class TutoringController extends GetxController {
   }
 
   Future<void> _fetchTutorSessionsFallback(String tutorId) async {
-    final allRaw = await Amplify.DataStore.query(TutoringSession.classType);
-    final resolvedTutor = await _resolveTutorById(tutorId);
-    activeSessions.assignAll(
-      allRaw.map(
-        (s) => resolvedTutor != null ? s.copyWith(tutor: resolvedTutor) : s,
-      ),
-    );
-    for (final session in activeSessions) {
-      observeChat(session.id);
+    // ✅ Fallback scoped to the tutor's own sessions only — NOT all sessions.
+    //    Previous code did allRaw without filtering which loaded everything
+    //    into activeSessions and made the inbox show all users' chats.
+    try {
+      final tutorSessions = await Amplify.DataStore.query(
+        TutoringSession.classType,
+        where: TutoringSession.TUTOR.eq(tutorId),
+      );
+      final resolvedTutor = await _resolveTutorById(tutorId);
+      activeSessions.assignAll(
+        tutorSessions.map(
+          (s) => resolvedTutor != null ? s.copyWith(tutor: resolvedTutor) : s,
+        ),
+      );
+      for (final session in activeSessions) {
+        observeChat(session.id);
+      }
+    } catch (e) {
+      print('❌ _fetchTutorSessionsFallback error: $e');
+      activeSessions.clear();
     }
   }
 
@@ -573,6 +595,13 @@ class TutoringController extends GetxController {
             : session.thumbnail ?? '';
   }
 
+  // ============================================================
+  // ✅ FIXED: addSessionToBooking
+  // Removed the unconditional Get.back() that was popping the
+  // SessionDetailScreen. Now shows a bottom sheet so the user
+  // stays on the detail page and can navigate to checkout or
+  // keep browsing.
+  // ============================================================
   Future<void> addSessionToBooking(
     TutoringSession session, {
     Map<String, String>? selectedAttributes,
@@ -580,7 +609,9 @@ class TutoringController extends GetxController {
     String? controllerTag,
   }) async {
     if (!await _canSync()) return;
+
     final bookingController = BookingController.instance;
+
     Booking booking;
     if (bookingController.bookings.isNotEmpty) {
       booking = bookingController.bookings.first;
@@ -589,11 +620,13 @@ class TutoringController extends GetxController {
       if (created == null) return;
       booking = created;
     }
+
     final tagToUse = controllerTag ?? session.id;
     final sessionController = Get.find<SessionCreationController>(
       tag: tagToUse,
     );
     final double finalPrice = sessionController.calculateDynamicPrice(session);
+
     await bookingController.createBookingItem(
       booking: booking,
       sessionId: session.id,
@@ -607,12 +640,27 @@ class TutoringController extends GetxController {
       selectedAttributes: selectedAttributes,
       bookingDate: TemporalDateTime.now(),
     );
-    Get.back();
-    Get.snackbar(
-      "Added to Booking",
-      "Session added with your selected options",
-      snackPosition: SnackPosition.BOTTOM,
-    );
+
+    // ✅ Show confirmation sheet — stay on SessionDetailScreen
+    final context = Get.context;
+    if (context != null) {
+      await showModalBottomSheet(
+        // ignore: use_build_context_synchronously
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder:
+            (_) =>
+                _BookingConfirmationSheet(session: session, price: finalPrice),
+      );
+    } else {
+      Get.snackbar(
+        '✅ Added to Booking',
+        '${session.title} has been added to your cart',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
+      );
+    }
   }
 
   // ============================================================
@@ -681,8 +729,6 @@ class TutoringController extends GetxController {
   // REVIEWS
   // ============================================================
 
-  // FK maps — populated as a cache. _hydrateReviews also falls back to
-  // parsing sourceJson directly so cross-account display always works.
   final _reviewUserIdMap = <String, String>{};
   final _reviewTutorIdMap = <String, String>{};
 
@@ -765,16 +811,9 @@ class TutoringController extends GetxController {
     );
   }
 
-  // ✅ Uses the GSI query `listReviewsBySession` generated by @index queryField.
-  //    This queries the GSI directly instead of doing a full table scan with
-  //    a filter — much faster and not affected by owner auth filtering.
-  //    Falls back to the old filter query for backwards compatibility if the
-  //    GSI query fails (e.g. before amplify push is run).
   Future<List<Review>> fetchReviews(String sessionId) async {
     if (!await _canSync()) return [];
     try {
-      // ✅ PRIMARY: GSI query via listReviewsBySession (requires schema update
-      //    with queryField: "listReviewsBySession" on the @index).
       const gsiQuery = """
         query ListReviewsBySession(\$sessionId: ID!, \$limit: Int) {
           listReviewsBySession(sessionId: \$sessionId, limit: \$limit) {
@@ -783,7 +822,6 @@ class TutoringController extends GetxController {
         }
       """;
 
-      // ✅ FALLBACK: old filter scan (works before schema update).
       const filterQuery = """
         query ListReviewsBySessionFilter(\$sessionId: ID!, \$limit: Int) {
           listReviews(filter: {sessionId: {eq: \$sessionId}}, limit: \$limit) {
@@ -795,7 +833,6 @@ class TutoringController extends GetxController {
       String? sourceJson;
       List<String> ids = [];
 
-      // Try GSI query first.
       final gsiResponse =
           await Amplify.API
               .query(
@@ -813,7 +850,6 @@ class TutoringController extends GetxController {
           '🔍 fetchReviews (GSI): ${ids.length} reviews for session $sessionId',
         );
       } else {
-        // GSI not available yet — fall back to filter query.
         print(
           '⚠️ fetchReviews: GSI query failed, falling back to filter query. '
           'Run "amplify push" to enable the GSI. Errors: ${gsiResponse.errors}',
@@ -849,13 +885,11 @@ class TutoringController extends GetxController {
           if (results.isNotEmpty) {
             raw.add(results.first);
           } else {
-            // Not in local DataStore — build from GraphQL JSON directly.
             final minimal = _buildMinimalReviewById(id, sourceJson, sessionId);
             if (minimal != null) raw.add(minimal);
           }
         }
       } else if (sourceJson == null) {
-        // Fully offline fallback.
         print('⚠️ fetchReviews: falling back to local DataStore only');
         final local = await Amplify.DataStore.query(
           Review.classType,
@@ -871,7 +905,6 @@ class TutoringController extends GetxController {
     }
   }
 
-  // ✅ Same GSI + fallback pattern as fetchReviews.
   Future<List<Review>> fetchReviewsByTutor(String tutorId) async {
     if (!await _canSync()) return [];
     try {
@@ -1001,6 +1034,7 @@ class TutoringController extends GetxController {
         return users.first.username;
       }
     } catch (_) {}
+
     if (_tutorCache.containsKey(userId)) {
       final cached = _tutorCache[userId]!;
       if (cached.name.isNotEmpty) return cached.name;
@@ -1015,6 +1049,7 @@ class TutoringController extends GetxController {
         return tutors.first.name;
       }
     } catch (_) {}
+
     try {
       final attrs = await Amplify.Auth.fetchUserAttributes();
       final nameAttr = attrs.firstWhere(
@@ -1025,14 +1060,17 @@ class TutoringController extends GetxController {
       );
       return nameAttr.value;
     } catch (_) {}
+
     return 'User';
   }
 
   Future<void> sendMessage(String sessionId, String text) async {
     if (!await _canSync()) return;
+
     final authUser = await Amplify.Auth.getCurrentUser();
     final userId = authUser.userId;
     final senderName = await _resolveSenderName(userId);
+
     final message = ChatMessage(
       sessionId: sessionId,
       senderId: userId,
@@ -1041,26 +1079,32 @@ class TutoringController extends GetxController {
       isVoice: false,
       createdAt: TemporalDateTime.now(),
     );
+
     await Amplify.DataStore.save(message);
   }
 
   Future<void> sendVoiceMessage(String sessionId, File audioFile) async {
     if (!await _canSync()) return;
+
     final authUser = await Amplify.Auth.getCurrentUser();
     final userId = authUser.userId;
     final senderName = await _resolveSenderName(userId);
+
     final key =
         'chat/$sessionId/${DateTime.now().millisecondsSinceEpoch}${p.extension(audioFile.path)}';
+
     try {
       final uploadResult =
           await Amplify.Storage.uploadFile(
             localFile: AWSFile.fromPath(audioFile.path),
             path: StoragePath.fromString(key),
           ).result;
+
       final urlResult =
           await Amplify.Storage.getUrl(
             path: StoragePath.fromString(uploadResult.uploadedItem.path),
           ).result;
+
       final message = ChatMessage(
         sessionId: sessionId,
         senderId: userId,
@@ -1070,6 +1114,7 @@ class TutoringController extends GetxController {
         isVoice: true,
         createdAt: TemporalDateTime.now(),
       );
+
       await Amplify.DataStore.save(message);
       _onNewMessage(message);
     } on StorageException catch (e) {
@@ -1079,6 +1124,7 @@ class TutoringController extends GetxController {
 
   void observeChat(String chatId) {
     if (_observedChatIds.contains(chatId)) return;
+
     _observedChatIds.add(chatId);
 
     if (!_chatBaselineTime.containsKey(chatId)) {
@@ -1096,6 +1142,7 @@ class TutoringController extends GetxController {
       where: ChatMessage.SESSIONID.eq(chatId),
     ).listen((snapshot) async {
       final msgs = snapshot.items.whereType<ChatMessage>().toList();
+
       msgs.sort(
         (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now()).compareTo(
           b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
@@ -1107,11 +1154,14 @@ class TutoringController extends GetxController {
             msgs.isNotEmpty
                 ? msgs.last.createdAt?.getDateTimeInUtc() ?? DateTime.now()
                 : DateTime.now();
+
         _chatBaselineTime[chatId] = newestTime;
+
         _storage.write(
           '$_kLastReadPrefix$chatId',
           newestTime.millisecondsSinceEpoch,
         );
+
         sessionMessages[chatId] = msgs;
         sessionMessages.refresh();
         return;
@@ -1123,12 +1173,16 @@ class TutoringController extends GetxController {
       final myId = await _getOrCacheCurrentUserId();
 
       int newCount = 0;
+
       for (final msg in msgs) {
         if (existingIds.contains(msg.id)) continue;
+
         final msgTime = msg.createdAt?.getDateTimeInUtc();
         if (msgTime == null || !msgTime.isAfter(baseline)) continue;
+
         if (currentOpenChatId == chatId) continue;
         if (myId != null && msg.senderId == myId) continue;
+
         newCount++;
       }
 
@@ -1144,29 +1198,202 @@ class TutoringController extends GetxController {
   void _onNewMessage(ChatMessage msg) {
     final chatId = msg.sessionId;
     if (chatId == null) return;
+
     sessionMessages.update(
       chatId,
       (list) => list..add(msg),
       ifAbsent: () => [msg],
     );
+
     final isOwnMessage =
         _currentAuthUserId != null && msg.senderId == _currentAuthUserId;
+
     if (currentOpenChatId != chatId && !isOwnMessage) {
       unreadCounts[chatId] = (unreadCounts[chatId] ?? 0) + 1;
     }
+
     sessionMessages.refresh();
   }
 
   void markSessionRead(String chatId) {
     unreadCounts[chatId] = 0;
     currentOpenChatId = chatId;
+
     final now = DateTime.now().toUtc();
     _chatBaselineTime[chatId] = now;
+
     _storage.write('$_kLastReadPrefix$chatId', now.millisecondsSinceEpoch);
+
     sessionMessages.refresh();
   }
 
   void clearCurrentOpenSession() => currentOpenChatId = null;
+
+  // ============================================================
+  // NEW: APPSYNC MESSAGE FETCH
+  // ============================================================
+
+  Future<List<ChatMessage>> fetchMessagesFromAppSync(String chatId) async {
+    if (!await _canSync()) return sessionMessages[chatId] ?? [];
+
+    try {
+      const queryDoc = r"""
+      query ListMessagesBySession($sessionId: String!, $limit: Int) {
+        listChatMessagesBySession(sessionId: $sessionId, limit: $limit) {
+          items {
+            id
+            sessionId
+            senderId
+            senderName
+            text
+            audioUrl
+            isVoice
+            createdAt
+            _version
+            _deleted
+          }
+        }
+      }
+    """;
+
+      final response =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: queryDoc,
+                  variables: {'sessionId': chatId, 'limit': 500},
+                ),
+              )
+              .response;
+
+      if (response.errors.isNotEmpty || response.data == null) {
+        return sessionMessages[chatId] ?? [];
+      }
+
+      final decoded = jsonDecode(response.data!) as Map<String, dynamic>;
+      final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+      final listObj =
+          root['listChatMessagesBySession'] as Map<String, dynamic>?;
+
+      final items = listObj?['items'] as List<dynamic>? ?? [];
+
+      final messages = <ChatMessage>[];
+
+      for (final raw in items) {
+        final item = raw as Map<String, dynamic>;
+
+        if (item['_deleted'] == true) continue;
+
+        final id = item['id'] as String?;
+        if (id == null) continue;
+
+        final createdAtStr = item['createdAt'] as String?;
+
+        messages.add(
+          ChatMessage(
+            id: id,
+            sessionId: item['sessionId'] as String? ?? chatId,
+            senderId: item['senderId'] as String? ?? '',
+            senderName: item['senderName'] as String?,
+            text: item['text'] as String?,
+            audioUrl: item['audioUrl'] as String?,
+            isVoice: item['isVoice'] as bool? ?? false,
+            createdAt:
+                createdAtStr != null
+                    ? TemporalDateTime.fromString(createdAtStr)
+                    : null,
+          ),
+        );
+      }
+
+      messages.sort(
+        (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now()).compareTo(
+          b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
+        ),
+      );
+
+      sessionMessages[chatId] = messages;
+      sessionMessages.refresh();
+
+      return messages;
+    } catch (e) {
+      print('❌ fetchMessagesFromAppSync: $e');
+      return sessionMessages[chatId] ?? [];
+    }
+  }
+
+  // ============================================================
+  // NEW: DELETE MESSAGE (APPSYNC SAFE VERSION)
+  // ============================================================
+
+  Future<void> deleteMessage(String chatId, ChatMessage message) async {
+    if (!await _canSync()) return;
+
+    final current = List<ChatMessage>.from(sessionMessages[chatId] ?? []);
+    current.removeWhere((m) => m.id == message.id);
+
+    sessionMessages[chatId] = current;
+    sessionMessages.refresh();
+
+    try {
+      const getDoc = r"""
+      query GetChatMessage($id: ID!) {
+        getChatMessage(id: $id) {
+          id
+          _version
+          _deleted
+        }
+      }
+    """;
+
+      final getResponse =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: getDoc,
+                  variables: {'id': message.id},
+                ),
+              )
+              .response;
+
+      int version = 1;
+
+      if (getResponse.errors.isEmpty && getResponse.data != null) {
+        final decoded = jsonDecode(getResponse.data!) as Map<String, dynamic>;
+        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+        final obj = root['getChatMessage'] as Map<String, dynamic>?;
+
+        if (obj == null || obj['_deleted'] == true) {
+          return;
+        }
+
+        final v = obj['_version'];
+        if (v != null) version = (v as num).toInt();
+      }
+
+      const mutationDoc = r"""
+      mutation DeleteChatMessage($input: DeleteChatMessageInput!) {
+        deleteChatMessage(input: $input) {
+          id
+          _version
+        }
+      }
+    """;
+
+      await Amplify.API
+          .mutate(
+            request: GraphQLRequest<String>(
+              document: mutationDoc,
+              variables: {
+                'input': {'id': message.id, '_version': version},
+              },
+            ),
+          )
+          .response;
+    } catch (e) {
+      print('❌ deleteMessage: $e');
+    }
+  }
 
   // ============================================================
   // DELETE SESSION
@@ -1314,5 +1541,139 @@ class TutoringController extends GetxController {
     unreadCounts.clear();
     _chatBaselineTime.clear();
     _observedChatIds.clear();
+  }
+}
+
+// ============================================================
+// Booking confirmation bottom sheet
+// Stays inside this file so TutoringController can reference it
+// without a circular import. No extra import blocks needed.
+// ============================================================
+class _BookingConfirmationSheet extends StatelessWidget {
+  const _BookingConfirmationSheet({required this.session, required this.price});
+
+  final TutoringSession session;
+  final double price;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: cs.outline.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Success icon
+          Container(
+            width: 60,
+            height: 60,
+            decoration: const BoxDecoration(
+              color: Color(0xFF00C48C),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          Text(
+            'Added to Booking!',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            session.title,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: cs.onSurface.withValues(alpha: 0.6),
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '₦${price.toStringAsFixed(2)}',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: TColors.primary,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Go to Checkout
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Get.back(); // close sheet
+                Get.to(() => const CheckoutScreen());
+              },
+              icon: const Icon(Iconsax.security_safe, size: 18),
+              label: const Text(
+                'Go to Checkout',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0BA4DB),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Keep Browsing
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => Get.back(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: cs.onSurface,
+                side: BorderSide(color: cs.outline.withValues(alpha: 0.3)),
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text(
+                'Keep Browsing',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

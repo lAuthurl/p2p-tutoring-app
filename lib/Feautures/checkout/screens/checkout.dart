@@ -1,14 +1,13 @@
-// ── CheckoutScreen ────────────────────────────────────────────────────────────
+// lib/Features/checkout/screens/checkout_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:p2p_tutoring_app/Feautures/checkout/screens/widgets/billing_payment_section.dart';
 import 'package:p2p_tutoring_app/Feautures/checkout/screens/widgets/t_payment_section.dart';
 
 import '../../Booking/controllers/booking_controller.dart';
 import '../controllers/checkout_controller.dart';
 import '../../Booking/screens/widgets/booking_items.dart';
-import '../../../../../utils/constants/colors.dart';
 
 class CheckoutScreen extends StatelessWidget {
   const CheckoutScreen({super.key});
@@ -44,31 +43,31 @@ class CheckoutScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Section label ─────────────────────────────────────
-            _SectionLabel(label: 'Your Sessions'),
+            // ── Section label ──────────────────────────────────────
+            const _SectionLabel(label: 'Your Sessions'),
             const SizedBox(height: 10),
 
-            // ── Booking items card ────────────────────────────────
-            _Card(child: const TBookingItems()),
+            // ── Booking items card ─────────────────────────────────
+            const _Card(child: TBookingItems()),
             const SizedBox(height: 20),
 
-            // ── Billing summary ───────────────────────────────────
-            _SectionLabel(label: 'Order Summary'),
+            // ── Billing summary ────────────────────────────────────
+            const _SectionLabel(label: 'Order Summary'),
             const SizedBox(height: 10),
-            _Card(child: const TBillingAmountSection()),
+            const _Card(child: TBillingAmountSection()),
             const SizedBox(height: 20),
 
-            // ── Payment method ────────────────────────────────────
-            _SectionLabel(label: 'Payment'),
+            // ── Payment method ─────────────────────────────────────
+            const _SectionLabel(label: 'Payment'),
             const SizedBox(height: 10),
-            _Card(child: const TPaymentSection()),
+            const _Card(child: TPaymentSection()),
 
             const SizedBox(height: 100),
           ],
         ),
       ),
 
-      // ── Checkout button ───────────────────────────────────────
+      // ── Pay button ─────────────────────────────────────────────
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: colorScheme.surface,
@@ -85,41 +84,68 @@ class CheckoutScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Obx(() {
               final totalPrice = bookingController.totalBookingPrice.value;
-              final paymentMethod =
-                  checkoutController.selectedPaymentMethod.value.name;
+              final processing = checkoutController.isProcessing.value;
 
               return ElevatedButton(
-                onPressed: () {
-                  Get.snackbar(
-                    'Payment',
-                    'Processing payment with $paymentMethod',
-                    snackPosition: SnackPosition.BOTTOM,
-                  );
-                },
+                onPressed:
+                    processing
+                        ? null
+                        : () =>
+                            checkoutController.processPaystackPayment(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: TColors.primary,
+                  backgroundColor:
+                      processing
+                          ? const Color(0xFF0BA4DB).withValues(alpha: 0.6)
+                          : const Color(0xFF0BA4DB),
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(
+                    0xFF0BA4DB,
+                  ).withValues(alpha: 0.5),
+                  disabledForegroundColor: Colors.white70,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
                   elevation: 0,
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Iconsax.security_safe, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Pay  ₦${totalPrice.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
-                ),
+                child:
+                    processing
+                        ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Processing…',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        )
+                        : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.lock_rounded, size: 17),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Pay  ₦${totalPrice.toStringAsFixed(2)}  ·  Paystack',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                          ],
+                        ),
               );
             }),
           ),
@@ -130,6 +156,7 @@ class CheckoutScreen extends StatelessWidget {
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
+
 class _SectionLabel extends StatelessWidget {
   final String label;
   const _SectionLabel({required this.label});

@@ -7,8 +7,6 @@ import '../../../common/widgets/icons/t_circular_icon.dart';
 import '../../dashboard/Home/controllers/favorites_controller.dart';
 
 class TFavouriteIcon extends StatelessWidget {
-  /// A custom Icon widget to add or remove tutoring sessions from favorites.
-  /// Just pass the sessionId, and it handles the logic automatically.
   const TFavouriteIcon({super.key, required this.sessionId});
 
   final String sessionId;
@@ -19,10 +17,35 @@ class TFavouriteIcon extends StatelessWidget {
 
     return Obx(() {
       final isFav = controller.favoriteIds.contains(sessionId);
-      return TCircularIcon(
-        icon: isFav ? Iconsax.heart5 : Iconsax.heart,
-        color: isFav ? TColors.error : null,
-        onPressed: () => controller.toggleFavorite(sessionId),
+      final isToggling = controller.isToggling(sessionId);
+
+      // While the mutation is in flight: dim the icon and overlay a small
+      // spinner. onPressed is still wired up but the _inProgress guard in
+      // FavoritesController will ignore any tap that arrives during flight.
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          Opacity(
+            opacity: isToggling ? 0.4 : 1.0,
+            child: TCircularIcon(
+              icon: isFav ? Iconsax.heart5 : Iconsax.heart,
+              color: isFav ? TColors.error : null,
+              onPressed:
+                  isToggling
+                      ? null
+                      : () => controller.toggleFavorite(sessionId),
+            ),
+          ),
+          if (isToggling)
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: isFav ? TColors.error : TColors.primary,
+              ),
+            ),
+        ],
       );
     });
   }
