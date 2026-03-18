@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print, unnecessary_null_comparison
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
@@ -35,17 +36,6 @@ class HomeController extends GetxController {
     userController = Get.find<UserController>();
     subjectController = Get.find<SubjectController>();
 
-    // ✅ FIX: the ever() on currentUser must call _startAppFlow on EVERY
-    //    login, not just the first. The old code had a guard:
-    //      if (isLoading.value || isReady.value) return;
-    //    After logout, _resetState() sets isReady=false and isLoading=false,
-    //    so the guard clears correctly. But the ever() callback fires once
-    //    and the worker stays alive — so the second login (after logout)
-    //    fires _startAppFlow again as expected. The real issue was that
-    //    _resetState() wasn't being called on logout (userController.currentUser
-    //    was set to null but the ever() branch for null called _resetState()
-    //    which is correct). This is fine — keeping it as-is but making sure
-    //    _resetState fully clears isReady so the guard doesn't block re-entry.
     ever<User?>(userController.currentUser, (user) {
       if (user != null) {
         _startAppFlow();
@@ -70,11 +60,7 @@ class HomeController extends GetxController {
   // =========================================================================
 
   Future<void> _startAppFlow() async {
-    // ✅ FIX: reset isReady and isLoading before the guard check so a
-    //    re-login after logout always proceeds through the full flow.
-    //    Previously isLoading could be true from a previous half-finished
-    //    call, blocking the re-login flow silently.
-    if (isLoading.value) return; // already in progress — don't double-start
+    if (isLoading.value) return;
     isLoading.value = true;
     isReady.value = false;
 
@@ -93,7 +79,6 @@ class HomeController extends GetxController {
       await _waitForDataStoreReady();
       await Future.delayed(const Duration(milliseconds: 800));
 
-      await _buildSessionSubjectMapFromGraphQL();
       await _loadAllSessionsFromGraphQL();
 
       debugPrint('HomeController: ready for ${user.username}');
@@ -107,30 +92,24 @@ class HomeController extends GetxController {
     }
   }
 
-  // ── Wait for DataStore syncQueriesReady ───────────────────────────────────
   Future<void> _waitForDataStoreReady() async {
     final completer = Completer<void>();
     late final StreamSubscription sub;
     sub = Amplify.Hub.listen(HubChannel.DataStore, (event) {
       if (event.eventName == 'syncQueriesReady' && !completer.isCompleted) {
-        debugPrint('HomeController: DataStore syncQueriesReady received');
         completer.complete();
         sub.cancel();
       }
     });
-
     try {
       await completer.future.timeout(
         const Duration(seconds: 2),
         onTimeout: () {
-          debugPrint(
-            'HomeController: syncQueriesReady timed out after 2s — proceeding',
-          );
+          debugPrint('HomeController: syncQueriesReady timed out — proceeding');
           sub.cancel();
         },
       );
     } catch (e) {
-      debugPrint('HomeController: _waitForDataStoreReady error: $e');
       sub.cancel();
     }
   }
@@ -143,9 +122,6 @@ class HomeController extends GetxController {
       );
       if (existing.isEmpty) {
         await Amplify.DataStore.save(user);
-        debugPrint('HomeController: user created in DataStore');
-      } else {
-        debugPrint('HomeController: user already exists');
       }
     } catch (e) {
       debugPrint('HomeController: _ensureUserExists error: $e');
@@ -162,60 +138,19 @@ class HomeController extends GetxController {
   // SESSION LOADING
   // =========================================================================
 
-  Future<void> _buildSessionSubjectMapFromGraphQL() async {
-    const queryDoc = r"""
-      query ListAllSessions($limit: Int) {
-        listTutoringSessions(limit: $limit) {
-          items {
-            id
-            subjectId
-          }
-        }
-      }
-    """;
-
-    try {
-      final request = GraphQLRequest<String>(
-        document: queryDoc,
-        variables: {'limit': 1000},
-      );
-      final response = await Amplify.API.query(request: request).response;
-
-      if (response.errors.isNotEmpty) {
-        debugPrint(
-          'HomeController: _buildSessionSubjectMap errors: ${response.errors}',
-        );
-        return;
-      }
-
-      final data = response.data;
-      if (data == null) return;
-
-      _parseSessionSubjectPairs(data);
-      debugPrint(
-        'HomeController: subject map built — ${_sessionSubjectMap.length} entries',
-      );
-    } catch (e) {
-      debugPrint(
-        'HomeController: _buildSessionSubjectMapFromGraphQL error: $e',
-      );
-    }
-  }
-
-  void _parseSessionSubjectPairs(String jsonStr) {
-    final itemPattern = RegExp(r'\{[^{}]*"id"\s*:\s*"([^"]+)"[^{}]*\}');
-    final subjectIdPattern = RegExp(r'"subjectId"\s*:\s*"([^"]+)"');
-    for (final itemMatch in itemPattern.allMatches(jsonStr)) {
-      final block = itemMatch.group(0)!;
-      final sessionId = itemMatch.group(1)!;
-      final subjectMatch = subjectIdPattern.firstMatch(block);
-      if (subjectMatch != null) {
-        _sessionSubjectMap[sessionId] = subjectMatch.group(1)!;
-      }
-    }
-  }
-
+  /// ✅ FIX: Load ALL sessions directly from the GraphQL JSON response.
+  ///
+  /// The previous approach fetched session IDs from AppSync then re-queried
+  /// DataStore for each one. DataStore only contains sessions belonging to
+  /// the current user's sync scope — sessions created by OTHER tutors are
+  /// never in the local DataStore, so they were silently dropped.
+  ///
+  /// Now we decode the full AppSync response using dart:convert and build
+  /// TutoringSession objects directly from the JSON maps. No DataStore
+  /// lookup needed — every session AppSync returns gets shown regardless
+  /// of which account created it.
   Future<void> _loadAllSessionsFromGraphQL() async {
+    // ✅ Request ALL fields we need in one query — no second DataStore fetch.
     const queryDoc = r"""
       query ListAllSessionsFull($limit: Int) {
         listTutoringSessions(limit: $limit) {
@@ -245,62 +180,72 @@ class HomeController extends GetxController {
 
       if (response.errors.isNotEmpty || response.data == null) {
         debugPrint(
-          'HomeController: GraphQL session load failed — falling back to DataStore',
+          'HomeController: GraphQL failed — falling back to DataStore',
         );
         await _loadAllSessionsFromDataStore();
         return;
       }
 
-      final dataStr = response.data!;
+      // ✅ Parse response with dart:convert — reliable for nested JSON.
+      final decoded = jsonDecode(response.data!) as Map<String, dynamic>;
+      final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+      final listObj = root['listTutoringSessions'] as Map<String, dynamic>?;
+      final items = listObj?['items'] as List<dynamic>?;
 
-      final idPattern = RegExp(r'"id"\s*:\s*"([^"]+)"');
-      final sessionIds =
-          idPattern.allMatches(dataStr).map((m) => m.group(1)!).toList();
-      debugPrint(
-        'HomeController: AppSync returned ${sessionIds.length} sessions',
-      );
-
-      if (sessionIds.isEmpty) {
+      if (items == null || items.isEmpty) {
         debugPrint(
-          'HomeController: 0 sessions from AppSync — using DataStore fallback',
+          'HomeController: 0 sessions from AppSync — DataStore fallback',
         );
         await _loadAllSessionsFromDataStore();
         return;
       }
 
-      final sessionTutorMap = <String, String>{};
-      final itemPattern = RegExp(r'\{[^{}]*"id"\s*:\s*"([^"]+)"[^{}]*\}');
-      final tutorIdPattern = RegExp(r'"tutorId"\s*:\s*"([^"]+)"');
-      for (final m in itemPattern.allMatches(dataStr)) {
-        final block = m.group(0)!;
-        final sid = m.group(1)!;
-        final tutorMatch = tutorIdPattern.firstMatch(block);
-        if (tutorMatch != null) sessionTutorMap[sid] = tutorMatch.group(1)!;
-      }
+      debugPrint('HomeController: AppSync returned ${items.length} sessions');
 
       final resolved = <TutoringSession>[];
-      for (final id in sessionIds) {
-        final local = await Amplify.DataStore.query(
-          TutoringSession.classType,
-          where: TutoringSession.ID.eq(id),
-        );
 
-        TutoringSession session;
-        if (local.isNotEmpty) {
-          session = local.first;
-        } else {
-          final minimal = _buildMinimalSessionFromGraphQL(id, dataStr);
-          if (minimal == null) continue;
-          session = minimal;
+      for (final raw in items) {
+        final item = raw as Map<String, dynamic>;
+        final id = item['id'] as String?;
+        if (id == null) continue;
+
+        // ✅ Build session directly from the GraphQL map — no DataStore query.
+        // This means sessions from ALL tutors are included, not just the
+        // current user's DataStore scope.
+        final tutorId = item['tutorId'] as String?;
+        final subjectId = item['subjectId'] as String?;
+        final createdAtStr = item['createdAt'] as String?;
+        final updatedAtStr = item['updatedAt'] as String?;
+
+        // Cache subject mapping.
+        if (subjectId != null && subjectId.isNotEmpty) {
+          _sessionSubjectMap[id] = subjectId;
         }
 
-        final tutorId = sessionTutorMap[id] ?? session.tutor?.id;
+        TutoringSession session = TutoringSession(
+          id: id,
+          title: item['title'] as String? ?? 'Session',
+          description: item['description'] as String?,
+          pricePerSession: (item['pricePerSession'] as num?)?.toDouble(),
+          thumbnail: item['thumbnail'] as String?,
+          isFeatured: item['isFeatured'] as bool?,
+          createdAt:
+              createdAtStr != null
+                  ? TemporalDateTime.fromString(createdAtStr)
+                  : null,
+          updatedAt:
+              updatedAtStr != null
+                  ? TemporalDateTime.fromString(updatedAtStr)
+                  : null,
+        );
+
+        // Resolve tutor (cache-friendly — only one DataStore query per unique tutor).
         if (tutorId != null && tutorId.isNotEmpty) {
           final tutor = await _resolveTutorById(tutorId);
           if (tutor != null) session = session.copyWith(tutor: tutor);
         }
 
-        final subjectId = _sessionSubjectMap[id] ?? session.subject?.id;
+        // Resolve subject.
         if (subjectId != null && subjectId.isNotEmpty) {
           final subject = await _resolveSubjectById(subjectId);
           if (subject != null) session = session.copyWith(subject: subject);
@@ -311,12 +256,11 @@ class HomeController extends GetxController {
 
       allSessions.assignAll(resolved);
       debugPrint(
-        'HomeController: ${resolved.length} sessions loaded from AppSync',
+        'HomeController: ${resolved.length} sessions loaded from AppSync '
+        '(all tutors)',
       );
     } catch (e) {
-      debugPrint(
-        'HomeController: _loadAllSessionsFromGraphQL error: $e — falling back',
-      );
+      debugPrint('HomeController: _loadAllSessionsFromGraphQL error: $e');
       await _loadAllSessionsFromDataStore();
     }
   }
@@ -329,54 +273,11 @@ class HomeController extends GetxController {
       final hydrated = await _hydrateSessions(rawSessions);
       allSessions.assignAll(hydrated);
       debugPrint(
-        'HomeController: DataStore fallback — ${hydrated.length} sessions loaded',
+        'HomeController: DataStore fallback — ${hydrated.length} sessions',
       );
     } catch (e) {
       debugPrint('HomeController: _loadAllSessionsFromDataStore error: $e');
       allSessions.clear();
-    }
-  }
-
-  TutoringSession? _buildMinimalSessionFromGraphQL(String id, String jsonStr) {
-    try {
-      final block = RegExp(
-        r'\{[^{}]*"id"\s*:\s*"' + RegExp.escape(id) + r'"[^{}]*\}',
-      ).firstMatch(jsonStr)?.group(0);
-      if (block == null) return null;
-
-      final title =
-          RegExp(r'"title"\s*:\s*"([^"]+)"').firstMatch(block)?.group(1) ??
-          'Session';
-      final description = RegExp(
-        r'"description"\s*:\s*"([^"]+)"',
-      ).firstMatch(block)?.group(1);
-      final price =
-          double.tryParse(
-            RegExp(
-                  r'"pricePerSession"\s*:\s*([\d.]+)',
-                ).firstMatch(block)?.group(1) ??
-                '0',
-          ) ??
-          0.0;
-      final thumbnail = RegExp(
-        r'"thumbnail"\s*:\s*"([^"]+)"',
-      ).firstMatch(block)?.group(1);
-      final isFeatured =
-          RegExp(
-            r'"isFeatured"\s*:\s*(true|false)',
-          ).firstMatch(block)?.group(1) ==
-          'true';
-
-      return TutoringSession(
-        id: id,
-        title: title,
-        description: description,
-        pricePerSession: price,
-        thumbnail: thumbnail,
-        isFeatured: isFeatured,
-      );
-    } catch (e) {
-      return null;
     }
   }
 
@@ -482,7 +383,7 @@ class HomeController extends GetxController {
   void updateSearch(String query) => searchQuery.value = query;
 
   // =========================================================================
-  // RESET — called when user logs out
+  // RESET
   // =========================================================================
 
   void _resetState() {
@@ -492,8 +393,6 @@ class HomeController extends GetxController {
     popularSessions.clear();
     recentSessions.clear();
     subjectController.subjects.clear();
-    // ✅ FIX: must set both false so _startAppFlow() is not blocked
-    //    by the isLoading guard on the next login.
     isReady.value = false;
     isLoading.value = false;
     searchQuery.value = '';

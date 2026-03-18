@@ -3,6 +3,7 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import 'package:amplify_api/amplify_api.dart';
 import 'package:amplify_datastore/amplify_datastore.dart';
+import 'package:amplify_storage_s3/amplify_storage_s3.dart'; // ✅ ADD THIS IMPORT
 import 'amplifyconfiguration.dart';
 import 'data_store_manager.dart';
 import 'models/ModelProvider.dart';
@@ -21,6 +22,7 @@ class AmplifyInitializer {
         AmplifyAuthCognito(),
         AmplifyAPI(),
         AmplifyDataStore(modelProvider: ModelProvider.instance),
+        AmplifyStorageS3(), // ✅ ADD THIS — required for voice message uploads
       ]);
 
       await Amplify.configure(amplifyconfig);
@@ -58,7 +60,7 @@ class AmplifyInitializer {
 
   static Future<void> logout() async {
     try {
-      await Amplify.DataStore.stop(); // 🔥 stop first
+      await Amplify.DataStore.stop();
       await Amplify.DataStore.clear();
       await Amplify.Auth.signOut();
 

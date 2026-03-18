@@ -397,9 +397,6 @@ class TutoringController extends GetxController {
   void _observeSessions() async {
     if (!await _canSync()) return;
     try {
-      // ✅ observeQuery populates `sessions` with ALL sessions from DataStore
-      //    — this is the source for home grid widgets. It must NOT be
-      //    replaced by fetchTutorSessions which only loads the tutor's own.
       Amplify.DataStore.observeQuery(TutoringSession.classType).listen((
         snapshot,
       ) async {
@@ -461,13 +458,6 @@ class TutoringController extends GetxController {
     if (!await _canSync()) return;
     try {
       final tutorId = await currentUserTutorId;
-      // ✅ If the user is not a tutor (no tutorId), skip entirely.
-      //    This was previously triggering _fetchTutorSessionsFallback which
-      //    loaded ALL sessions into activeSessions then the observeQuery
-      //    _mergeSessions overwrote `sessions` with the same list —
-      //    but the key issue was fetchTutorSessions being called for students
-      //    who have no tutor record, causing the fallback to accidentally
-      //    pollute activeSessions with every session.
       if (tutorId == null) {
         print('ℹ️ fetchTutorSessions: no tutor record for this user — skip');
         return;
@@ -498,7 +488,6 @@ class TutoringController extends GetxController {
       final resolvedTutor = await _resolveTutorById(tutorId);
       final sessionIds = _parseIds(response.data!);
       if (sessionIds.isEmpty) {
-        // Tutor has no sessions yet — activeSessions should be empty, not all
         activeSessions.clear();
         return;
       }
@@ -533,9 +522,6 @@ class TutoringController extends GetxController {
   }
 
   Future<void> _fetchTutorSessionsFallback(String tutorId) async {
-    // ✅ Fallback scoped to the tutor's own sessions only — NOT all sessions.
-    //    Previous code did allRaw without filtering which loaded everything
-    //    into activeSessions and made the inbox show all users' chats.
     try {
       final tutorSessions = await Amplify.DataStore.query(
         TutoringSession.classType,
@@ -595,13 +581,6 @@ class TutoringController extends GetxController {
             : session.thumbnail ?? '';
   }
 
-  // ============================================================
-  // ✅ FIXED: addSessionToBooking
-  // Removed the unconditional Get.back() that was popping the
-  // SessionDetailScreen. Now shows a bottom sheet so the user
-  // stays on the detail page and can navigate to checkout or
-  // keep browsing.
-  // ============================================================
   Future<void> addSessionToBooking(
     TutoringSession session, {
     Map<String, String>? selectedAttributes,
@@ -641,7 +620,6 @@ class TutoringController extends GetxController {
       bookingDate: TemporalDateTime.now(),
     );
 
-    // ✅ Show confirmation sheet — stay on SessionDetailScreen
     final context = Get.context;
     if (context != null) {
       await showModalBottomSheet(
@@ -1083,6 +1061,10 @@ class TutoringController extends GetxController {
     await Amplify.DataStore.save(message);
   }
 
+  // ✅ FIXED: broad catch added so PluginError ("Storage plugin has not been
+  // added to Amplify") doesn't propagate as an unhandled exception and crash
+  // the app. Once AmplifyStorageS3() is registered in AmplifyInitializer and
+  // amplify_storage_s3 is in pubspec.yaml this path will never be hit.
   Future<void> sendVoiceMessage(String sessionId, File audioFile) async {
     if (!await _canSync()) return;
 
@@ -1119,6 +1101,25 @@ class TutoringController extends GetxController {
       _onNewMessage(message);
     } on StorageException catch (e) {
       print('❌ S3 Upload failed: ${e.message}');
+      Get.snackbar(
+        'Upload Failed',
+        'Could not upload voice message. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+    } catch (e) {
+      // Catches PluginError and any other unexpected storage errors.
+      print('❌ sendVoiceMessage error: $e');
+      Get.snackbar(
+        'Voice Message Error',
+        'Voice messages are unavailable. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
     }
   }
 
@@ -1230,7 +1231,7 @@ class TutoringController extends GetxController {
   void clearCurrentOpenSession() => currentOpenChatId = null;
 
   // ============================================================
-  // NEW: APPSYNC MESSAGE FETCH
+  // APPSYNC MESSAGE FETCH
   // ============================================================
 
   Future<List<ChatMessage>> fetchMessagesFromAppSync(String chatId) async {
@@ -1281,7 +1282,6 @@ class TutoringController extends GetxController {
 
       for (final raw in items) {
         final item = raw as Map<String, dynamic>;
-
         if (item['_deleted'] == true) continue;
 
         final id = item['id'] as String?;
@@ -1323,7 +1323,7 @@ class TutoringController extends GetxController {
   }
 
   // ============================================================
-  // NEW: DELETE MESSAGE (APPSYNC SAFE VERSION)
+  // DELETE MESSAGE
   // ============================================================
 
   Future<void> deleteMessage(String chatId, ChatMessage message) async {
@@ -1363,9 +1363,7 @@ class TutoringController extends GetxController {
         final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
         final obj = root['getChatMessage'] as Map<String, dynamic>?;
 
-        if (obj == null || obj['_deleted'] == true) {
-          return;
-        }
+        if (obj == null || obj['_deleted'] == true) return;
 
         final v = obj['_version'];
         if (v != null) version = (v as num).toInt();
@@ -1546,8 +1544,6 @@ class TutoringController extends GetxController {
 
 // ============================================================
 // Booking confirmation bottom sheet
-// Stays inside this file so TutoringController can reference it
-// without a circular import. No extra import blocks needed.
 // ============================================================
 class _BookingConfirmationSheet extends StatelessWidget {
   const _BookingConfirmationSheet({required this.session, required this.price});
@@ -1574,7 +1570,6 @@ class _BookingConfirmationSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
           Container(
             width: 40,
             height: 4,
@@ -1584,8 +1579,6 @@ class _BookingConfirmationSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Success icon
           Container(
             width: 60,
             height: 60,
@@ -1600,7 +1593,6 @@ class _BookingConfirmationSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-
           Text(
             'Added to Booking!',
             style: theme.textTheme.titleLarge?.copyWith(
@@ -1626,13 +1618,11 @@ class _BookingConfirmationSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-
-          // Go to Checkout
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () {
-                Get.back(); // close sheet
+                Get.back();
                 Get.to(() => const CheckoutScreen());
               },
               icon: const Icon(Iconsax.security_safe, size: 18),
@@ -1652,8 +1642,6 @@ class _BookingConfirmationSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-
-          // Keep Browsing
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(

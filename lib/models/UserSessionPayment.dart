@@ -22,6 +22,7 @@
 import 'ModelProvider.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 
+
 /** This is an auto generated class representing the UserSessionPayment type in your schema. */
 class UserSessionPayment extends amplify_core.Model {
   static const classType = const _UserSessionPaymentModelType();
@@ -37,118 +38,79 @@ class UserSessionPayment extends amplify_core.Model {
 
   @override
   getInstanceType() => classType;
-
-  @Deprecated(
-    '[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.',
-  )
+  
+  @Deprecated('[getId] is being deprecated in favor of custom primary key feature. Use getter [modelIdentifier] to get model identifier.')
   @override
   String getId() => id;
-
+  
   UserSessionPaymentModelIdentifier get modelIdentifier {
-    return UserSessionPaymentModelIdentifier(id: id);
+      return UserSessionPaymentModelIdentifier(
+        id: id
+      );
   }
-
+  
   String get userId {
     try {
       return _userId!;
-    } catch (e) {
+    } catch(e) {
       throw amplify_core.AmplifyCodeGenModelException(
-        amplify_core
-            .AmplifyExceptionMessages
-            .codeGenRequiredFieldForceCastExceptionMessage,
-        recoverySuggestion:
-            amplify_core
-                .AmplifyExceptionMessages
-                .codeGenRequiredFieldForceCastRecoverySuggestion,
-        underlyingException: e.toString(),
-      );
+          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
+          recoverySuggestion:
+            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
+          underlyingException: e.toString()
+          );
     }
   }
-
+  
   String get sessionId {
     try {
       return _sessionId!;
-    } catch (e) {
+    } catch(e) {
       throw amplify_core.AmplifyCodeGenModelException(
-        amplify_core
-            .AmplifyExceptionMessages
-            .codeGenRequiredFieldForceCastExceptionMessage,
-        recoverySuggestion:
-            amplify_core
-                .AmplifyExceptionMessages
-                .codeGenRequiredFieldForceCastRecoverySuggestion,
-        underlyingException: e.toString(),
-      );
+          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
+          recoverySuggestion:
+            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
+          underlyingException: e.toString()
+          );
     }
   }
-
+  
   bool get hasPaid {
     try {
       return _hasPaid!;
-    } catch (e) {
+    } catch(e) {
       throw amplify_core.AmplifyCodeGenModelException(
-        amplify_core
-            .AmplifyExceptionMessages
-            .codeGenRequiredFieldForceCastExceptionMessage,
-        recoverySuggestion:
-            amplify_core
-                .AmplifyExceptionMessages
-                .codeGenRequiredFieldForceCastRecoverySuggestion,
-        underlyingException: e.toString(),
-      );
+          amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastExceptionMessage,
+          recoverySuggestion:
+            amplify_core.AmplifyExceptionMessages.codeGenRequiredFieldForceCastRecoverySuggestion,
+          underlyingException: e.toString()
+          );
     }
   }
-
+  
   amplify_core.TemporalDateTime? get paidAt {
     return _paidAt;
   }
-
+  
   double? get amountPaid {
     return _amountPaid;
   }
-
+  
   String? get reference {
     return _reference;
   }
-
+  
   amplify_core.TemporalDateTime? get createdAt {
     return _createdAt;
   }
-
+  
   amplify_core.TemporalDateTime? get updatedAt {
     return _updatedAt;
   }
-
-  const UserSessionPayment._internal({
-    required this.id,
-    required userId,
-    required sessionId,
-    required hasPaid,
-    paidAt,
-    amountPaid,
-    reference,
-    createdAt,
-    updatedAt,
-  }) : _userId = userId,
-       _sessionId = sessionId,
-       _hasPaid = hasPaid,
-       _paidAt = paidAt,
-       _amountPaid = amountPaid,
-       _reference = reference,
-       _createdAt = createdAt,
-       _updatedAt = updatedAt;
-
-  factory UserSessionPayment({
-    String? id,
-    required String userId,
-    required String sessionId,
-    required bool hasPaid,
-    amplify_core.TemporalDateTime? paidAt,
-    double? amountPaid,
-    String? reference,
-    amplify_core.TemporalDateTime? createdAt,
-    amplify_core.TemporalDateTime? updatedAt,
-  }) {
+  
+  const UserSessionPayment._internal({required this.id, required userId, required sessionId, required hasPaid, paidAt, amountPaid, reference, createdAt, updatedAt}): _userId = userId, _sessionId = sessionId, _hasPaid = hasPaid, _paidAt = paidAt, _amountPaid = amountPaid, _reference = reference, _createdAt = createdAt, _updatedAt = updatedAt;
+  
+  factory UserSessionPayment({String? id, required String userId, required String sessionId, required bool hasPaid, amplify_core.TemporalDateTime? paidAt, double? amountPaid, String? reference, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return UserSessionPayment._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       userId: userId,
@@ -158,73 +120,51 @@ class UserSessionPayment extends amplify_core.Model {
       amountPaid: amountPaid,
       reference: reference,
       createdAt: createdAt,
-      updatedAt: updatedAt,
-    );
+      updatedAt: updatedAt);
   }
-
+  
   bool equals(Object other) {
     return this == other;
   }
-
+  
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
     return other is UserSessionPayment &&
-        id == other.id &&
-        _userId == other._userId &&
-        _sessionId == other._sessionId &&
-        _hasPaid == other._hasPaid &&
-        _paidAt == other._paidAt &&
-        _amountPaid == other._amountPaid &&
-        _reference == other._reference &&
-        _createdAt == other._createdAt &&
-        _updatedAt == other._updatedAt;
+      id == other.id &&
+      _userId == other._userId &&
+      _sessionId == other._sessionId &&
+      _hasPaid == other._hasPaid &&
+      _paidAt == other._paidAt &&
+      _amountPaid == other._amountPaid &&
+      _reference == other._reference &&
+      _createdAt == other._createdAt &&
+      _updatedAt == other._updatedAt;
   }
-
+  
   @override
   int get hashCode => toString().hashCode;
-
+  
   @override
   String toString() {
     var buffer = new StringBuffer();
-
+    
     buffer.write("UserSessionPayment {");
     buffer.write("id=" + "$id" + ", ");
     buffer.write("userId=" + "$_userId" + ", ");
     buffer.write("sessionId=" + "$_sessionId" + ", ");
-    buffer.write(
-      "hasPaid=" + (_hasPaid != null ? _hasPaid.toString() : "null") + ", ",
-    );
-    buffer.write(
-      "paidAt=" + (_paidAt != null ? _paidAt.format() : "null") + ", ",
-    );
-    buffer.write(
-      "amountPaid=" +
-          (_amountPaid != null ? _amountPaid.toString() : "null") +
-          ", ",
-    );
+    buffer.write("hasPaid=" + (_hasPaid != null ? _hasPaid!.toString() : "null") + ", ");
+    buffer.write("paidAt=" + (_paidAt != null ? _paidAt!.format() : "null") + ", ");
+    buffer.write("amountPaid=" + (_amountPaid != null ? _amountPaid!.toString() : "null") + ", ");
     buffer.write("reference=" + "$_reference" + ", ");
-    buffer.write(
-      "createdAt=" + (_createdAt != null ? _createdAt.format() : "null") + ", ",
-    );
-    buffer.write(
-      "updatedAt=" + (_updatedAt != null ? _updatedAt.format() : "null"),
-    );
+    buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
+    buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
     buffer.write("}");
-
+    
     return buffer.toString();
   }
-
-  UserSessionPayment copyWith({
-    String? userId,
-    String? sessionId,
-    bool? hasPaid,
-    amplify_core.TemporalDateTime? paidAt,
-    double? amountPaid,
-    String? reference,
-    amplify_core.TemporalDateTime? createdAt,
-    amplify_core.TemporalDateTime? updatedAt,
-  }) {
+  
+  UserSessionPayment copyWith({String? userId, String? sessionId, bool? hasPaid, amplify_core.TemporalDateTime? paidAt, double? amountPaid, String? reference, amplify_core.TemporalDateTime? createdAt, amplify_core.TemporalDateTime? updatedAt}) {
     return UserSessionPayment._internal(
       id: id,
       userId: userId ?? this.userId,
@@ -234,10 +174,9 @@ class UserSessionPayment extends amplify_core.Model {
       amountPaid: amountPaid ?? this.amountPaid,
       reference: reference ?? this.reference,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
+      updatedAt: updatedAt ?? this.updatedAt);
   }
-
+  
   UserSessionPayment copyWithModelFieldValues({
     ModelFieldValue<String>? userId,
     ModelFieldValue<String>? sessionId,
@@ -246,7 +185,7 @@ class UserSessionPayment extends amplify_core.Model {
     ModelFieldValue<double?>? amountPaid,
     ModelFieldValue<String?>? reference,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
-    ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt,
+    ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt
   }) {
     return UserSessionPayment._internal(
       id: id,
@@ -257,42 +196,25 @@ class UserSessionPayment extends amplify_core.Model {
       amountPaid: amountPaid == null ? this.amountPaid : amountPaid.value,
       reference: reference == null ? this.reference : reference.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
-      updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value,
+      updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value
     );
   }
-
-  UserSessionPayment.fromJson(Map<String, dynamic> json)
+  
+  UserSessionPayment.fromJson(Map<String, dynamic> json)  
     : id = json['id'],
       _userId = json['userId'],
       _sessionId = json['sessionId'],
       _hasPaid = json['hasPaid'],
-      _paidAt =
-          json['paidAt'] != null
-              ? amplify_core.TemporalDateTime.fromString(json['paidAt'])
-              : null,
+      _paidAt = json['paidAt'] != null ? amplify_core.TemporalDateTime.fromString(json['paidAt']) : null,
       _amountPaid = (json['amountPaid'] as num?)?.toDouble(),
       _reference = json['reference'],
-      _createdAt =
-          json['createdAt'] != null
-              ? amplify_core.TemporalDateTime.fromString(json['createdAt'])
-              : null,
-      _updatedAt =
-          json['updatedAt'] != null
-              ? amplify_core.TemporalDateTime.fromString(json['updatedAt'])
-              : null;
-
+      _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
+      _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
+  
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'userId': _userId,
-    'sessionId': _sessionId,
-    'hasPaid': _hasPaid,
-    'paidAt': _paidAt?.format(),
-    'amountPaid': _amountPaid,
-    'reference': _reference,
-    'createdAt': _createdAt?.format(),
-    'updatedAt': _updatedAt?.format(),
+    'id': id, 'userId': _userId, 'sessionId': _sessionId, 'hasPaid': _hasPaid, 'paidAt': _paidAt?.format(), 'amountPaid': _amountPaid, 'reference': _reference, 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
-
+  
   Map<String, Object?> toMap() => {
     'id': id,
     'userId': _userId,
@@ -302,14 +224,10 @@ class UserSessionPayment extends amplify_core.Model {
     'amountPaid': _amountPaid,
     'reference': _reference,
     'createdAt': _createdAt,
-    'updatedAt': _updatedAt,
+    'updatedAt': _updatedAt
   };
 
-  static final amplify_core.QueryModelIdentifier<
-    UserSessionPaymentModelIdentifier
-  >
-  MODEL_IDENTIFIER =
-      amplify_core.QueryModelIdentifier<UserSessionPaymentModelIdentifier>();
+  static final amplify_core.QueryModelIdentifier<UserSessionPaymentModelIdentifier> MODEL_IDENTIFIER = amplify_core.QueryModelIdentifier<UserSessionPaymentModelIdentifier>();
   static final ID = amplify_core.QueryField(fieldName: "id");
   static final USERID = amplify_core.QueryField(fieldName: "userId");
   static final SESSIONID = amplify_core.QueryField(fieldName: "sessionId");
@@ -319,129 +237,94 @@ class UserSessionPayment extends amplify_core.Model {
   static final REFERENCE = amplify_core.QueryField(fieldName: "reference");
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
   static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
-  static var schema = amplify_core.Model.defineSchema(
-    define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
-      modelSchemaDefinition.name = "UserSessionPayment";
-      modelSchemaDefinition.pluralName = "UserSessionPayments";
-
-      modelSchemaDefinition.authRules = [
-        amplify_core.AuthRule(
-          authStrategy: amplify_core.AuthStrategy.OWNER,
-          ownerField: "owner",
-          identityClaim: "cognito:username",
-          provider: amplify_core.AuthRuleProvider.USERPOOLS,
-          operations: const [
-            amplify_core.ModelOperation.CREATE,
-            amplify_core.ModelOperation.READ,
-            amplify_core.ModelOperation.UPDATE,
-            amplify_core.ModelOperation.DELETE,
-          ],
-        ),
-        amplify_core.AuthRule(
-          authStrategy: amplify_core.AuthStrategy.PUBLIC,
-          operations: const [amplify_core.ModelOperation.READ],
-        ),
-      ];
-
-      modelSchemaDefinition.indexes = [
-        amplify_core.ModelIndex(fields: const ["userId"], name: "byUser"),
-        amplify_core.ModelIndex(fields: const ["sessionId"], name: "bySession"),
-      ];
-
-      modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.USERID,
-          isRequired: true,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.SESSIONID,
-          isRequired: true,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.HASPAID,
-          isRequired: true,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.bool,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.PAIDAT,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.dateTime,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.AMOUNTPAID,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.double,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.REFERENCE,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.string,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.CREATEDAT,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.dateTime,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.UPDATEDAT,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.dateTime,
-          ),
-        ),
-      );
-    },
-  );
+  static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
+    modelSchemaDefinition.name = "UserSessionPayment";
+    modelSchemaDefinition.pluralName = "UserSessionPayments";
+    
+    modelSchemaDefinition.authRules = [
+      amplify_core.AuthRule(
+        authStrategy: amplify_core.AuthStrategy.OWNER,
+        ownerField: "owner",
+        identityClaim: "cognito:username",
+        provider: amplify_core.AuthRuleProvider.USERPOOLS,
+        operations: const [
+          amplify_core.ModelOperation.CREATE,
+          amplify_core.ModelOperation.READ,
+          amplify_core.ModelOperation.UPDATE,
+          amplify_core.ModelOperation.DELETE
+        ]),
+      amplify_core.AuthRule(
+        authStrategy: amplify_core.AuthStrategy.PUBLIC,
+        operations: const [
+          amplify_core.ModelOperation.READ
+        ])
+    ];
+    
+    modelSchemaDefinition.indexes = [
+      amplify_core.ModelIndex(fields: const ["userId"], name: "byUser"),
+      amplify_core.ModelIndex(fields: const ["sessionId"], name: "bySession")
+    ];
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: UserSessionPayment.USERID,
+      isRequired: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: UserSessionPayment.SESSIONID,
+      isRequired: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: UserSessionPayment.HASPAID,
+      isRequired: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: UserSessionPayment.PAIDAT,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: UserSessionPayment.AMOUNTPAID,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.double)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: UserSessionPayment.REFERENCE,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: UserSessionPayment.CREATEDAT,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: UserSessionPayment.UPDATEDAT,
+      isRequired: false,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)
+    ));
+  });
 }
 
-class _UserSessionPaymentModelType
-    extends amplify_core.ModelType<UserSessionPayment> {
+class _UserSessionPaymentModelType extends amplify_core.ModelType<UserSessionPayment> {
   const _UserSessionPaymentModelType();
-
+  
   @override
   UserSessionPayment fromJson(Map<String, dynamic> jsonData) {
     return UserSessionPayment.fromJson(jsonData);
   }
-
+  
   @override
   String modelName() {
     return 'UserSessionPayment';
@@ -452,37 +335,41 @@ class _UserSessionPaymentModelType
  * This is an auto generated class representing the model identifier
  * of [UserSessionPayment] in your schema.
  */
-class UserSessionPaymentModelIdentifier
-    implements amplify_core.ModelIdentifier<UserSessionPayment> {
+class UserSessionPaymentModelIdentifier implements amplify_core.ModelIdentifier<UserSessionPayment> {
   final String id;
 
   /** Create an instance of UserSessionPaymentModelIdentifier using [id] the primary key. */
-  const UserSessionPaymentModelIdentifier({required this.id});
-
+  const UserSessionPaymentModelIdentifier({
+    required this.id});
+  
   @override
-  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{'id': id});
-
+  Map<String, dynamic> serializeAsMap() => (<String, dynamic>{
+    'id': id
+  });
+  
   @override
-  List<Map<String, dynamic>> serializeAsList() =>
-      serializeAsMap().entries
-          .map((entry) => (<String, dynamic>{entry.key: entry.value}))
-          .toList();
-
+  List<Map<String, dynamic>> serializeAsList() => serializeAsMap()
+    .entries
+    .map((entry) => (<String, dynamic>{ entry.key: entry.value }))
+    .toList();
+  
   @override
   String serializeAsString() => serializeAsMap().values.join('#');
-
+  
   @override
   String toString() => 'UserSessionPaymentModelIdentifier(id: $id)';
-
+  
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) {
       return true;
     }
-
-    return other is UserSessionPaymentModelIdentifier && id == other.id;
+    
+    return other is UserSessionPaymentModelIdentifier &&
+      id == other.id;
   }
-
+  
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode =>
+    id.hashCode;
 }

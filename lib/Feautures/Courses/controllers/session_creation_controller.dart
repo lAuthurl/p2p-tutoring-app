@@ -156,20 +156,77 @@ class SessionCreationController extends GetxController {
   // ── Create Session ───────────────────────────────────────────────
 
   Future<void> createSession() async {
-    // ── GATE: Tutor must have a saved Paystack card ──────────────
+    // ✅ Card gate — only prompt ONCE if no card is saved yet.
+    // PaystackCardController persists the card to SharedPreferences, so
+    // once the tutor adds a card it's remembered across all future sessions.
+    // We never re-prompt or re-navigate after a card already exists.
     final cardCtrl = Get.put(PaystackCardController());
-    if (!cardCtrl.hasCard) {
-      Get.snackbar(
-        '💳 Card Required',
-        'Add a payment card before creating a session',
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 3),
-      );
-      await Get.to(() => const PaystackCardEntryScreen());
-      // Abort session creation so user can re-tap after adding card
-      return;
+
+    // Wait for the controller to finish loading from SharedPreferences.
+    // isLoading is true briefly on first access — wait for it to settle.
+    if (cardCtrl.isLoading.value) {
+      await Future.doWhile(() async {
+        await Future.delayed(const Duration(milliseconds: 50));
+        return cardCtrl.isLoading.value;
+      });
     }
 
+    if (!cardCtrl.hasCard) {
+      // ✅ Show a friendly one-time prompt explaining WHY a card is needed
+      // before navigating to the card entry screen.
+      final shouldAdd = await Get.dialog<bool>(
+        AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Add Payment Card',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          content: const Text(
+            'Tutors need a card on file to receive payouts from students. '
+            'You only need to do this once — your card is saved securely '
+            'for all future sessions.',
+            style: TextStyle(fontSize: 14, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back(result: false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Get.back(result: true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0BA4DB),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('Add Card'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldAdd != true) return;
+
+      // Navigate to card entry and wait for the user to return.
+      await Get.to(() => const PaystackCardEntryScreen());
+
+      // After returning, re-check. If the user skipped adding a card, abort.
+      if (!cardCtrl.hasCard) {
+        Get.snackbar(
+          'Card Required',
+          'Please add a payment card to create a session.',
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 3),
+        );
+        return;
+      }
+    }
+
+    // ── Card exists — proceed with session creation ───────────────
     if (!formKey.currentState!.validate()) return;
 
     if (subjectId.value.isEmpty) {

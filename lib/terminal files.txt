@@ -5,18 +5,18 @@ flutter pub get
 amplify codegen models
 
 
-SESSION ONLY LOADS FOR THE PERSON THAT CREATED IT
-review BLOCK BEFORE PAYMENY
-TUTOR ONLY NEED TO ADD CARD ONCE AND CAN ADD MORE AND EDIT IN PROFILE SCREEN
-
 make vc work 
 make image upload work
 make algorithm for feautured lecturers 
+sessions should be truely sorted by recent on default
+filter for your sessions
 
-fix failed to load review snackbar problem when exit a detail screen too fast
-messages DONT APPEAR
-logout details still there when logout button is initiated , i need the details clared for privacy 
+logout details sometimes still there when logout button is initiated , i need the details clared for privacy 
 SLIGHT SHOW OF HOMEPAGE ON LOAD APP
 
 
+NUMBER PEOPLE WILLING TO TEACH AND REMOVES THE SESSION FROM  THE LOADED SESSIOND IF THE MAXPEOPLE IS REACHED BUT STILL STAYS IN FAVORITE ALSO AFTER PAYMENT AUTO FAVORITE THE SESSION 
+
+
 and try making voice call work  - last thing to do
+remember me 

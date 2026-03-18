@@ -23,7 +23,7 @@ dependencies:
   # Amplify Flutter latest packages
   amplify_flutter: ^2.9.0
   amplify_auth_cognito: ^2.9.0
-  amplify_storage_s3: ^2.9.0
+  amplify_storage_s3: ^2.10.0
   amplify_api: ^2.9.0
   amplify_datastore: ^2.9.0
 

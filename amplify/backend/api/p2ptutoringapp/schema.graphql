@@ -4,6 +4,7 @@
 type User @model
   @auth(rules: [
     { allow: owner, operations: [create, read, update, delete] },
+    { allow: private, operations: [read] },
     { allow: public, operations: [read] }
   ])
 {
@@ -35,13 +36,14 @@ type User @model
 type Tutor @model
   @auth(rules: [
     { allow: owner, operations: [create, read, update, delete] },
+    { allow: private, operations: [read] },
     { allow: public, operations: [read] }
   ])
 {
   id: ID!
   name: String!
   email: String!
-  image: String              # needed for providerImage
+  image: String
   skills: [String]
   about: String
 
@@ -56,6 +58,7 @@ type Tutor @model
 type Subject @model
   @auth(rules: [
     { allow: owner, operations: [create, read, update, delete] },
+    { allow: private, operations: [read] },
     { allow: public, operations: [read] }
   ])
 {
@@ -75,14 +78,15 @@ type Subject @model
 # -------------------------------
 type TutoringSession @model
   @auth(rules: [
-    { allow: owner, operations: [create, read, update, delete] }, # tutor owns session
+    { allow: owner, operations: [create, read, update, delete] },
+    { allow: private, operations: [read] },   # ✅ any signed-in Cognito user can list ALL sessions
     { allow: public, operations: [read] }
   ])
 {
   id: ID!
 
-  tutorId: ID! @index(name: "byTutor")  # needed for Tutor → TutoringSession
-  subjectId: ID! @index(name: "bySubject")   # index for Subject → TutoringSession
+  tutorId: ID! @index(name: "byTutor")
+  subjectId: ID! @index(name: "bySubject")
 
   # Relationships
   tutor: Tutor @belongsTo(fields: ["tutorId"])
@@ -109,22 +113,20 @@ type TutoringSession @model
 # -------------------------------
 type Booking @model
   @auth(rules: [
-    { allow: owner, operations: [create, read, update, delete] }, # student owns booking
+    { allow: owner, operations: [create, read, update, delete] },
     { allow: public, operations: [read] }
   ])
 {
   id: ID!
 
-  userId: ID! @index(name: "byUser")   # index for User → Booking
+  userId: ID! @index(name: "byUser")
   user: User @belongsTo(fields: ["userId"])
 
-  sessionId: ID! @index(name: "bySession")   # index for TutoringSession → Booking
-  #   ^ required for the centralized TutoringSession.bookings
+  sessionId: ID! @index(name: "bySession")
 
-  # BookingItems relationship
   bookingItems: [BookingItem] @hasMany(indexName: "byBooking", fields: ["id"])
 
-  selectedOptions: AWSJSON   # {"Duration":"2hr","Mode":"Online"}
+  selectedOptions: AWSJSON
 
   totalPrice: Float
   status: String
@@ -144,10 +146,10 @@ type BookingItem @model
 {
   id: ID!
 
-  userId: ID! @index(name: "byUser")  # index for User → BookingItem
+  userId: ID! @index(name: "byUser")
   user: User @belongsTo(fields: ["userId"])
 
-  bookingId: ID! @index(name: "byBooking", sortKeyFields: ["createdAt"])  # composite index
+  bookingId: ID! @index(name: "byBooking", sortKeyFields: ["createdAt"])
   booking: Booking @belongsTo(fields: ["bookingId"])
 
   sessionId: ID
@@ -179,13 +181,14 @@ type BookingItem @model
 type SessionAttribute @model
   @auth(rules: [
     { allow: owner, operations: [create, read, update, delete] },
+    { allow: private, operations: [read] },
     { allow: public, operations: [read] }
   ])
 {
   id: ID!
 
   tutorId: ID!
-  sessionId: ID! @index(name: "bySession")   # index for TutoringSession → SessionAttribute
+  sessionId: ID! @index(name: "bySession")
   name: String!
   values: [String]
 
@@ -195,10 +198,13 @@ type SessionAttribute @model
   updatedAt: AWSDateTime
 }
 
+# -------------------------------
+# Review
+# -------------------------------
 type Review @model
   @auth(rules: [
     { allow: owner, operations: [create, update, delete] },
-    { allow: private, operations: [read] },
+    { allow: private, operations: [read] },   # ✅ fixes "Not Authorized to access user/tutor on type Review"
     { allow: public, operations: [read] }
   ]) {
   id: ID!
@@ -222,27 +228,24 @@ type Review @model
 # -------------------------------
 type ChatMessage @model
   @auth(rules: [
-    { allow: owner, operations: [create, read] },   # sender can create/read
-    { allow: public, operations: [read] }           # other users can read
+    { allow: owner, operations: [create, delete] },
+    { allow: private, operations: [read] },   # ✅ any signed-in user can read messages in their sessions
+    { allow: public, operations: [read] }
   ])
 {
   id: ID!
-  sessionId: ID!         # TutoringSession.id
-  senderId: ID!          # User.id of the sender
+  sessionId: ID! @index(name: "bySession", queryField: "listChatMessagesBySession")
+  senderId: ID!
   senderName: String
   text: String
   isVoice: Boolean
-  audioUrl: String       # S3 URL if voice message
+  audioUrl: String
   createdAt: AWSDateTime
 }
 
-# ------------------------------- 
+# -------------------------------
 # UserFavorite
-# ------------------------------- 
-# Add this block to your existing schema.graphql
-# Then run: amplify push
-# Then run: amplify codegen models
-# This generates the UserFavorite Dart class in lib/models/
+# -------------------------------
 type UserFavorite @model
   @auth(rules: [
     { allow: owner, operations: [create, read, update, delete] },
@@ -257,7 +260,6 @@ type UserFavorite @model
 
 # -------------------------------
 # UserSessionPayment
-# tracks whether a user has paid for a specific session
 # -------------------------------
 type UserSessionPayment @model
   @auth(rules: [
@@ -271,7 +273,7 @@ type UserSessionPayment @model
   hasPaid: Boolean! @default(value: "false")
   paidAt: AWSDateTime
   amountPaid: Float
-  reference: String        # Paystack transaction reference (fake for prototype)
+  reference: String
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
 }

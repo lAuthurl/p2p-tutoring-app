@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:line_awesome_flutter/line_awesome_flutter.dart';
 
+import '../../../Feautures/checkout/controllers/paystack_card_controller.dart';
+import '../../../Feautures/checkout/screens/paystack_card_entry_screen.dart';
 import '../../../Feautures/dashboard/Home/controllers/subject_controller.dart';
 import '../../../common/widgets/shimmers/shimmer.dart';
 import '../../../../../data/repository/authentication_repository/authentication_repository.dart';
@@ -269,6 +271,19 @@ class ProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
+                  _SectionLabel(label: 'Payment'),
+                  _MenuCard(
+                    children: [
+                      // ✅ Payment card management — tutors add once here,
+                      // students can view/update their saved card.
+                      // Navigates to PaystackCardEntryScreen which handles
+                      // both add and update (prefills if card already saved).
+                      _PaymentCardMenuItem(),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
                   _SectionLabel(label: 'Account'),
                   _MenuCard(
                     children: [
@@ -320,7 +335,6 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Drag handle
                 Container(
                   width: 40,
                   height: 4,
@@ -329,10 +343,7 @@ class ProfileScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(100),
                   ),
                 ),
-
                 const SizedBox(height: 28),
-
-                // Icon
                 Container(
                   width: 64,
                   height: 64,
@@ -346,10 +357,7 @@ class ProfileScreen extends StatelessWidget {
                     size: 28,
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // Title
                 Text(
                   'Log out?',
                   style: TextStyle(
@@ -359,10 +367,7 @@ class ProfileScreen extends StatelessWidget {
                     color: colorScheme.onSurface,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // Subtitle
                 Text(
                   "You'll need to sign in again\nto access your account.",
                   textAlign: TextAlign.center,
@@ -373,10 +378,7 @@ class ProfileScreen extends StatelessWidget {
                     fontWeight: FontWeight.w400,
                   ),
                 ),
-
                 const SizedBox(height: 32),
-
-                // Log out button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -408,10 +410,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
-                // Cancel button
                 SizedBox(
                   width: double.infinity,
                   child: TextButton(
@@ -439,6 +438,124 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
     );
+  }
+}
+
+// ── Payment card menu item ────────────────────────────────────────────────────
+/// Shows the saved card type + masked number if one exists, or "Add Card"
+/// if none is saved. Tapping always goes to PaystackCardEntryScreen where
+/// the user can add or replace their card.
+class _PaymentCardMenuItem extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cardCtrl = Get.put(PaystackCardController());
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Obx(() {
+      final hasCard = cardCtrl.hasCard;
+      final card = cardCtrl.savedCard.value;
+
+      return InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          Get.to(() => const PaystackCardEntryScreen());
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0BA4DB).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.credit_card_rounded,
+                  color: Color(0xFF0BA4DB),
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasCard ? 'Payment Card' : 'Add Payment Card',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                    if (hasCard) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${card.cardType}  ${card.maskedNumber}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurface.withValues(alpha: 0.45),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Required for sessions & checkout',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurface.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // Edit badge when card exists, add icon otherwise.
+              if (hasCard)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 11,
+                        color: Colors.green,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: colorScheme.onSurface.withValues(alpha: 0.3),
+                ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 }
 

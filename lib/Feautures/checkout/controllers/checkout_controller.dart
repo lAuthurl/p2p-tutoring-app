@@ -1,7 +1,7 @@
 // lib/Features/checkout/controllers/checkout_controller.dart
-
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:convert';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import '../../../../models/ModelProvider.dart';
 import '../../../personalization/controllers/user_controller.dart';
 import '../../Booking/controllers/booking_controller.dart';
+import '../../Courses/controllers/tutoring_controller.dart';
 import '../models/paystack_card_model.dart';
 import 'paystack_card_controller.dart';
 import '../screens/paystack_card_entry_screen.dart';
@@ -19,18 +20,14 @@ class CheckoutController extends GetxController {
   final isProcessing = false.obs;
   final paymentSuccess = false.obs;
 
-  // ── Paystack colours (used in dialogs) ──────────────────────────
   static const Color _paystackBlue = Color(0xFF0BA4DB);
   static const Color _successGreen = Color(0xFF00C48C);
 
-  // ── Main entry point called from CheckoutScreen ─────────────────
   Future<void> processPaystackPayment(BuildContext context) async {
     final cardCtrl = Get.put(PaystackCardController());
 
-    // 1. Ensure a card is saved
     if (!cardCtrl.hasCard) {
       await Get.to(() => const PaystackCardEntryScreen());
-      // After returning, re-check
       if (!cardCtrl.hasCard) {
         Get.snackbar(
           'Card Required',
@@ -54,28 +51,19 @@ class CheckoutController extends GetxController {
     }
 
     isProcessing.value = true;
-
-    // 2. Show processing modal
     _showProcessingDialog(context, cardCtrl.savedCard.value, totalPrice);
 
     try {
-      // 3. Simulate Paystack network round-trip (1.6 s)
       await Future.delayed(const Duration(milliseconds: 1600));
 
-      // 4. Generate fake reference
       final ref = 'PSK_${DateTime.now().millisecondsSinceEpoch}';
 
-      // 5. Persist payment records in DataStore
       await _persistPaymentRecords(bookingCtrl, totalPrice, ref);
 
-      // 6. Done
       paymentSuccess.value = true;
       isProcessing.value = false;
 
-      // Close processing dialog
       if (Navigator.canPop(context)) Get.back();
-
-      // Show success dialog
       _showSuccessDialog(context, totalPrice, ref);
     } catch (e, st) {
       isProcessing.value = false;
@@ -92,57 +80,379 @@ class CheckoutController extends GetxController {
     }
   }
 
-  // ── Persist BookingItem.hasPaid + UserSessionPayment ────────────
+  // =========================================================================
+  // PERSIST PAYMENT — direct AppSync mutations + auto chat message
+  // =========================================================================
   Future<void> _persistPaymentRecords(
     BookingController bookingCtrl,
     double total,
     String ref,
   ) async {
     final userId = UserController.instance.currentUser.value?.id;
+    if (userId == null) throw Exception('User not authenticated');
 
-    for (final item in List.from(bookingCtrl.bookingItems)) {
-      // a) Mark BookingItem as paid
-      final updatedItem = item.copyWith(hasPaid: true);
-      await Amplify.DataStore.save(updatedItem);
+    // Snapshot items before clearing the cart.
+    final items = List<BookingItem>.from(bookingCtrl.bookingItems);
 
-      // b) Upsert UserSessionPayment so SessionDetailScreen can gate chat
-      if (item.sessionId != null && userId != null) {
-        // Check if a record already exists (idempotent)
-        final existing = await Amplify.DataStore.query(
-          UserSessionPayment.classType,
-          where: UserSessionPayment.USERID
-              .eq(userId)
-              .and(UserSessionPayment.SESSIONID.eq(item.sessionId!)),
+    for (final item in items) {
+      await _updateBookingItemPaid(item);
+
+      if (item.sessionId != null) {
+        await _upsertUserSessionPayment(
+          userId: userId,
+          sessionId: item.sessionId!,
+          total: total,
+          ref: ref,
         );
 
-        if (existing.isEmpty) {
-          final payment = UserSessionPayment(
-            userId: userId,
-            sessionId: item.sessionId!,
-            hasPaid: true,
-            paidAt: TemporalDateTime(DateTime.now()),
-            amountPaid: total,
-            reference: ref,
-          );
-          await Amplify.DataStore.save(payment);
-        } else {
-          // Already has a record — update it to paid
-          final updated = existing.first.copyWith(
-            hasPaid: true,
-            paidAt: TemporalDateTime(DateTime.now()),
-            amountPaid: total,
-            reference: ref,
-          );
-          await Amplify.DataStore.save(updated);
-        }
+        // ✅ Send automatic chat message so the tutor knows what was booked.
+        await _sendBookingConfirmationMessage(
+          item: item,
+          userId: userId,
+          totalPaid: total,
+          ref: ref,
+        );
       }
     }
 
-    // Clear cart after successful payment
-    bookingCtrl.clearBooking();
+    await bookingCtrl.clearBooking();
   }
 
-  // ── Processing dialog ────────────────────────────────────────────
+  // =========================================================================
+  // AUTO CHAT MESSAGE
+  // =========================================================================
+
+  /// Sends a structured booking confirmation message into the session's
+  /// chat thread immediately after payment succeeds.
+  ///
+  /// Format example:
+  /// ────────────────────────────────
+  /// 📋 New Booking Confirmed
+  ///
+  /// 📚 Session: Advanced Mathematics
+  /// 👤 Student: Lewin
+  ///
+  /// 🗓 Selected Options:
+  ///   • Mode: Online
+  ///   • Duration: 2hr
+  ///   • Payment: Before Session
+  ///
+  /// 💳 Amount Paid: ₦5,500.00
+  /// 🔖 Reference: PSK_1718123456789
+  /// ────────────────────────────────
+  ///
+  /// The chatId follows the convention: {sessionId}_{userId}
+  /// so the tutor's inbox can route it to the correct thread.
+  Future<void> _sendBookingConfirmationMessage({
+    required BookingItem item,
+    required String userId,
+    required double totalPaid,
+    required String ref,
+  }) async {
+    try {
+      final sessionId = item.sessionId;
+      if (sessionId == null) return;
+
+      // Build the chat thread ID — same convention used everywhere else.
+      final chatId = '${sessionId}_$userId';
+
+      // Resolve the student's display name.
+      final currentUser = UserController.instance.currentUser.value;
+      final studentName =
+          (currentUser?.username.isNotEmpty ?? false)
+              ? currentUser!.username
+              : 'Student';
+
+      // Parse selected attributes from the JSON stored on the BookingItem.
+      final attrsJson = item.selectedAttributes;
+      final Map<String, dynamic> attrs =
+          (attrsJson != null && attrsJson.isNotEmpty)
+              ? (jsonDecode(attrsJson) as Map<String, dynamic>)
+              : {};
+
+      // Build the attributes bullet list.
+      final attrLines = attrs.entries
+          .map((e) => '  • ${e.key}: ${e.value}')
+          .join('\n');
+
+      final sessionTitle = item.serviceTitle ?? 'Session';
+      final tutorName = item.providerName ?? 'Tutor';
+
+      final messageText = [
+        '📋 New Booking Confirmed',
+        '',
+        '📚 Session: $sessionTitle',
+        '👤 Student: $studentName',
+        if (tutorName.isNotEmpty) '🎓 Tutor: $tutorName',
+        '',
+        if (attrs.isNotEmpty) ...['🗓 Selected Options:', attrLines, ''],
+        '💳 Amount Paid: ₦${totalPaid.toStringAsFixed(2)}',
+        '🔖 Reference: $ref',
+      ].join('\n');
+
+      // Use TutoringController.sendMessage which saves to DataStore and
+      // syncs to AppSync, triggering the tutor's observeChat listener.
+      if (Get.isRegistered<TutoringController>()) {
+        await TutoringController.instance.sendMessage(chatId, messageText);
+        safePrint('✅ CheckoutController: booking confirmation sent to $chatId');
+      } else {
+        // Fallback: send directly via AppSync mutation if TutoringController
+        // isn't registered (e.g. during a cold-start checkout flow).
+        await _sendMessageDirectly(
+          chatId: chatId,
+          userId: userId,
+          senderName: studentName,
+          text: messageText,
+        );
+      }
+    } catch (e) {
+      // Non-fatal — payment already succeeded. Log and continue.
+      safePrint('⚠️ CheckoutController._sendBookingConfirmationMessage: $e');
+    }
+  }
+
+  /// Direct AppSync fallback for sending a chat message without DataStore.
+  Future<void> _sendMessageDirectly({
+    required String chatId,
+    required String userId,
+    required String senderName,
+    required String text,
+  }) async {
+    try {
+      const mutationDoc = r"""
+        mutation CreateChatMessage($input: CreateChatMessageInput!) {
+          createChatMessage(input: $input) {
+            id
+            sessionId
+            senderId
+            senderName
+            text
+            isVoice
+            createdAt
+            _version
+          }
+        }
+      """;
+
+      final now = DateTime.now().toUtc().toIso8601String();
+
+      await Amplify.API
+          .mutate(
+            request: GraphQLRequest<String>(
+              document: mutationDoc,
+              variables: {
+                'input': {
+                  'sessionId': chatId,
+                  'senderId': userId,
+                  'senderName': senderName,
+                  'text': text,
+                  'isVoice': false,
+                  'createdAt': now,
+                },
+              },
+            ),
+          )
+          .response;
+
+      safePrint('✅ CheckoutController: fallback message sent to $chatId');
+    } catch (e) {
+      safePrint('⚠️ CheckoutController._sendMessageDirectly: $e');
+    }
+  }
+
+  // =========================================================================
+  // UPDATE BOOKING ITEM PAID
+  // =========================================================================
+  Future<void> _updateBookingItemPaid(BookingItem item) async {
+    try {
+      const getDoc = r"""
+        query GetBookingItem($id: ID!) {
+          getBookingItem(id: $id) { id _version _deleted }
+        }
+      """;
+
+      final getResponse =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: getDoc,
+                  variables: {'id': item.id},
+                ),
+              )
+              .response;
+
+      int version = 1;
+      if (getResponse.errors.isEmpty && getResponse.data != null) {
+        final decoded = jsonDecode(getResponse.data!) as Map<String, dynamic>;
+        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+        final obj = root['getBookingItem'] as Map<String, dynamic>?;
+        if (obj == null || obj['_deleted'] == true) return;
+        final v = obj['_version'];
+        if (v != null) version = (v as num).toInt();
+      }
+
+      const mutationDoc = r"""
+        mutation UpdateBookingItem($input: UpdateBookingItemInput!) {
+          updateBookingItem(input: $input) {
+            id hasPaid _version
+          }
+        }
+      """;
+
+      final response =
+          await Amplify.API
+              .mutate(
+                request: GraphQLRequest<String>(
+                  document: mutationDoc,
+                  variables: {
+                    'input': {
+                      'id': item.id,
+                      '_version': version,
+                      'hasPaid': true,
+                      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+                    },
+                  },
+                ),
+              )
+              .response;
+
+      if (response.errors.isNotEmpty) {
+        safePrint(
+          '⚠️ CheckoutController._updateBookingItemPaid errors: ${response.errors}',
+        );
+      } else {
+        safePrint(
+          '✅ CheckoutController: BookingItem ${item.id} marked as paid',
+        );
+      }
+    } catch (e) {
+      safePrint('❌ CheckoutController._updateBookingItemPaid: $e');
+    }
+  }
+
+  // =========================================================================
+  // UPSERT USER SESSION PAYMENT
+  // =========================================================================
+  Future<void> _upsertUserSessionPayment({
+    required String userId,
+    required String sessionId,
+    required double total,
+    required String ref,
+  }) async {
+    try {
+      final now = DateTime.now().toUtc().toIso8601String();
+
+      const listDoc = r"""
+        query ListPaymentsByUser($userId: ID!, $limit: Int) {
+          listUserSessionPaymentsByUser(userId: $userId, limit: $limit) {
+            items {
+              id userId sessionId hasPaid _version _deleted
+            }
+          }
+        }
+      """;
+
+      final listResponse =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: listDoc,
+                  variables: {'userId': userId, 'limit': 100},
+                ),
+              )
+              .response;
+
+      String? existingId;
+      int existingVersion = 1;
+
+      if (listResponse.errors.isEmpty && listResponse.data != null) {
+        final decoded = jsonDecode(listResponse.data!) as Map<String, dynamic>;
+        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+        final listObj =
+            root['listUserSessionPaymentsByUser'] as Map<String, dynamic>?;
+        final items = listObj?['items'] as List<dynamic>? ?? [];
+
+        for (final raw in items) {
+          final item = raw as Map<String, dynamic>;
+          if (item['sessionId'] == sessionId && item['_deleted'] != true) {
+            existingId = item['id'] as String?;
+            final v = item['_version'];
+            if (v != null) existingVersion = (v as num).toInt();
+            break;
+          }
+        }
+      }
+
+      if (existingId != null) {
+        const updateDoc = r"""
+          mutation UpdateUserSessionPayment($input: UpdateUserSessionPaymentInput!) {
+            updateUserSessionPayment(input: $input) {
+              id hasPaid _version
+            }
+          }
+        """;
+
+        await Amplify.API
+            .mutate(
+              request: GraphQLRequest<String>(
+                document: updateDoc,
+                variables: {
+                  'input': {
+                    'id': existingId,
+                    '_version': existingVersion,
+                    'hasPaid': true,
+                    'paidAt': now,
+                    'amountPaid': total,
+                    'reference': ref,
+                    'updatedAt': now,
+                  },
+                },
+              ),
+            )
+            .response;
+
+        safePrint(
+          '✅ CheckoutController: UserSessionPayment $existingId updated',
+        );
+      } else {
+        const createDoc = r"""
+          mutation CreateUserSessionPayment($input: CreateUserSessionPaymentInput!) {
+            createUserSessionPayment(input: $input) {
+              id hasPaid _version
+            }
+          }
+        """;
+
+        await Amplify.API
+            .mutate(
+              request: GraphQLRequest<String>(
+                document: createDoc,
+                variables: {
+                  'input': {
+                    'userId': userId,
+                    'sessionId': sessionId,
+                    'hasPaid': true,
+                    'paidAt': now,
+                    'amountPaid': total,
+                    'reference': ref,
+                    'createdAt': now,
+                    'updatedAt': now,
+                  },
+                },
+              ),
+            )
+            .response;
+
+        safePrint('✅ CheckoutController: UserSessionPayment created');
+      }
+    } catch (e) {
+      safePrint('❌ CheckoutController._upsertUserSessionPayment: $e');
+    }
+  }
+
+  // =========================================================================
+  // PROCESSING DIALOG
+  // =========================================================================
   void _showProcessingDialog(
     BuildContext context,
     PaystackCardModel card,
@@ -167,7 +477,6 @@ class CheckoutController extends GetxController {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Paystack logo area
                     Container(
                       width: 56,
                       height: 56,
@@ -219,7 +528,9 @@ class CheckoutController extends GetxController {
     );
   }
 
-  // ── Success dialog ───────────────────────────────────────────────
+  // =========================================================================
+  // SUCCESS DIALOG
+  // =========================================================================
   void _showSuccessDialog(BuildContext context, double amount, String ref) {
     showDialog(
       context: context,
@@ -235,7 +546,6 @@ class CheckoutController extends GetxController {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Success checkmark
                   Container(
                     width: 68,
                     height: 68,

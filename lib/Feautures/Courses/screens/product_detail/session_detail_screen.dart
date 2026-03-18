@@ -1,6 +1,7 @@
 // lib/Features/Sessions/screens/session_detail_screen.dart
 // ignore_for_file: public_member_api_docs, use_build_context_synchronously
 
+import 'dart:convert';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -36,7 +37,8 @@ class SessionDetailScreen extends StatefulWidget {
   State<SessionDetailScreen> createState() => _SessionDetailScreenState();
 }
 
-class _SessionDetailScreenState extends State<SessionDetailScreen> {
+class _SessionDetailScreenState extends State<SessionDetailScreen>
+    with RouteAware {
   late final TutoringController _tutoringController;
   late final SessionCreationController _creationController;
 
@@ -44,6 +46,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   bool _loadingReviews = true;
   bool _isOwner = false;
   String? _currentUserId;
+
+  bool _hasPaid = false;
+  bool _checkingPayment = true;
+
+  static final RouteObserver<ModalRoute> _routeObserver =
+      RouteObserver<ModalRoute>();
+
+  bool get _isFreeSession => (widget.session.pricePerSession ?? 0) <= 0;
 
   @override
   void initState() {
@@ -57,13 +67,37 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _fetchCurrentUser();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    _recheckPayment();
+  }
+
+  Future<void> _recheckPayment() async {
+    if (_isFreeSession || _currentUserId == null || _isOwner) return;
+    setState(() => _checkingPayment = true);
+    await _checkPaymentStatus();
+  }
+
   Future<void> _fetchCurrentUser() async {
     try {
       final user = await Amplify.Auth.getCurrentUser();
       if (!mounted) return;
       setState(() => _currentUserId = user.userId);
+      await _checkPaymentStatus();
     } catch (_) {
-      if (mounted) setState(() => _currentUserId = null);
+      if (mounted) {
+        setState(() {
+          _currentUserId = null;
+          _checkingPayment = false;
+        });
+      }
     }
   }
 
@@ -72,11 +106,77 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     if (!mounted) return;
     setState(() {
       _isOwner = tutorId != null && tutorId == widget.session.tutor?.id;
+      if (_isOwner) _checkingPayment = false;
     });
+  }
+
+  Future<void> _checkPaymentStatus() async {
+    if (_isFreeSession) {
+      if (mounted) {
+        setState(() {
+          _hasPaid = true;
+          _checkingPayment = false;
+        });
+      }
+      return;
+    }
+
+    if (_isOwner || _currentUserId == null) {
+      if (mounted) setState(() => _checkingPayment = false);
+      return;
+    }
+
+    try {
+      const queryDoc = r"""
+        query ListPaymentsByUser($userId: ID!, $limit: Int) {
+          listUserSessionPaymentsByUser(userId: $userId, limit: $limit) {
+            items {
+              id
+              userId
+              sessionId
+              hasPaid
+              _deleted
+            }
+          }
+        }
+      """;
+
+      final response =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: queryDoc,
+                  variables: {'userId': _currentUserId!, 'limit': 200},
+                ),
+              )
+              .response;
+
+      if (response.errors.isEmpty && response.data != null) {
+        final decoded = jsonDecode(response.data!) as Map<String, dynamic>;
+        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+        final listObj =
+            root['listUserSessionPaymentsByUser'] as Map<String, dynamic>?;
+        final items = listObj?['items'] as List<dynamic>? ?? [];
+
+        final paid = items.any((raw) {
+          final item = raw as Map<String, dynamic>;
+          return item['sessionId'] == widget.session.id &&
+              item['hasPaid'] == true &&
+              item['_deleted'] != true;
+        });
+
+        if (mounted) setState(() => _hasPaid = paid);
+      }
+    } catch (e) {
+      safePrint('_checkPaymentStatus error: $e');
+    } finally {
+      if (mounted) setState(() => _checkingPayment = false);
+    }
   }
 
   @override
   void dispose() {
+    _routeObserver.unsubscribe(this);
     if (Get.isRegistered<TutoringController>(tag: widget.tag)) {
       Get.delete<TutoringController>(tag: widget.tag);
     }
@@ -127,10 +227,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         final bDate = b.createdAt?.getDateTimeInUtc() ?? DateTime(0);
         return bDate.compareTo(aDate);
       });
-      setState(() {
-        _reviews = reviews;
-        _loadingReviews = false;
-      });
+      if (mounted) {
+        setState(() {
+          _reviews = reviews;
+          _loadingReviews = false;
+        });
+      }
     } catch (e) {
       Get.snackbar(
         "Error",
@@ -139,7 +241,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         backgroundColor: Colors.redAccent,
         colorText: Colors.white,
       );
-      setState(() => _loadingReviews = false);
+      if (mounted) setState(() => _loadingReviews = false);
     }
   }
 
@@ -168,20 +270,66 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
   }
 
+  /// ✅ FIX: Read selectedAttributes from _creationController (SessionCreationController),
+  /// NOT from tutoringController.selectedAttributes.
+  ///
+  /// The TSessionAttributes widget calls _creationController.onAttributeSelected()
+  /// which updates _creationController.selectedAttributes. The tagged
+  /// TutoringController.selectedAttributes is a completely separate RxMap
+  /// that nothing writes to on this screen — it stays empty, so the booking
+  /// items were always created with null selectedAttributes and the checkout
+  /// message showed no options.
   Future<void> _bookSession(TutoringSession session) async {
     try {
       final tutoringController = Get.find<TutoringController>(tag: widget.tag);
+
+      // Read from SessionCreationController — this is where TSessionAttributes
+      // writes the user's selections (Mode, Duration, etc.).
+      final attrs = Map<String, String>.from(
+        _creationController.selectedAttributes,
+      );
+
       await tutoringController.addSessionToBooking(
         session,
-        selectedAttributes: Map<String, String>.from(
-          tutoringController.selectedAttributes,
-        ),
+        selectedAttributes: attrs.isEmpty ? null : attrs,
         quantity: 1,
+        controllerTag: widget.tag,
       );
-    } catch (_) {}
+    } catch (e) {
+      safePrint('❌ _bookSession error: $e');
+    }
   }
 
   Future<void> _openReviewScreen() async {
+    if (_isOwner) {
+      await Get.to(() => SessionReviewScreen(session: widget.session));
+      _fetchReviews();
+      return;
+    }
+
+    if (_checkingPayment) {
+      Get.snackbar(
+        'Please wait',
+        'Verifying your access…',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+
+    if (!_isFreeSession && !_hasPaid) {
+      Get.snackbar(
+        'Payment Required',
+        'Book and complete payment to write a review.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange.shade700,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+        icon: const Icon(Iconsax.lock_1, color: Colors.white, size: 18),
+      );
+      return;
+    }
+
     await Get.to(() => SessionReviewScreen(session: widget.session));
     _fetchReviews();
   }
@@ -193,18 +341,18 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final colorScheme = theme.colorScheme;
     TDeviceUtils.getScreenWidth(context);
 
+    final canReview = _isOwner || _isFreeSession || _hasPaid;
+
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: Stack(
         children: [
-          // ── Scrollable content ───────────────────────────────────
           SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 96),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TSessionImageSlider(session: session),
-
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: TSizes.defaultSpace,
@@ -219,15 +367,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                         tag: widget.tag,
                       ),
                       const SizedBox(height: TSizes.spaceBtwItems),
-
                       TSessionAttributes(session: session),
                       const SizedBox(height: TSizes.spaceBtwSections / 2),
 
-                      // ── Action row (Tutor Profile + Chat) ──────────
                       _ActionRow(
                         isOwner: _isOwner,
+                        isFreeSession: _isFreeSession,
                         currentUserId: _currentUserId,
                         session: session,
+                        hasPaid: _hasPaid,
+                        checking: _checkingPayment,
                         onTutorTap: () async {
                           final tutor = await _getTutorOrFetch(session);
                           if (tutor != null) {
@@ -277,34 +426,101 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           const _SectionLabel(title: "Reviews"),
-                          TextButton.icon(
-                            onPressed: _openReviewScreen,
-                            icon: Icon(
-                              Iconsax.star,
-                              size: 14,
-                              color: colorScheme.primary,
-                            ),
-                            label: Text(
-                              "Write a review",
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: colorScheme.primary,
+                          Tooltip(
+                            message:
+                                (!canReview && !_checkingPayment)
+                                    ? 'Pay to unlock reviews'
+                                    : '',
+                            child: TextButton.icon(
+                              onPressed: _openReviewScreen,
+                              icon: Icon(
+                                canReview ? Iconsax.star : Iconsax.lock_1,
+                                size: 14,
+                                color:
+                                    canReview
+                                        ? colorScheme.primary
+                                        : colorScheme.onSurface.withValues(
+                                          alpha: 0.35,
+                                        ),
                               ),
-                            ),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
+                              label: Text(
+                                canReview
+                                    ? "Write a review"
+                                    : _checkingPayment
+                                    ? "Checking…"
+                                    : "Write a review 🔒",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      canReview
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurface.withValues(
+                                            alpha: 0.35,
+                                          ),
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
                               ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: TSizes.spaceBtwItems),
+
+                      if (!_isOwner &&
+                          !_isFreeSession &&
+                          !_checkingPayment &&
+                          !_hasPaid) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: colorScheme.outline.withValues(
+                                alpha: 0.15,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Iconsax.lock_1,
+                                size: 15,
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.4,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Complete payment to write a review for this session.',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.55,
+                                    ),
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: TSizes.spaceBtwItems),
+                      ],
 
                       if (_loadingReviews)
                         const Center(child: CircularProgressIndicator())
@@ -359,7 +575,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             ),
           ),
 
-          // ── Sticky Book Session bar ──────────────────────────────
           Positioned(
             bottom: 0,
             left: 0,
@@ -418,8 +633,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   }
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
-
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.title});
   final String title;
@@ -430,69 +643,29 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ── Action row — Tutor Profile + Chat (with payment gate) ────────────────────
-
-class _ActionRow extends StatefulWidget {
+class _ActionRow extends StatelessWidget {
   const _ActionRow({
     required this.isOwner,
+    required this.isFreeSession,
     required this.currentUserId,
     required this.session,
+    required this.hasPaid,
+    required this.checking,
     required this.onTutorTap,
   });
 
   final bool isOwner;
+  final bool isFreeSession;
   final String? currentUserId;
   final TutoringSession session;
+  final bool hasPaid;
+  final bool checking;
   final VoidCallback onTutorTap;
-
-  @override
-  State<_ActionRow> createState() => _ActionRowState();
-}
-
-class _ActionRowState extends State<_ActionRow> {
-  bool _hasPaid = false;
-  bool _checking = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkPaymentStatus();
-  }
-
-  Future<void> _checkPaymentStatus() async {
-    // Owners (tutors) always have chat access — skip query
-    if (widget.isOwner || widget.currentUserId == null) {
-      if (mounted) setState(() => _checking = false);
-      return;
-    }
-
-    try {
-      final results = await Amplify.DataStore.query(
-        UserSessionPayment.classType,
-        where: UserSessionPayment.USERID
-            .eq(widget.currentUserId!)
-            .and(UserSessionPayment.SESSIONID.eq(widget.session.id))
-            .and(UserSessionPayment.HASPAID.eq(true)),
-      );
-
-      if (mounted) {
-        setState(() {
-          _hasPaid = results.isNotEmpty;
-          _checking = false;
-        });
-      }
-    } catch (e) {
-      safePrint('_ActionRow: payment check error – $e');
-      if (mounted) setState(() => _checking = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
-    // Chat is enabled if: viewer is the tutor (owner) OR student has paid
-    final chatEnabled = widget.isOwner || _hasPaid;
+    final chatEnabled = isOwner || isFreeSession || hasPaid;
 
     final activeButtonStyle = OutlinedButton.styleFrom(
       padding: const EdgeInsets.symmetric(vertical: 13),
@@ -515,22 +688,19 @@ class _ActionRowState extends State<_ActionRow> {
       children: [
         Row(
           children: [
-            // ── Tutor Profile ──────────────────────────────────────
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: widget.onTutorTap,
+                onPressed: onTutorTap,
                 icon: const Icon(Iconsax.profile_circle, size: 17),
                 label: const Text("Tutor Profile"),
                 style: activeButtonStyle,
               ),
             ),
             const SizedBox(width: TSizes.spaceBtwItems),
-
-            // ── Chat (gated) ───────────────────────────────────────
             Expanded(
               child: Tooltip(
                 message:
-                    (!chatEnabled && !_checking)
+                    (!chatEnabled && !checking)
                         ? 'Book & pay to unlock chat'
                         : '',
                 preferBelow: false,
@@ -538,31 +708,29 @@ class _ActionRowState extends State<_ActionRow> {
                   onPressed:
                       chatEnabled
                           ? () {
-                            if (widget.isOwner) {
+                            if (isOwner) {
                               Get.to(() => const InboxScreen());
                             } else {
-                              if (widget.currentUserId == null) return;
+                              if (currentUserId == null) return;
                               Get.to(
                                 () => ChatScreen(
-                                  sessionId:
-                                      '${widget.session.id}_${widget.currentUserId}',
-                                  sessionTitle: widget.session.title,
-                                  otherUserName:
-                                      widget.session.tutor?.name ?? 'Tutor',
+                                  sessionId: '${session.id}_$currentUserId',
+                                  sessionTitle: session.title,
+                                  otherUserName: session.tutor?.name ?? 'Tutor',
                                 ),
                               );
                             }
                           }
                           : null,
                   icon:
-                      _checking
+                      checking
                           ? const SizedBox(
                             width: 14,
                             height: 14,
                             child: CircularProgressIndicator(strokeWidth: 1.5),
                           )
                           : Icon(
-                            widget.isOwner
+                            isOwner
                                 ? Iconsax.message_text
                                 : chatEnabled
                                 ? Iconsax.message
@@ -570,9 +738,9 @@ class _ActionRowState extends State<_ActionRow> {
                             size: 17,
                           ),
                   label: Text(
-                    widget.isOwner
+                    isOwner
                         ? 'Inbox'
-                        : _checking
+                        : checking
                         ? 'Checking…'
                         : chatEnabled
                         ? 'Chat'
@@ -585,8 +753,7 @@ class _ActionRowState extends State<_ActionRow> {
           ],
         ),
 
-        // ── "Pay to unlock" hint banner ────────────────────────────
-        if (!widget.isOwner && !_checking && !_hasPaid) ...[
+        if (!isOwner && !isFreeSession && !checking && !hasPaid) ...[
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
@@ -608,7 +775,7 @@ class _ActionRowState extends State<_ActionRow> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Book and complete payment to unlock chat with this tutor.',
+                    'Book and complete payment to unlock chat and reviews.',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: colorScheme.onSurface.withValues(alpha: 0.65),
                       height: 1.4,
@@ -623,8 +790,6 @@ class _ActionRowState extends State<_ActionRow> {
     );
   }
 }
-
-// ── Empty reviews ─────────────────────────────────────────────────────────────
 
 class _EmptyReviews extends StatelessWidget {
   const _EmptyReviews({required this.theme, required this.colorScheme});
@@ -667,8 +832,6 @@ class _EmptyReviews extends StatelessWidget {
     );
   }
 }
-
-// ── Review card ───────────────────────────────────────────────────────────────
 
 class _ReviewCard extends StatelessWidget {
   const _ReviewCard({
