@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/constants/colors.dart';
-import '../../../../utils/helpers/helper_functions.dart';
+import '../../../common/widgets/images/t_user_avatar.dart';
 import '../../../common/widgets/texts/t_product_title_text.dart';
 import '../../../common/widgets/texts/t_product_price_text.dart';
 import '../../../models/ModelProvider.dart';
@@ -16,10 +16,6 @@ class BookingItemStyle01 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rawUrl = item.serviceImage ?? '';
-    final cleaned = THelperFunctions.normalizeImagePath(rawUrl);
-    final isNetwork = THelperFunctions.isNetworkImagePath(rawUrl);
-
     final bookingDateTime =
         item.bookingDate?.getDateTimeInUtc().toLocal() ?? DateTime.now();
     final formattedDate = DateFormat.yMMMd().format(bookingDateTime);
@@ -38,24 +34,12 @@ class BookingItemStyle01 extends StatelessWidget {
             CrossAxisAlignment.center, // center everything vertically
         children: [
           // Avatar/Image
-          CircleAvatar(
+          TUserAvatar(
+            imageKeyOrUrl: item.providerImage,
             radius: 30,
+            fallbackInitial: item.providerName ?? '?',
             backgroundColor: TColors.primary,
-            backgroundImage: isNetwork ? NetworkImage(cleaned) : null,
-            child:
-                (!isNetwork || cleaned.isEmpty)
-                    ? Text(
-                      (item.providerName?.isNotEmpty == true
-                              ? item.providerName![0]
-                              : '?')
-                          .toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                    : null,
+            foregroundColor: Colors.white,
           ),
 
           const SizedBox(

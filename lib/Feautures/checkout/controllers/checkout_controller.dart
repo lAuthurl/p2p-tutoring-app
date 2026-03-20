@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:gal/gal.dart';
 import 'dart:io';
 
 import '../../../../models/ModelProvider.dart';
@@ -165,8 +166,6 @@ class CheckoutController extends GetxController {
   // QR CODE HELPERS
   // =========================================================================
 
-  /// Returns true when the selected attributes indicate an offline/physical
-  /// session — checks Mode, Location, or Type keys.
   bool _isPhysicalSession(Map<String, dynamic> attrs) {
     final mode =
         (attrs['Mode'] ?? attrs['mode'] ?? '').toString().toLowerCase();
@@ -181,8 +180,6 @@ class CheckoutController extends GetxController {
         type.contains('physical');
   }
 
-  /// Builds the QR payload — a structured JSON string containing all session
-  /// details needed for verification at the physical meeting point.
   String _buildQrPayload({
     required String sessionId,
     required String bookingRef,
@@ -206,112 +203,37 @@ class CheckoutController extends GetxController {
     return jsonEncode(payload);
   }
 
-  /// Renders the QR card to a PNG file using dart:ui PictureRecorder.
-  ///
-  /// This approach has zero widget-tree dependency — it draws directly onto
-  /// a Canvas, so it never crashes from missing BuildContext, InheritedTheme,
-  /// or off-screen rendering issues. No screenshot package needed.
+  // =========================================================================
+  // ✅ FIXED: renders a clean centered QR code on a white card — no clutter
+  // =========================================================================
   Future<File?> _renderQrToFile({
     required String qrData,
-    required String sessionTitle,
     required String ref,
-    required String studentName,
-    required String tutorName,
-    required Map<String, dynamic> attrs,
-    required double amountPaid,
   }) async {
     try {
-      const double w = 900;
+      const double cardSize = 900;
       const double pixelRatio = 3.0;
+      const double qrSize = 600;
+      const double padding = (cardSize - qrSize) / 2;
+      const double cornerRadius = 48.0;
 
-      // Build the attribute lines for display
-      final attrEntries = attrs.entries.toList();
-
-      // ── Measure total height dynamically ───────────────────────────────
-      // Header=120, QR=300, divider=40, details rows, footer=60, padding
-      const double headerH = 120;
-      const double qrH = 300;
-      const double dividerH = 48;
-      const double rowH = 44;
-      const double footerH = 56;
-      const double vPad = 28;
-
-      // rows: student + tutor + attrs + paid
-      final int rowCount = 2 + attrEntries.length + 1;
-      final double detailH = rowCount * rowH + (rowCount - 1) * 10;
-      final double totalH =
-          headerH + qrH + dividerH + detailH + footerH + vPad * 3;
-
-      // ── Paint onto canvas ───────────────────────────────────────────────
       final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, totalH));
-
-      final Paint bgPaint = Paint()..color = Colors.white;
-      final RRect cardRRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, w, totalH),
-        const Radius.circular(36),
-      );
-      canvas.drawRRect(cardRRect, bgPaint);
-
-      // ── Header gradient ─────────────────────────────────────────────────
-      final headerRect = Rect.fromLTWH(0, 0, w, headerH);
-      final headerRRect = RRect.fromRectAndCorners(
-        headerRect,
-        topLeft: const Radius.circular(36),
-        topRight: const Radius.circular(36),
-      );
-      final headerPaint =
-          Paint()
-            ..shader = const LinearGradient(
-              colors: [Color(0xFF0BA4DB), Color(0xFF0886B8)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ).createShader(headerRect);
-      canvas.drawRRect(headerRRect, headerPaint);
-
-      // Header text — "TutorLink"
-      _drawText(
-        canvas,
-        'TutorLink',
-        const Offset(28, 22),
-        fontSize: 28,
-        color: Colors.white,
-        fontWeight: FontWeight.w800,
+      final canvas = Canvas(
+        recorder,
+        const Rect.fromLTWH(0, 0, cardSize, cardSize),
       );
 
-      // "● Physical" badge
-      final badgePaint = Paint()..color = const Color(0xFF00C48C);
+      // ── White card background ──────────────────────────────────────────
+      final bgPaint = Paint()..color = Colors.white;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          const Rect.fromLTWH(720, 18, 160, 36),
-          const Radius.circular(20),
+          const Rect.fromLTWH(0, 0, cardSize, cardSize),
+          const Radius.circular(cornerRadius),
         ),
-        badgePaint,
-      );
-      _drawText(
-        canvas,
-        '● Physical',
-        const Offset(730, 24),
-        fontSize: 18,
-        color: Colors.white,
-        fontWeight: FontWeight.w700,
+        bgPaint,
       );
 
-      // Session title
-      _drawText(
-        canvas,
-        sessionTitle.length > 40
-            ? '${sessionTitle.substring(0, 40)}…'
-            : sessionTitle,
-        const Offset(28, 68),
-        fontSize: 26,
-        color: Colors.white,
-        fontWeight: FontWeight.w700,
-      );
-
-      // ── QR code ─────────────────────────────────────────────────────────
-      // QrPainter draws directly onto the canvas — no widget tree needed.
-      // color/emptyColor are deprecated; use eyeStyle + dataModuleStyle instead.
+      // ── Centered QR code ───────────────────────────────────────────────
       final qrPainter = QrPainter(
         data: qrData,
         version: QrVersions.auto,
@@ -324,139 +246,18 @@ class CheckoutController extends GetxController {
           dataModuleShape: QrDataModuleShape.square,
           color: Color(0xFF1A1A2E),
         ),
-        // emptyColor removed — background is already white from the card paint
       );
-      const double qrSize = 260;
-      final double qrX = (w - qrSize) / 2;
-      // qrY is runtime-computed so must be final, not const
-      final double qrY = headerH + 20;
 
       canvas.save();
-      canvas.translate(qrX, qrY);
+      canvas.translate(padding, padding);
       qrPainter.paint(canvas, const Size(qrSize, qrSize));
       canvas.restore();
 
-      // ── Divider + label ─────────────────────────────────────────────────
-      // dividerY is a runtime value — all Offset() uses must be non-const
-      final double dividerY = qrY + qrSize + 16;
-      final dividerPaint =
-          Paint()
-            ..color = const Color(0xFFE0E0E0)
-            ..strokeWidth = 1.5;
-      canvas.drawLine(
-        Offset(24, dividerY + 12),
-        Offset(300, dividerY + 12),
-        dividerPaint,
-      );
-      canvas.drawLine(
-        Offset(600, dividerY + 12),
-        Offset(w - 24, dividerY + 12),
-        dividerPaint,
-      );
-      _drawText(
-        canvas,
-        'SCAN TO VERIFY',
-        Offset(320, dividerY + 2), // non-const — dividerY is runtime
-        fontSize: 16,
-        color: const Color(0xFFAAAAAA),
-        fontWeight: FontWeight.w700,
-        letterSpacing: 2,
-      );
-
-      // ── Detail rows ─────────────────────────────────────────────────────
-      double rowY = dividerY + dividerH;
-
-      void drawRow(IconData icon, String label, String value, Color color) {
-        // Icon chip background
-        final chipPaint = Paint()..color = color.withValues(alpha: 0.12);
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(24, rowY, 48, 36),
-            const Radius.circular(10),
-          ),
-          chipPaint,
-        );
-        // Label
-        _drawText(
-          canvas,
-          '$label:',
-          Offset(82, rowY + 6),
-          fontSize: 20,
-          color: const Color(0xFF999999),
-          fontWeight: FontWeight.w500,
-        );
-        // Value
-        _drawText(
-          canvas,
-          value.length > 36 ? '${value.substring(0, 36)}…' : value,
-          Offset(220, rowY + 6),
-          fontSize: 20,
-          color: const Color(0xFF1A1A2E),
-          fontWeight: FontWeight.w700,
-        );
-        rowY += rowH + 10;
-      }
-
-      drawRow(
-        Icons.person_rounded,
-        'Student',
-        studentName,
-        const Color(0xFF0BA4DB),
-      );
-      drawRow(
-        Icons.school_rounded,
-        'Tutor',
-        tutorName,
-        const Color(0xFF7C3AED),
-      );
-      for (final e in attrEntries) {
-        drawRow(
-          Icons.tune_rounded,
-          e.key,
-          e.value.toString(),
-          const Color(0xFFF59E0B),
-        );
-      }
-      drawRow(
-        Icons.payments_rounded,
-        'Paid',
-        '₦${amountPaid.toStringAsFixed(2)}',
-        const Color(0xFF00C48C),
-      );
-
-      // ── Footer ──────────────────────────────────────────────────────────
-      final double footerY = totalH - footerH;
-      final footerBgPaint = Paint()..color = const Color(0xFFF8F8F8);
-      canvas.drawRRect(
-        RRect.fromRectAndCorners(
-          Rect.fromLTWH(0, footerY, w, footerH),
-          bottomLeft: const Radius.circular(36),
-          bottomRight: const Radius.circular(36),
-        ),
-        footerBgPaint,
-      );
-      _drawText(
-        canvas,
-        'Ref: $ref',
-        Offset(24, footerY + 16),
-        fontSize: 18,
-        color: const Color(0xFFAAAAAA),
-        fontWeight: FontWeight.w600,
-      );
-      _drawText(
-        canvas,
-        'tutorlink.app',
-        Offset(w - 200, footerY + 16),
-        fontSize: 18,
-        color: const Color(0xFF0BA4DB),
-        fontWeight: FontWeight.w600,
-      );
-
-      // ── Finalise image ───────────────────────────────────────────────────
+      // ── Finalise ───────────────────────────────────────────────────────
       final picture = recorder.endRecording();
       final img = await picture.toImage(
-        (w * pixelRatio).toInt(),
-        (totalH * pixelRatio).toInt(),
+        (cardSize * pixelRatio).toInt(),
+        (cardSize * pixelRatio).toInt(),
       );
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return null;
@@ -473,62 +274,25 @@ class CheckoutController extends GetxController {
     }
   }
 
-  /// Draws text onto a Canvas at [offset] with the given style parameters.
-  void _drawText(
-    Canvas canvas,
-    String text,
-    Offset offset, {
-    required double fontSize,
-    required Color color,
-    FontWeight fontWeight = FontWeight.w400,
-    double letterSpacing = 0,
-  }) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          fontSize: fontSize,
-          color: color,
-          fontWeight: fontWeight,
-          letterSpacing: letterSpacing,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, offset);
-  }
-
-  /// Sends the QR image to both tutor and student chat threads.
-  /// The image is saved to device storage and can be downloaded/shared.
+  // =========================================================================
+  // ✅ FIXED: QR sent only to the purchasing student's chat thread
+  // =========================================================================
   Future<void> _sendQrCode({
     required String sessionId,
     required String studentUserId,
-    required String tutorUserId,
     required String qrData,
     required String sessionTitle,
     required String ref,
-    required String studentName,
-    required String tutorName,
-    required Map<String, dynamic> attrs,
-    required double amountPaid,
   }) async {
     try {
-      final qrFile = await _renderQrToFile(
-        qrData: qrData,
-        sessionTitle: sessionTitle,
-        ref: ref,
-        studentName: studentName,
-        tutorName: tutorName,
-        attrs: attrs,
-        amountPaid: amountPaid,
-      );
+      final qrFile = await _renderQrToFile(qrData: qrData, ref: ref);
 
       if (qrFile == null) {
-        safePrint('⚠️ _sendQrCode: QR render failed, skipping QR message');
+        safePrint('⚠️ _sendQrCode: QR render failed, skipping');
         return;
       }
 
-      // Show download/share bottom sheet to student
+      // ✅ Show download sheet ONLY to the student (purchaser)
       if (Get.context != null) {
         await _showQrDownloadSheet(
           context: Get.context!,
@@ -538,36 +302,29 @@ class CheckoutController extends GetxController {
         );
       }
 
-      // Send QR notice message in both chat threads
-      // Student thread: {sessionId}_{studentUserId}
-      // Tutor thread: {sessionId}_{tutorUserId} if different
+      // ✅ Send QR notice ONLY to student's own chat thread
       final studentChatId = '${sessionId}_$studentUserId';
-      final tutorChatId = '${sessionId}_$tutorUserId';
-
       const qrNotice =
           '📍 Physical Session QR Code\n\n'
           'A verification QR code has been generated for this booking. '
-          'Both you and your tutor have a copy. Show it at the start of '
-          'your session for instant verification.\n\n'
+          'Show it at the start of your session for instant verification.\n\n'
           '🔒 Ref: ';
 
-      final fullNotice = '$qrNotice$ref';
-
       if (Get.isRegistered<TutoringController>()) {
-        final tc = TutoringController.instance;
-        await tc.sendMessage(studentChatId, fullNotice);
-        if (tutorChatId != studentChatId) {
-          await tc.sendMessage(tutorChatId, fullNotice);
-        }
+        await TutoringController.instance.sendMessage(
+          studentChatId,
+          '$qrNotice$ref',
+        );
       }
 
-      safePrint('✅ QR code notice sent for session $sessionId');
+      safePrint(
+        '✅ QR code notice sent to student $studentUserId for session $sessionId',
+      );
     } catch (e) {
       safePrint('⚠️ _sendQrCode error: $e');
     }
   }
 
-  /// Bottom sheet shown to the student with download + share options.
   Future<void> _showQrDownloadSheet({
     required BuildContext context,
     required File qrFile,
@@ -601,6 +358,7 @@ class CheckoutController extends GetxController {
       final sessionId = item.sessionId;
       if (sessionId == null) return;
 
+      // ✅ Student-only chat thread
       final chatId = '${sessionId}_$userId';
 
       final currentUser = UserController.instance.currentUser.value;
@@ -636,7 +394,6 @@ class CheckoutController extends GetxController {
 
       if (Get.isRegistered<TutoringController>()) {
         await TutoringController.instance.sendMessage(chatId, messageText);
-        safePrint('✅ CheckoutController: booking confirmation sent to $chatId');
       } else {
         await _sendMessageDirectly(
           chatId: chatId,
@@ -646,22 +403,11 @@ class CheckoutController extends GetxController {
         );
       }
 
-      // ✅ If physical/offline — generate and send QR to both parties
-      if (_isPhysicalSession(attrs)) {
-        safePrint('📍 Physical session detected — generating QR code');
+      safePrint('✅ CheckoutController: booking confirmation sent to $chatId');
 
-        // Resolve the tutor's userId so we can address their chat thread
-        String tutorUserId = userId; // fallback to student if unresolvable
-        try {
-          if (Get.isRegistered<HomeController>()) {
-            final sessions = HomeController.instance.allSessions;
-            final match = sessions.firstWhere(
-              (s) => s.id == sessionId,
-              orElse: () => sessions.first,
-            );
-            tutorUserId = match.tutor?.id ?? userId;
-          }
-        } catch (_) {}
+      // ✅ Physical session — generate QR for student only
+      if (_isPhysicalSession(attrs)) {
+        safePrint('📍 Physical session — generating QR for student');
 
         final qrData = _buildQrPayload(
           sessionId: sessionId,
@@ -676,14 +422,9 @@ class CheckoutController extends GetxController {
         await _sendQrCode(
           sessionId: sessionId,
           studentUserId: userId,
-          tutorUserId: tutorUserId,
           qrData: qrData,
           sessionTitle: sessionTitle,
           ref: ref,
-          studentName: studentName,
-          tutorName: tutorName,
-          attrs: attrs,
-          amountPaid: totalPaid,
         );
       }
     } catch (e) {
@@ -1081,9 +822,9 @@ class CheckoutController extends GetxController {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
-                        Get.back(); // close dialog
-                        Get.back(); // back from checkout
-                        Get.back(); // back from booking review
+                        Get.back();
+                        Get.back();
+                        Get.back();
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _paystackBlue,
@@ -1195,7 +936,7 @@ class _QrDownloadSheet extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Show this at your session for instant\nverification. Your tutor has one too.',
+            'Show this at your session for instant\nverification.',
             style: tt.bodyMedium?.copyWith(
               color: cs.onSurface.withValues(alpha: 0.55),
               height: 1.5,
@@ -1228,11 +969,11 @@ class _QrDownloadSheet extends StatelessWidget {
           // ── Action buttons ───────────────────────────────────────
           Row(
             children: [
-              // Save to device
+              // ✅ FIXED: Save uses gal package to save to gallery
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    await _saveToGallery(context, qrFile);
+                    await _saveToGallery(context);
                   },
                   icon: const Icon(Icons.download_rounded, size: 18),
                   label: const Text(
@@ -1258,7 +999,7 @@ class _QrDownloadSheet extends StatelessWidget {
                       ShareParams(
                         files: [XFile(qrFile.path)],
                         text:
-                            'My TutorLink session QR code — $sessionTitle (Ref: $ref)',
+                            'My TutorLink session QR — $sessionTitle (Ref: $ref)',
                       ),
                     );
                   },
@@ -1297,21 +1038,17 @@ class _QrDownloadSheet extends StatelessWidget {
     );
   }
 
-  Future<void> _saveToGallery(BuildContext context, File file) async {
+  // ✅ FIXED: uses gal to properly save PNG to device photo gallery
+  Future<void> _saveToGallery(BuildContext context) async {
     try {
-      // Use image_gallery_saver or gal package — whichever is in your pubspec.
-      // Example with the `gal` package:
-      // await Gal.putImage(file.path);
-      //
-      // If you use image_gallery_saver:
-      // await ImageGallerySaver.saveFile(file.path);
-      //
-      // For now we copy to downloads-equivalent using path_provider:
-      final dir = await getApplicationDocumentsDirectory();
-      final dest = File(
-        '${dir.path}/TutorLink_QR_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.copy(dest.path);
+      // Request permission first
+      final hasAccess = await Gal.hasAccess(toAlbum: true);
+      if (!hasAccess) {
+        await Gal.requestAccess(toAlbum: true);
+      }
+
+      // Save the PNG file to the gallery
+      await Gal.putImage(qrFile.path, album: 'TutorLink');
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1320,7 +1057,7 @@ class _QrDownloadSheet extends StatelessWidget {
               children: [
                 Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
                 SizedBox(width: 8),
-                Text('QR code saved to your device'),
+                Text('QR code saved to your gallery'),
               ],
             ),
             backgroundColor: const Color(0xFF00C48C),
@@ -1333,6 +1070,18 @@ class _QrDownloadSheet extends StatelessWidget {
       }
     } catch (e) {
       safePrint('⚠️ _saveToGallery error: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Could not save image. Please try again.'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
     }
   }
 }

@@ -3,6 +3,7 @@ import 'package:line_awesome_flutter/line_awesome_flutter.dart';
 
 import '../../../../../../utils/constants/colors.dart';
 import '../../../../../../personalization/controllers/user_controller.dart';
+import '../../../../common/widgets/images/t_network_image.dart';
 
 class ImageWithIcon extends StatelessWidget {
   final double size;
@@ -32,7 +33,7 @@ class ImageWithIcon extends StatelessWidget {
             borderRadius: BorderRadius.circular(size / 2),
             child:
                 imageUrl != null && imageUrl.isNotEmpty
-                    ? Image.network(imageUrl, fit: BoxFit.cover)
+                    ? TNetworkImage(imageKeyOrUrl: imageUrl, fit: BoxFit.cover)
                     : Container(
                       color: TColors.primary,
                       child: Center(

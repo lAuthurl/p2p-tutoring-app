@@ -179,11 +179,9 @@ class SessionCreationController extends GetxController {
     }
 
     if (!cardCtrl.hasCard) {
-      // ✅ Show polished bottom sheet instead of plain AlertDialog
       final shouldAdd = await _showCardRequiredSheet();
       if (shouldAdd != true) return;
 
-      // Navigate to card entry screen and wait for return
       await Get.to(() => const PaystackCardEntryScreen());
 
       if (!cardCtrl.hasCard) {
@@ -196,8 +194,6 @@ class SessionCreationController extends GetxController {
         return;
       }
 
-      // ✅ Card just added — go to home and create session from there
-      // so the tutor sees their new session land on the home screen live.
       await _createSessionData();
       Get.offAllNamed(TRoutes.mainDashboard);
       Get.snackbar(
@@ -233,8 +229,6 @@ class SessionCreationController extends GetxController {
 
   // ── Card Required Bottom Sheet ───────────────────────────────────
 
-  /// Polished modal bottom sheet that explains WHY a card is needed.
-  /// Returns true if the tutor taps "Add Card", false/null on dismiss.
   Future<bool?> _showCardRequiredSheet() {
     final context = Get.context;
     if (context == null) return Future.value(false);
@@ -249,8 +243,6 @@ class SessionCreationController extends GetxController {
 
   // ── Core session creation logic ──────────────────────────────────
 
-  /// Extracted so it can be called from both the normal flow and the
-  /// post-card-entry flow without duplicating code.
   Future<void> _createSessionData() async {
     if (!formKey.currentState!.validate()) {
       throw Exception('Form validation failed');
@@ -334,7 +326,10 @@ mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
         await Amplify.DataStore.save(attr);
       }
 
-      // Optimistic UI update
+      // ✅ Optimistic UI update — inserts the new session into allSessions
+      // then triggers _applyFilters() so featured/popular/filtered/recent
+      // lists all recompute and the home grid shows the new session
+      // immediately without waiting for AppSync sync.
       if (Get.isRegistered<HomeController>()) {
         final subjects = await Amplify.DataStore.query(
           Subject.classType,
@@ -351,13 +346,19 @@ mutation CreateTutoringSession(\$input: CreateTutoringSessionInput!) {
           subject: subjects.isNotEmpty ? subjects.first : null,
           maxStudents: maxStudentsVal,
           enrolledCount: 0,
+          // ✅ Set createdAt so newest-first sort puts it at the top
+          createdAt: TemporalDateTime.now(),
         );
 
         final home = Get.find<HomeController>();
         home.warmSessionSubjectMap(sessionId, capturedSubjectId);
         home.warmTutorCache(tutor);
-        home.allSessions.insert(0, optimisticSession);
-        home.recentSessions.insert(0, optimisticSession);
+
+        // ✅ Add to allSessions — the ever() listener on allSessions
+        //    in HomeController.onInit() automatically calls _applyFilters()
+        //    which rebuilds filteredSessions, featuredSessions,
+        //    popularSessions, and recentSessions in correct sorted order.
+        home.allSessions.add(optimisticSession);
       }
     } finally {
       isUploading.value = false;

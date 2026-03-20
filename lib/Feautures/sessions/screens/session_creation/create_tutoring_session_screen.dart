@@ -7,6 +7,7 @@ import 'package:line_awesome_flutter/line_awesome_flutter.dart';
 
 import '../../../../../common/widgets/buttons/primary_button.dart';
 import '../../../../../utils/constants/sizes.dart';
+import '../../../../common/widgets/images/t_network_image.dart';
 import '../../../dashboard/Home/controllers/subject_controller.dart';
 import '../../controllers/session_creation_controller.dart';
 
@@ -70,8 +71,8 @@ class CreateTutoringSessionScreen extends StatelessWidget {
                         child: ClipOval(
                           child:
                               thumbnailUrl != null
-                                  ? Image.network(
-                                    thumbnailUrl,
+                                  ? TNetworkImage(
+                                    imageKeyOrUrl: thumbnailUrl,
                                     fit: BoxFit.cover,
                                   )
                                   : Container(

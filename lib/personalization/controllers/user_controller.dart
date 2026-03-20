@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -9,6 +11,7 @@ import 'package:p2p_tutoring_app/common/widgets/loaders/circular_loader.dart';
 import '../../../models/ModelProvider.dart';
 import '../../Feautures/booking/controllers/booking_controller.dart';
 import '../../Feautures/sessions/controllers/tutoring_controller.dart';
+import '../../Feautures/dashboard/Home/controllers/home_controller.dart';
 import '../../Feautures/dashboard/Home/controllers/subject_controller.dart';
 import '../../data/repository/authentication_repository/authentication_repository.dart';
 import '../../utils/helpers/network_manager.dart';
@@ -48,15 +51,12 @@ class UserController extends GetxController {
 
   // ---------------------------------------------------------------------------
   // FORM KEYS
-  // ✅ Recreated fresh each time the controller is instantiated, preventing
-  //    "Multiple widgets used the same GlobalKey" after re-login.
   // ---------------------------------------------------------------------------
   late GlobalKey<FormState> updateUserProfileFormKey;
   late GlobalKey<FormState> reAuthFormKey;
 
   // ---------------------------------------------------------------------------
   // TEXT CONTROLLERS
-  // ✅ All created fresh in onInit — never reused after dispose.
   // ---------------------------------------------------------------------------
   late TextEditingController verifyEmail;
   late TextEditingController verifyPassword;
@@ -101,6 +101,43 @@ class UserController extends GetxController {
     try {
       controller.dispose();
     } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // ✅ STATIC: Resolve a fresh pre-signed S3 URL from a stored key or
+  // an old expired pre-signed URL. Call this at display time — never
+  // cache the result long-term since URLs expire after 15 minutes.
+  // ---------------------------------------------------------------------------
+  static Future<String?> resolveS3Url(String? keyOrUrl) async {
+    if (keyOrUrl == null || keyOrUrl.isEmpty) return null;
+
+    // Already a plain https URL with no signing params — return as-is
+    if (keyOrUrl.startsWith('https://') && !keyOrUrl.contains('X-Amz-')) {
+      return keyOrUrl;
+    }
+
+    // If it's an old expired pre-signed URL, extract just the path key
+    String key = keyOrUrl;
+    if (keyOrUrl.startsWith('https://')) {
+      try {
+        final uri = Uri.parse(keyOrUrl);
+        // uri.path starts with '/' — strip the leading slash
+        key = uri.path.substring(1);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    try {
+      final result =
+          await Amplify.Storage.getUrl(
+            path: StoragePath.fromString(key),
+          ).result;
+      return result.url.toString();
+    } catch (e) {
+      debugPrint('resolveS3Url failed for key "$key": $e');
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -166,10 +203,6 @@ class UserController extends GetxController {
 
   // ---------------------------------------------------------------------------
   // UPDATE PROFILE
-  // ✅ FIX: Also updates the Tutor record (skills, about, name, image) so
-  //    that TutorProfileScreen reflects changes immediately. Previously only
-  //    the User model was saved, leaving the Tutor record stale — which is
-  //    why the profile page always showed "No skills added yet" and no info.
   // ---------------------------------------------------------------------------
   Future<void> updateUserProfile() async {
     try {
@@ -191,7 +224,6 @@ class UserController extends GetxController {
       final user = currentUser.value;
       if (user == null) throw 'No user loaded';
 
-      // Parse the skills list from the comma-separated text field.
       final updatedSkills =
           skills.text
               .trim()
@@ -203,7 +235,7 @@ class UserController extends GetxController {
       final updatedAbout = about.text.trim();
       final updatedName = fullName.text.trim();
 
-      // ── Save User record ─────────────────────────────────────────
+      // ── Save User record ────────────────────────────────────────
       final updatedUser = user.copyWith(
         username: updatedName,
         email: email.text.trim(),
@@ -216,10 +248,7 @@ class UserController extends GetxController {
       currentUser.value = updatedUser;
       assignDataToProfile();
 
-      // ── Sync matching Tutor record ───────────────────────────────
-      // The Tutor record is a separate model that holds the public-facing
-      // tutor profile. It must be updated separately because DataStore does
-      // not cascade saves across model boundaries.
+      // ── Sync Tutor record + refresh home ─────────────────────────
       await _syncTutorRecord(
         userEmail: updatedUser.email,
         name: updatedName,
@@ -242,8 +271,12 @@ class UserController extends GetxController {
     }
   }
 
-  // Finds the Tutor record that matches [userEmail] and updates its
-  // skills, about, name, and image to stay in sync with the User record.
+  // ---------------------------------------------------------------------------
+  // SYNC TUTOR RECORD
+  // ✅ After saving the Tutor, propagates the update to HomeController
+  // allSessions and TutoringController caches so every session card and
+  // profile screen reflects the new name/image immediately.
+  // ---------------------------------------------------------------------------
   Future<void> _syncTutorRecord({
     required String userEmail,
     required String name,
@@ -252,7 +285,6 @@ class UserController extends GetxController {
     String? image,
   }) async {
     try {
-      // Look up by email — the same strategy used in currentUserTutorId.
       final tutors = await Amplify.DataStore.query(
         Tutor.classType,
         where: Tutor.EMAIL.eq(userEmail),
@@ -260,9 +292,7 @@ class UserController extends GetxController {
 
       if (tutors.isEmpty) {
         if (kDebugMode) {
-          print(
-            '⚠️ _syncTutorRecord: no Tutor found for email $userEmail — skipping sync',
-          );
+          print('⚠️ _syncTutorRecord: no Tutor found for $userEmail — skip');
         }
         return;
       }
@@ -273,32 +303,45 @@ class UserController extends GetxController {
         name: name.isNotEmpty ? name : tutor.name,
         skills: skills.isNotEmpty ? skills : tutor.skills,
         about: about.isNotEmpty ? about : tutor.about,
-        // Only update image if one is set — avoids wiping a tutor avatar
+        // Only update image if one is set — avoids wiping the avatar
         // when the user hasn't changed their picture.
         image: (image != null && image.isNotEmpty) ? image : tutor.image,
       );
 
       await Amplify.DataStore.save(updatedTutor);
 
-      // Warm the cache in TutoringController so any open screen that holds
-      // a reference to this tutor gets the fresh data without re-fetching.
+      // Warm TutoringController tutor cache
       if (Get.isRegistered<TutoringController>()) {
         TutoringController.instance.warmTutorCache(updatedTutor);
       }
 
+      // Patch all matching sessions in HomeController so home grid
+      // cards immediately show new name and avatar
+      if (Get.isRegistered<HomeController>()) {
+        HomeController.instance.refreshTutorInSessions(updatedTutor);
+      }
+
+      // Warm the User cache in TutoringController so review
+      // cards also show the updated username/avatar
+      if (currentUser.value != null && Get.isRegistered<TutoringController>()) {
+        TutoringController.instance.warmUserCache(currentUser.value!);
+      }
+
       if (kDebugMode) {
-        print('✅ _syncTutorRecord: Tutor ${tutor.id} updated');
+        print(
+          '✅ _syncTutorRecord: Tutor ${tutor.id} updated and '
+          'propagated to home + tutoring caches',
+        );
       }
     } catch (e) {
-      // Non-fatal — the User was already saved successfully.
       if (kDebugMode) print('⚠️ _syncTutorRecord failed: $e');
     }
   }
 
   // ---------------------------------------------------------------------------
   // PROFILE IMAGE UPLOAD
-  // ✅ FIX: Also updates the Tutor record's image field after upload so that
-  //    the tutor avatar on TutorProfileScreen updates immediately.
+  // ✅ Stores the S3 key path (not the pre-signed URL) so the image
+  // never expires. TUserAvatar resolves a fresh URL at display time.
   // ---------------------------------------------------------------------------
   Future<void> uploadUserProfilePicture() async {
     try {
@@ -314,21 +357,22 @@ class UserController extends GetxController {
 
       imageUploading.value = true;
 
-      final uploadedUrl = await _uploadImageToS3('Users/Images/Profile', image);
+      // ✅ Returns S3 key, not a pre-signed URL
+      final s3Key = await _uploadImageToS3('Users/Images/Profile', image);
 
-      // ── Update User record ───────────────────────────────────────
-      final updatedUser = user.copyWith(profilePicture: uploadedUrl);
+      // Update User record with the S3 key
+      final updatedUser = user.copyWith(profilePicture: s3Key);
       await Amplify.DataStore.save(updatedUser);
       currentUser.value = updatedUser;
-      profileImageUrl.value = uploadedUrl;
+      profileImageUrl.value = s3Key;
 
-      // ── Sync image to Tutor record ───────────────────────────────
+      // Sync key to Tutor record + propagate to home grid
       await _syncTutorRecord(
         userEmail: updatedUser.email,
         name: updatedUser.username,
         skills: updatedUser.skills ?? [],
         about: updatedUser.about ?? '',
-        image: uploadedUrl,
+        image: s3Key,
       );
 
       TLoaders.successSnackBar(
@@ -342,6 +386,9 @@ class UserController extends GetxController {
     }
   }
 
+  // ✅ Returns the S3 key path — NOT a pre-signed URL.
+  // Pre-signed URLs expire after 15 min (X-Amz-Expires=900).
+  // Store the key and call resolveS3Url() at display time instead.
   Future<String> _uploadImageToS3(String folder, XFile image) async {
     final filename = '${DateTime.now().millisecondsSinceEpoch}_${image.name}';
     final storagePath = StoragePath.fromString('$folder/$filename');
@@ -351,8 +398,8 @@ class UserController extends GetxController {
       path: storagePath,
     ).result;
 
-    final urlResult = await Amplify.Storage.getUrl(path: storagePath).result;
-    return urlResult.url.toString();
+    // Return the key, not the URL
+    return '$folder/$filename';
   }
 
   // ---------------------------------------------------------------------------
@@ -376,7 +423,8 @@ class UserController extends GetxController {
     Get.defaultDialog(
       title: 'Delete Account',
       middleText:
-          'Are you sure you want to permanently delete your account? This cannot be undone.',
+          'Are you sure you want to permanently delete your account? '
+          'This cannot be undone.',
       confirm: ElevatedButton(
         onPressed: deleteUserAccount,
         style: ElevatedButton.styleFrom(backgroundColor: Colors.red),

@@ -9,6 +9,7 @@ import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/constants/text_strings.dart';
 import '../../../../../personalization/controllers/user_controller.dart';
+import '../../../common/widgets/images/t_user_avatar.dart';
 import 'profile_form.dart';
 
 class UpdateProfileScreen extends StatelessWidget {
@@ -107,34 +108,14 @@ class UpdateProfileScreen extends StatelessWidget {
                                             height: 86,
                                             radius: 100,
                                           )
-                                          : CircleAvatar(
+                                          : TUserAvatar(
+                                            imageKeyOrUrl: imageUrl,
                                             radius: 43,
+                                            fallbackInitial:
+                                                user?.username ?? '?',
                                             backgroundColor: Colors.white
                                                 .withValues(alpha: 0.25),
-                                            backgroundImage:
-                                                (imageUrl != null &&
-                                                        imageUrl.isNotEmpty)
-                                                    ? NetworkImage(imageUrl)
-                                                    : null,
-                                            child:
-                                                (imageUrl == null ||
-                                                        imageUrl.isEmpty)
-                                                    ? Text(
-                                                      (user?.username != null &&
-                                                              user!
-                                                                  .username
-                                                                  .isNotEmpty)
-                                                          ? user.username[0]
-                                                              .toUpperCase()
-                                                          : '?',
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 30,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    )
-                                                    : null,
+                                            foregroundColor: Colors.white,
                                           ),
                                 ),
                                 // Edit badge

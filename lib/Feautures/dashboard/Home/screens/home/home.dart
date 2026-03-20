@@ -18,8 +18,8 @@ import 'widgets/t_header_subjects.dart';
 import '../../../../../common/widgets/custom_shapes/containers/primary_header_container.dart';
 import '../../../../../utils/constants/image_strings.dart';
 import '../../../../sessions/screens/product_cards/t_session_card_vertical.dart';
+import '../../../../../personalization/controllers/user_controller.dart';
 
-/// HomeScreen with reactive session filtering and search
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -27,6 +27,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final homeController = Get.find<HomeController>();
     final subjectController = Get.find<SubjectController>();
+    final userController = Get.find<UserController>();
     final searchController = TextEditingController();
 
     return Scaffold(
@@ -45,7 +46,15 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const THomeAppBar(),
+                  // ✅ Wrapped in Obx so the app bar greeting and avatar
+                  //    rebuild immediately when name or profile image changes
+                  Obx(() {
+                    // Reading these values registers them as dependencies
+                    // so Obx rebuilds when either changes
+                    userController.currentUser.value;
+                    userController.profileImageUrl.value;
+                    return const THomeAppBar();
+                  }),
                   const SizedBox(height: TSizes.spaceBtwSections),
                   TSearchContainer(
                     controller: searchController,
@@ -108,13 +117,6 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Featured Lectures Section
-// ---------------------------------------------------------------------------
-// The controller's _applyFilters() already ranks sessions by composite score
-// into featuredSessions — we just read it directly. No random shuffle needed.
-// ---------------------------------------------------------------------------
-
 class _FeaturedSection extends StatelessWidget {
   const _FeaturedSection();
 
@@ -154,13 +156,6 @@ class _FeaturedSection extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// All Lectures Section (limit 6, sorted newest-first)
-// ---------------------------------------------------------------------------
-// filteredSessions is now pre-sorted by createdAt descending in the controller,
-// so .take(6) naturally gives the 6 most recent sessions.
-// ---------------------------------------------------------------------------
-
 class _PopularSection extends StatelessWidget {
   const _PopularSection();
 
@@ -174,7 +169,6 @@ class _PopularSection extends StatelessWidget {
         TSectionHeading(
           title: 'All Lectures',
           onPressed: () {
-            // filteredSessions is already newest-first — dedupe and pass through
             final uniqueSessions =
                 {
                   for (var s in controller.filteredSessions) s.id: s,
@@ -189,8 +183,6 @@ class _PopularSection extends StatelessWidget {
         ),
         const SizedBox(height: TSizes.spaceBtwItems),
         Obx(() {
-          // filteredSessions is already sorted newest-first by the controller.
-          // Dedupe by id then take 6 — no manual sort needed here.
           final uniqueSessions =
               {
                 for (var s in controller.filteredSessions) s.id: s,

@@ -139,7 +139,6 @@ class HomeController extends GetxController {
   // =========================================================================
 
   Future<void> _loadAllSessionsFromGraphQL() async {
-    // ✅ maxStudents + enrolledCount added to query
     const queryDoc = r"""
       query ListAllSessionsFull($limit: Int) {
         listTutoringSessions(limit: $limit) {
@@ -215,7 +214,6 @@ class HomeController extends GetxController {
           pricePerSession: (item['pricePerSession'] as num?)?.toDouble(),
           thumbnail: item['thumbnail'] as String?,
           isFeatured: item['isFeatured'] as bool?,
-          // ✅ NEW: read capacity fields from GraphQL response
           maxStudents: item['maxStudents'] as int?,
           enrolledCount: item['enrolledCount'] as int? ?? 0,
           createdAt:
@@ -243,7 +241,7 @@ class HomeController extends GetxController {
 
       allSessions.assignAll(resolved);
       debugPrint(
-        'HomeController: ${resolved.length} sessions loaded from AppSync (all tutors)',
+        'HomeController: ${resolved.length} sessions loaded from AppSync',
       );
     } catch (e) {
       debugPrint('HomeController: _loadAllSessionsFromGraphQL error: $e');
@@ -339,38 +337,57 @@ class HomeController extends GetxController {
   }
 
   // =========================================================================
+  // ✅ NEW: Refresh tutor data in all sessions after a profile update.
+  // Called by UserController after name/image changes so the home grid
+  // and session cards immediately show the updated tutor info.
+  // =========================================================================
+  void refreshTutorInSessions(Tutor updatedTutor) {
+    // Update cache first so future resolves get fresh data
+    _tutorCache[updatedTutor.id] = updatedTutor;
+
+    bool changed = false;
+    for (int i = 0; i < allSessions.length; i++) {
+      final session = allSessions[i];
+      if (session.tutor?.id == updatedTutor.id) {
+        allSessions[i] = session.copyWith(tutor: updatedTutor);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      allSessions.refresh();
+      _applyFilters();
+      debugPrint(
+        'HomeController: refreshed tutor ${updatedTutor.id} '
+        'across ${allSessions.where((s) => s.tutor?.id == updatedTutor.id).length} sessions',
+      );
+    }
+  }
+
+  // =========================================================================
   // CAPACITY HELPERS
   // =========================================================================
 
-  /// Returns true when a session has a cap AND is full.
-  /// Used by _applyFilters to exclude full sessions from browse lists.
   bool _isFull(TutoringSession s) {
     final max = s.maxStudents;
     if (max == null || max <= 0) return false;
     return (s.enrolledCount ?? 0) >= max;
   }
 
-  /// Remaining spots. Returns null when no cap is set (unlimited).
   int? spotsLeft(TutoringSession s) {
     final max = s.maxStudents;
     if (max == null || max <= 0) return null;
     return (max - (s.enrolledCount ?? 0)).clamp(0, max);
   }
 
-  /// Increments enrolledCount on the local copy of a session after payment.
-  /// Also persists the new count to AppSync via a GraphQL mutation.
   Future<void> incrementEnrolledCount(String sessionId) async {
     final idx = allSessions.indexWhere((s) => s.id == sessionId);
     if (idx == -1) return;
 
     final old = allSessions[idx];
     final newCount = (old.enrolledCount ?? 0) + 1;
-    final updated = old.copyWith(enrolledCount: newCount);
+    allSessions[idx] = old.copyWith(enrolledCount: newCount);
 
-    // Optimistic local update — UI reacts immediately
-    allSessions[idx] = updated;
-
-    // Persist to AppSync
     try {
       const mutationDoc = r"""
         mutation IncrementEnrolled($id: ID!, $enrolledCount: Int!, $expectedVersion: Int!) {
@@ -384,7 +401,6 @@ class HomeController extends GetxController {
         }
       """;
 
-      // Fetch current _version first to avoid conflict errors
       const getDoc = r"""
         query GetSessionVersion($id: ID!) {
           getTutoringSession(id: $id) { id _version enrolledCount }
@@ -408,10 +424,8 @@ class HomeController extends GetxController {
         final obj = root['getTutoringSession'] as Map<String, dynamic>?;
         if (obj != null) {
           version = (obj['_version'] as num?)?.toInt() ?? 1;
-          // Use server's actual count + 1 to avoid races between devices
           final serverCount = (obj['enrolledCount'] as num?)?.toInt() ?? 0;
           final trustedCount = serverCount + 1;
-          // Re-patch local if server had a different value
           if (trustedCount != newCount) {
             allSessions[idx] = old.copyWith(enrolledCount: trustedCount);
           }
@@ -447,10 +461,6 @@ class HomeController extends GetxController {
     final selectedSubject = subjectController.selectedSubject.value;
     final query = searchQuery.value.toLowerCase();
 
-    // Step 1: apply subject + search filter
-    // ✅ Full sessions are excluded from browse lists (filteredSessions,
-    //    featuredSessions, popularSessions, recentSessions).
-    //    They remain in allSessions so favorites can still display them.
     final filtered =
         allSessions.where((s) {
           final resolvedSubjectId = _sessionSubjectMap[s.id] ?? s.subject?.id;
@@ -461,12 +471,10 @@ class HomeController extends GetxController {
               query.isEmpty ||
               s.title.toLowerCase().contains(query) ||
               (s.tutor?.name.toLowerCase().contains(query) ?? false);
-          // ✅ Exclude full sessions from public browse
           final notFull = !_isFull(s);
           return matchesSubject && matchesSearch && notFull;
         }).toList();
 
-    // Step 2: sort all sessions newest-first (true recency sort)
     filtered.sort((a, b) {
       final aTime = a.createdAt?.getDateTimeInUtc() ?? DateTime(0);
       final bTime = b.createdAt?.getDateTimeInUtc() ?? DateTime(0);
@@ -475,7 +483,6 @@ class HomeController extends GetxController {
 
     filteredSessions.assignAll(filtered);
 
-    // Step 3: featured = top-scored sessions via composite quality signal.
     final scored =
         filtered.map((s) => (session: s, score: _featuredScore(s))).toList()
           ..sort((a, b) => b.score.compareTo(a.score));
@@ -486,7 +493,6 @@ class HomeController extends GetxController {
     featuredSessions.value =
         topScored.isNotEmpty ? topScored : filtered.take(4).toList();
 
-    // Step 4: popular = highest-priced first, then highest-rated, then newest.
     final byPopularity = List<TutoringSession>.from(filtered)..sort((a, b) {
       final priceDiff = (b.pricePerSession ?? 0).compareTo(
         a.pricePerSession ?? 0,
@@ -500,20 +506,16 @@ class HomeController extends GetxController {
     });
     popularSessions.value = byPopularity;
 
-    // Step 5: recentSessions mirrors filteredSessions — already newest-first.
     recentSessions.value = filtered;
   }
 
-  /// Composite score used to rank "Featured" sessions.
   double _featuredScore(TutoringSession s) {
     double score = 0;
-
     if (s.isFeatured == true) score += 40;
     if (s.thumbnail != null && s.thumbnail!.isNotEmpty) score += 30;
     if (s.description != null && s.description!.isNotEmpty) score += 20;
     if (s.tutor?.name != null && s.tutor!.name.isNotEmpty) score += 10;
 
-    // Rating signal with confidence weighting
     final reviews = s.reviews;
     if (reviews != null && reviews.isNotEmpty) {
       final count = reviews.length;
@@ -523,7 +525,6 @@ class HomeController extends GetxController {
       score += (avgRating / 5) * 25 * confidence;
     }
 
-    // Recency bonus — linear decay over 30 days
     final created = s.createdAt?.getDateTimeInUtc();
     if (created != null) {
       final ageInDays = DateTime.now().toUtc().difference(created).inDays;
@@ -532,7 +533,6 @@ class HomeController extends GetxController {
       }
     }
 
-    // Price signal — proportional up to ₦10,000
     final price = s.pricePerSession ?? 0;
     if (price > 0) {
       score += (price.clamp(0, 10000) / 10000) * 10;
@@ -541,7 +541,6 @@ class HomeController extends GetxController {
     return score;
   }
 
-  /// Average rating helper — returns 0.0 if no reviews.
   double _avgRating(TutoringSession s) {
     final reviews = s.reviews;
     if (reviews == null || reviews.isEmpty) return 0.0;

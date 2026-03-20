@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:amplify_flutter/amplify_flutter.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_sound/flutter_sound.dart';
@@ -13,9 +14,9 @@ import 'package:iconsax/iconsax.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../models/ModelProvider.dart';
-import '../../../utils/constants/colors.dart';
-import '../../../utils/constants/sizes.dart';
+import '../../../../models/ModelProvider.dart';
+import '../../../../utils/constants/colors.dart';
+import '../../../../utils/constants/sizes.dart';
 import '../../sessions/controllers/tutoring_controller.dart';
 
 // ── InboxScreen ───────────────────────────────────────────────────────────────
@@ -39,8 +40,6 @@ class _InboxScreenState extends State<InboxScreen> {
   Future<void> _load() async {
     await controller.fetchTutorSessions();
     await controller.fetchAllStudentThreads();
-
-    // 👇 Subscribe to chat updates for every session
     for (final session in controller.activeSessions) {
       controller.observeChat(session.id);
     }
@@ -89,7 +88,6 @@ class _InboxScreenState extends State<InboxScreen> {
                 final baseSessions = controller.activeSessions;
                 final baseIds = baseSessions.map((s) => s.id).toSet();
 
-                // Subscribe to unreadCounts so list rebuilds on count changes.
                 // ignore: unnecessary_statement
                 controller.unreadCounts.entries;
 
@@ -393,9 +391,6 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _currentlyPlayingId;
   final Map<String, double> _playbackProgress = {};
 
-  // Local list of messages fetched directly from AppSync.
-  // Soft-deleted messages (_deleted=true) are filtered out on load and
-  // after every delete operation.
   final RxList<ChatMessage> _messages = <ChatMessage>[].obs;
 
   @override
@@ -406,7 +401,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _fetchMessagesFromAppSync();
     controller.observeChat(widget.sessionId);
     _textController.addListener(() => setState(() {}));
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       controller.markSessionRead(widget.sessionId);
     });
@@ -433,7 +427,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ── Fetch messages directly from AppSync and filter soft-deleted ──────────
   Future<void> _fetchMessagesFromAppSync() async {
     if (mounted) setState(() => _loadingMessages = true);
     try {
@@ -467,7 +460,6 @@ class _ChatScreenState extends State<ChatScreen> {
               .response;
 
       if (response.errors.isNotEmpty || response.data == null) {
-        // Fallback to DataStore if AppSync query fails.
         _loadFromDataStore();
         return;
       }
@@ -490,11 +482,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _loadFromDataStore() {
     final ds = controller.sessionMessages[widget.sessionId] ?? [];
-    // Filter soft-deleted items from DataStore fallback too.
-    _messages.assignAll(ds.where((m) => true).toList());
+    _messages.assignAll(ds);
   }
 
-  /// Parse ChatMessage list from AppSync response, filtering out _deleted=true.
   List<ChatMessage> _parseMessages(String responseData) {
     final result = <ChatMessage>[];
     try {
@@ -506,8 +496,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
       for (final raw in items) {
         final item = raw as Map<String, dynamic>;
-        // ✅ Filter out soft-deleted messages — AppSync sets _deleted=true
-        // on delete mutations. Without this filter they reappear on refresh.
         if (item['_deleted'] == true) continue;
 
         final id = item['id'] as String?;
@@ -536,13 +524,11 @@ class _ChatScreenState extends State<ChatScreen> {
     return result;
   }
 
-  // ── Delete a single message ───────────────────────────────────────────────
   Future<void> _deleteMessage(ChatMessage message) async {
-    // Optimistic removal.
+    // Optimistic removal
     _messages.removeWhere((m) => m.id == message.id);
 
     try {
-      // Step 1: fetch live _version (required for AppSync conflict detection).
       const getDoc = r"""
         query GetChatMessage($id: ID!) {
           getChatMessage(id: $id) {
@@ -568,15 +554,11 @@ class _ChatScreenState extends State<ChatScreen> {
         final decoded = jsonDecode(getResponse.data!) as Map<String, dynamic>;
         final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
         final obj = root['getChatMessage'] as Map<String, dynamic>?;
-        if (obj == null || obj['_deleted'] == true) {
-          // Already deleted on AppSync — optimistic removal is correct.
-          return;
-        }
+        if (obj == null || obj['_deleted'] == true) return;
         final v = obj['_version'];
         if (v != null) version = (v as num).toInt();
       }
 
-      // Step 2: send delete mutation with correct _version.
       const mutationDoc = r"""
         mutation DeleteChatMessage($input: DeleteChatMessageInput!) {
           deleteChatMessage(input: $input) {
@@ -599,7 +581,6 @@ class _ChatScreenState extends State<ChatScreen> {
               .response;
 
       if (response.errors.isNotEmpty) {
-        // Conflict — re-fetch and retry once.
         final isConflict = response.errors.any(
           (e) =>
               e.extensions?['errorType']?.toString().contains('Conflict') ==
@@ -607,13 +588,11 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         if (isConflict) {
           await _fetchMessagesFromAppSync();
-          // Try delete again with fresh data — find the message again.
           final fresh = _messages.firstWhereOrNull((m) => m.id == message.id);
           if (fresh != null) await _deleteMessage(fresh);
           return;
         }
-
-        // Non-conflict error — roll back.
+        // Roll back on non-conflict error
         print('❌ ChatScreen._deleteMessage error: ${response.errors}');
         _messages.add(message);
         _messages.sort(
@@ -622,7 +601,6 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       } else {
         print('✅ ChatScreen: deleted message ${message.id}');
-        // Also remove from TutoringController's DataStore cache.
         final chatMessages = controller.sessionMessages[widget.sessionId] ?? [];
         controller.sessionMessages[widget.sessionId] =
             chatMessages.where((m) => m.id != message.id).toList();
@@ -630,7 +608,6 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } catch (e) {
       print('❌ ChatScreen._deleteMessage: $e');
-      // Roll back on exception.
       if (!_messages.any((m) => m.id == message.id)) {
         _messages.add(message);
         _messages.sort(
@@ -641,7 +618,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ── Show delete confirmation ──────────────────────────────────────────────
   void _showDeleteDialog(ChatMessage message) {
     showDialog(
       context: context,
@@ -678,11 +654,38 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  // ✅ FIXED: configure audio session to route to loudspeaker
   Future<void> _initAudio() async {
     _recorder = FlutterSoundRecorder();
     _player = FlutterSoundPlayer();
     await _recorder!.openRecorder();
     await _player!.openPlayer();
+    await _player!.setVolume(1.0);
+
+    // Configure audio session for media playback through loudspeaker
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(
+        const AudioSessionConfiguration(
+          avAudioSessionCategory: AVAudioSessionCategory.playback,
+          avAudioSessionCategoryOptions:
+              AVAudioSessionCategoryOptions.defaultToSpeaker,
+          avAudioSessionMode: AVAudioSessionMode.defaultMode,
+          avAudioSessionRouteSharingPolicy:
+              AVAudioSessionRouteSharingPolicy.defaultPolicy,
+          avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
+          androidAudioAttributes: AndroidAudioAttributes(
+            contentType: AndroidAudioContentType.music,
+            flags: AndroidAudioFlags.none,
+            usage: AndroidAudioUsage.media,
+          ),
+          androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+          androidWillPauseWhenDucked: true,
+        ),
+      );
+    } catch (e) {
+      print('⚠️ ChatScreen._initAudio: audio session config error: $e');
+    }
   }
 
   Future<void> _sendTextMessage() async {
@@ -690,7 +693,6 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty || _currentUserId == null) return;
     await controller.sendMessage(widget.sessionId, text);
     _textController.clear();
-    // Refresh from AppSync after sending so new message appears.
     await _fetchMessagesFromAppSync();
     _scrollToBottom();
   }
@@ -701,7 +703,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!status.isGranted) return;
       final dir = await getTemporaryDirectory();
       final path =
-          '${dir.path}/${widget.sessionId}_${DateTime.now().millisecondsSinceEpoch}.aac';
+          '${dir.path}/${widget.sessionId}_'
+          '${DateTime.now().millisecondsSinceEpoch}.aac';
       await _recorder!.startRecorder(toFile: path, codec: Codec.aacADTS);
       setState(() => _isRecording = true);
     } else {
@@ -714,19 +717,31 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // ✅ FIXED: audio session configured for loudspeaker in _initAudio()
+  //    so playback automatically routes to speaker on Android/iOS
   Future<void> _playVoice(ChatMessage message) async {
     if (message.audioUrl == null) return;
+
+    // Tap same message again = stop
     if (_currentlyPlayingId == message.id) {
       await _player!.stopPlayer();
-      setState(() => _currentlyPlayingId = null);
+      if (mounted) setState(() => _currentlyPlayingId = null);
       return;
     }
+
+    // Stop any currently playing audio before starting new one
+    if (_player!.isPlaying) {
+      await _player!.stopPlayer();
+    }
+
     await _player!.startPlayer(
       fromURI: message.audioUrl,
+      codec: Codec.aacADTS,
       whenFinished: () {
         if (mounted) setState(() => _currentlyPlayingId = null);
       },
     );
+
     _playerSubscription?.cancel();
     _playerSubscription = _player!.onProgress!.listen((event) {
       final duration = event.duration.inMilliseconds;
@@ -750,6 +765,11 @@ class _ChatScreenState extends State<ChatScreen> {
         curve: Curves.easeOut,
       );
     });
+  }
+
+  bool _isDifferentDay(DateTime? a, DateTime? b) {
+    if (a == null || b == null) return false;
+    return a.day != b.day || a.month != b.month || a.year != b.year;
   }
 
   @override
@@ -856,7 +876,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-
       body: Column(
         children: [
           Expanded(
@@ -870,7 +889,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     )
                     : Obx(() {
                       final messages = _messages;
-
                       WidgetsBinding.instance.addPostFrameCallback(
                         (_) => _scrollToBottom(),
                       );
@@ -936,7 +954,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                 _DateSeparator(
                                   time: message.createdAt?.getDateTimeInUtc(),
                                 ),
-                              // ✅ Long-press to delete (own messages only)
                               GestureDetector(
                                 onLongPress:
                                     isMe
@@ -1009,6 +1026,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     }),
           ),
 
+          // Recording indicator
           if (_isRecording)
             Container(
               color: Colors.red.withValues(alpha: 0.06),
@@ -1037,6 +1055,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
 
+          // Input bar
           Container(
             decoration: BoxDecoration(
               color: colorScheme.surface,
@@ -1123,11 +1142,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
-  }
-
-  bool _isDifferentDay(DateTime? a, DateTime? b) {
-    if (a == null || b == null) return false;
-    return a.day != b.day || a.month != b.month || a.year != b.year;
   }
 
   Widget _voiceBubble(ChatMessage msg, bool isMe, bool isPlaying) {

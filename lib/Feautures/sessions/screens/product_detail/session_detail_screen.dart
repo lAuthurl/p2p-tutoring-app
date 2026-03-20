@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:readmore/readmore.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../../common/widgets/images/t_user_avatar.dart';
 import '../../../../common/widgets/texts/section_heading.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
@@ -48,6 +49,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
   String? _currentUserId;
 
   bool _hasPaid = false;
+
+  // ✅ FIXED: start as true only — set to false immediately once
+  // ownership is confirmed so tutors never see the "Checking…" state.
   bool _checkingPayment = true;
 
   static final RouteObserver<ModalRoute> _routeObserver =
@@ -63,8 +67,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
 
     _initializeAttributes(widget.session);
     _fetchReviews();
-    _checkOwnership();
-    _fetchCurrentUser();
+    // ✅ Check ownership FIRST — if owner, skip payment check entirely
+    _initAccess();
   }
 
   @override
@@ -80,34 +84,42 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
   }
 
   Future<void> _recheckPayment() async {
+    // ✅ Tutors never need to recheck — they always have access
     if (_isFreeSession || _currentUserId == null || _isOwner) return;
     setState(() => _checkingPayment = true);
     await _checkPaymentStatus();
   }
 
-  Future<void> _fetchCurrentUser() async {
+  // ✅ NEW: single entry point that runs ownership check first,
+  // then conditionally runs the payment check only for non-owners.
+  Future<void> _initAccess() async {
     try {
       final user = await Amplify.Auth.getCurrentUser();
       if (!mounted) return;
       setState(() => _currentUserId = user.userId);
-      await _checkPaymentStatus();
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _currentUserId = null;
-          _checkingPayment = false;
-        });
-      }
+      if (mounted) setState(() => _checkingPayment = false);
+      return;
     }
-  }
 
-  Future<void> _checkOwnership() async {
+    // Check ownership
     final tutorId = await _tutoringController.currentUserTutorId;
     if (!mounted) return;
-    setState(() {
-      _isOwner = tutorId != null && tutorId == widget.session.tutor?.id;
-      if (_isOwner) _checkingPayment = false;
-    });
+
+    final isOwner = tutorId != null && tutorId == widget.session.tutor?.id;
+
+    if (isOwner) {
+      // ✅ Tutor identified — no payment check needed, unlock everything
+      setState(() {
+        _isOwner = true;
+        _checkingPayment = false;
+      });
+      return;
+    }
+
+    // Not a tutor — run payment check for student
+    setState(() => _isOwner = false);
+    await _checkPaymentStatus();
   }
 
   Future<void> _checkPaymentStatus() async {
@@ -270,21 +282,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
     }
   }
 
-  /// ✅ FIX: Read selectedAttributes from _creationController (SessionCreationController),
-  /// NOT from tutoringController.selectedAttributes.
-  ///
-  /// The TSessionAttributes widget calls _creationController.onAttributeSelected()
-  /// which updates _creationController.selectedAttributes. The tagged
-  /// TutoringController.selectedAttributes is a completely separate RxMap
-  /// that nothing writes to on this screen — it stays empty, so the booking
-  /// items were always created with null selectedAttributes and the checkout
-  /// message showed no options.
   Future<void> _bookSession(TutoringSession session) async {
     try {
       final tutoringController = Get.find<TutoringController>(tag: widget.tag);
 
-      // Read from SessionCreationController — this is where TSessionAttributes
-      // writes the user's selections (Mode, Duration, etc.).
       final attrs = Map<String, String>.from(
         _creationController.selectedAttributes,
       );
@@ -665,6 +666,8 @@ class _ActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
+    // ✅ Tutors always have chat enabled — no checking needed
     final chatEnabled = isOwner || isFreeSession || hasPaid;
 
     final activeButtonStyle = OutlinedButton.styleFrom(
@@ -700,13 +703,16 @@ class _ActionRow extends StatelessWidget {
             Expanded(
               child: Tooltip(
                 message:
-                    (!chatEnabled && !checking)
+                    // ✅ Tutors never see the lock tooltip
+                    (!isOwner && !chatEnabled && !checking)
                         ? 'Book & pay to unlock chat'
                         : '',
                 preferBelow: false,
                 child: OutlinedButton.icon(
                   onPressed:
-                      chatEnabled
+                      // ✅ Tutor: always tappable, goes straight to Inbox
+                      // Student: only tappable when chatEnabled
+                      (isOwner || chatEnabled)
                           ? () {
                             if (isOwner) {
                               Get.to(() => const InboxScreen());
@@ -723,21 +729,21 @@ class _ActionRow extends StatelessWidget {
                           }
                           : null,
                   icon:
-                      checking
+                      // ✅ Tutor: always show inbox icon, no spinner
+                      isOwner
+                          ? const Icon(Iconsax.message_text, size: 17)
+                          : checking
                           ? const SizedBox(
                             width: 14,
                             height: 14,
                             child: CircularProgressIndicator(strokeWidth: 1.5),
                           )
                           : Icon(
-                            isOwner
-                                ? Iconsax.message_text
-                                : chatEnabled
-                                ? Iconsax.message
-                                : Iconsax.lock_1,
+                            chatEnabled ? Iconsax.message : Iconsax.lock_1,
                             size: 17,
                           ),
                   label: Text(
+                    // ✅ Tutor: always "Inbox", no spinner, no lock
                     isOwner
                         ? 'Inbox'
                         : checking
@@ -746,13 +752,17 @@ class _ActionRow extends StatelessWidget {
                         ? 'Chat'
                         : 'Chat 🔒',
                   ),
-                  style: chatEnabled ? activeButtonStyle : disabledButtonStyle,
+                  style:
+                      (isOwner || chatEnabled)
+                          ? activeButtonStyle
+                          : disabledButtonStyle,
                 ),
               ),
             ),
           ],
         ),
 
+        // ✅ Lock banner only shown to non-owner unpaid students
         if (!isOwner && !isFreeSession && !checking && !hasPaid) ...[
           const SizedBox(height: 10),
           Container(
@@ -847,10 +857,7 @@ class _ReviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = review;
-    final hasAvatar =
-        r.user?.profilePicture != null && r.user!.profilePicture!.isNotEmpty;
     final username = r.user?.username ?? "Anonymous";
-    final initial = username.isNotEmpty ? username[0].toUpperCase() : "?";
     final dateStr =
         r.createdAt != null
             ? r.createdAt!.getDateTimeInUtc().toLocal().toString().split(" ")[0]
@@ -890,22 +897,12 @@ class _ReviewCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
+                TUserAvatar(
+                  imageKeyOrUrl: r.user?.profilePicture,
                   radius: 18,
+                  fallbackInitial: r.user?.username ?? '?',
                   backgroundColor: TColors.primary.withValues(alpha: 0.12),
-                  backgroundImage:
-                      hasAvatar ? NetworkImage(r.user!.profilePicture!) : null,
-                  child:
-                      hasAvatar
-                          ? null
-                          : Text(
-                            initial,
-                            style: TextStyle(
-                              color: TColors.primary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
+                  foregroundColor: TColors.primary,
                 ),
                 const SizedBox(width: 10),
                 Expanded(

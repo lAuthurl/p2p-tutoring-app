@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p2p_tutoring_app/Feautures/sessions/controllers/tutoring_controller.dart';
 
+import '../../../../common/widgets/images/t_network_image.dart';
+import '../../../../common/widgets/images/t_user_avatar.dart';
 import '../../../../common/widgets/texts/t_brand_title_text_with_verified_icon.dart';
 import '../../../../utils/constants/enums.dart';
 import '../../controllers/session_creation_controller.dart';
@@ -38,73 +40,22 @@ class TSessionCardVertical extends StatelessWidget {
     }
 
     Widget buildImage(String src) {
-      final fallback = TImages.tutorPromo1;
-
       if (src.isEmpty) {
-        return Image.asset(fallback, fit: BoxFit.cover);
+        return Image.asset(TImages.tutorPromo1, fit: BoxFit.cover);
       }
 
-      if (src.startsWith('http')) {
-        return Image.network(
-          src,
-          fit: BoxFit.cover,
-          errorBuilder:
-              (_, __, ___) => Image.asset(fallback, fit: BoxFit.cover),
-        );
-      }
-
-      return Image.asset(src, fit: BoxFit.cover);
+      // ✅ TNetworkImage handles both S3 keys and https URLs via resolveS3Url
+      return TNetworkImage(
+        imageKeyOrUrl: src,
+        fit: BoxFit.cover,
+        fallbackAsset: TImages.tutorPromo1,
+      );
     }
 
+    // ✅ FIXED: replaced manual http-check logic with TUserAvatar which
+    // handles S3 keys, expired pre-signed URLs, and plain https URLs
+    // automatically via resolveS3Url — so tutor avatars always load.
     Widget buildTutorAvatar(Tutor? tutor) {
-      Widget inner;
-
-      if (tutor == null) {
-        inner = const Text(
-          '?',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        );
-      } else if (tutor.image != null && tutor.image!.isNotEmpty) {
-        inner = ClipOval(
-          child:
-              tutor.image!.startsWith('http')
-                  ? Image.network(
-                    tutor.image!,
-                    width: 36,
-                    height: 36,
-                    fit: BoxFit.cover,
-                  )
-                  : Image.asset(
-                    tutor.image!,
-                    width: 36,
-                    height: 36,
-                    fit: BoxFit.cover,
-                  ),
-        );
-      } else {
-        final initials =
-            tutor.name
-                .trim()
-                .split(' ')
-                .map((e) => e[0])
-                .take(2)
-                .join()
-                .toUpperCase();
-
-        inner = Text(
-          initials,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-          ),
-        );
-      }
-
       return Container(
         width: 36,
         height: 36,
@@ -120,8 +71,15 @@ class TSessionCardVertical extends StatelessWidget {
             ),
           ],
         ),
-        alignment: Alignment.center,
-        child: inner,
+        child: ClipOval(
+          child: TUserAvatar(
+            imageKeyOrUrl: tutor?.image,
+            radius: 18, // diameter = 36 — matches container
+            fallbackInitial: tutor?.name ?? '?',
+            backgroundColor: TColors.primary,
+            foregroundColor: Colors.white,
+          ),
+        ),
       );
     }
 
@@ -172,7 +130,7 @@ class TSessionCardVertical extends StatelessWidget {
                 height: 160,
                 width: 180,
                 child: Stack(
-                  clipBehavior: Clip.none, // allows shadow overflow
+                  clipBehavior: Clip.none,
                   children: [
                     Positioned.fill(child: buildImage(mainImage())),
 
@@ -193,7 +151,7 @@ class TSessionCardVertical extends StatelessWidget {
                       ),
                     ),
 
-                    /// TUTOR AVATAR (safe bottom-left placement)
+                    /// TUTOR AVATAR
                     Positioned(
                       left: 6,
                       bottom: 6,

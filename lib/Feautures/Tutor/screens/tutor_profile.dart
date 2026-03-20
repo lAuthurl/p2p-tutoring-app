@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:intl/intl.dart';
 import 'package:amplify_flutter/amplify_flutter.dart' hide Transition;
+import '../../../common/widgets/images/t_user_avatar.dart';
 import '../../../utils/constants/colors.dart';
 import '../../../utils/constants/sizes.dart';
 import '../../../models/ModelProvider.dart';
@@ -209,24 +210,12 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                                 ),
                               ],
                             ),
-                            child: CircleAvatar(
+                            child: TUserAvatar(
+                              imageKeyOrUrl: tutor.image,
                               radius: 42,
+                              fallbackInitial: tutor.name,
                               backgroundColor: Colors.white,
-                              backgroundImage:
-                                  tutor.image?.isNotEmpty == true
-                                      ? NetworkImage(tutor.image!)
-                                      : null,
-                              child:
-                                  tutor.image?.isNotEmpty != true
-                                      ? Text(
-                                        tutor.name[0].toUpperCase(),
-                                        style: TextStyle(
-                                          fontSize: 32,
-                                          fontWeight: FontWeight.w800,
-                                          color: TColors.primary,
-                                        ),
-                                      )
-                                      : null,
+                              foregroundColor: TColors.primary,
                             ),
                           ),
                           const SizedBox(width: 14),
@@ -781,7 +770,7 @@ class _ReviewTile extends StatelessWidget {
             ? DateFormat.yMMMd().format(review.createdAt!.getDateTimeInUtc())
             : '';
     final username = review.user?.username ?? 'Anonymous';
-    final initial = username[0].toUpperCase();
+    username[0].toUpperCase();
 
     final isCreator =
         review.user?.email != null &&
@@ -797,24 +786,12 @@ class _ReviewTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Avatar
-          CircleAvatar(
+          TUserAvatar(
+            imageKeyOrUrl: review.user?.profilePicture,
             radius: 19,
+            fallbackInitial: review.user?.username ?? '?',
             backgroundColor: TColors.primary.withValues(alpha: 0.15),
-            backgroundImage:
-                review.user?.profilePicture?.isNotEmpty == true
-                    ? NetworkImage(review.user!.profilePicture!)
-                    : null,
-            child:
-                review.user?.profilePicture?.isNotEmpty != true
-                    ? Text(
-                      initial,
-                      style: TextStyle(
-                        color: TColors.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    )
-                    : null,
+            foregroundColor: TColors.primary,
           ),
           const SizedBox(width: 10),
           Expanded(

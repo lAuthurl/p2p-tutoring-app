@@ -6,6 +6,7 @@ import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:intl/intl.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 
+import '../../../../common/widgets/images/t_user_avatar.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../models/ModelProvider.dart';
@@ -595,8 +596,6 @@ class _ReviewTile extends StatelessWidget {
             ? DateFormat.yMMMd().format(review.createdAt!.getDateTimeInUtc())
             : '';
     final username = review.user?.username ?? "Anonymous";
-    final initial = username.isNotEmpty ? username[0].toUpperCase() : "?";
-    final hasAvatar = review.user?.profilePicture?.isNotEmpty ?? false;
 
     final isCreator =
         review.user?.email != null &&
@@ -636,24 +635,12 @@ class _ReviewTile extends StatelessWidget {
             Row(
               children: [
                 // Avatar
-                CircleAvatar(
+                TUserAvatar(
+                  imageKeyOrUrl: review.user?.profilePicture,
                   radius: 20,
+                  fallbackInitial: review.user?.username ?? '?',
                   backgroundColor: TColors.primary.withValues(alpha: 0.15),
-                  backgroundImage:
-                      hasAvatar
-                          ? NetworkImage(review.user!.profilePicture!)
-                          : null,
-                  child:
-                      hasAvatar
-                          ? null
-                          : Text(
-                            initial,
-                            style: TextStyle(
-                              color: TColors.primary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
+                  foregroundColor: TColors.primary,
                 ),
                 const SizedBox(width: 10),
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../utils/constants/sizes.dart';
 import '../../../utils/helpers/helper_functions.dart';
 import '../../../utils/constants/image_strings.dart';
+import 't_network_image.dart';
 
 class TRoundedImage extends StatelessWidget {
   const TRoundedImage({
@@ -41,41 +42,11 @@ class TRoundedImage extends StatelessWidget {
       // Use fallback placeholder asset
       imageWidget = Image.asset(TImages.tutorPromo1, fit: fit);
     } else if (useNetwork) {
-      imageWidget = Image.network(
-        cleaned,
-        fit: fit,
-        // Show simple loading indicator while network image loads
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                value:
-                    loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            (loadingProgress.expectedTotalBytes ?? 1)
-                        : null,
-              ),
-            ),
-          );
-        },
-        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-          if (frame == null) {
-            return const SizedBox.shrink();
-          }
-          return AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: 1,
-            child: child,
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          // fallback to asset placeholder
-          return Image.asset(TImages.tutorPromo1, fit: fit);
-        },
+      imageWidget = TNetworkImage(
+        imageKeyOrUrl: cleaned,
+        fit: fit ?? BoxFit.cover, // ✅ null fallback
+        showLoadingIndicator: true,
+        fallbackAsset: TImages.tutorPromo1,
       );
     } else {
       imageWidget = Image.asset(cleaned, fit: fit);

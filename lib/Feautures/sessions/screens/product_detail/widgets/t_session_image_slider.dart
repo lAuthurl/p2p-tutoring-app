@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import '../../../../../common/widgets/appbar/appbar.dart';
 import '../../../../../common/widgets/custom_shapes/curved_edges/curved_edges_widget.dart';
+import '../../../../../common/widgets/images/t_network_image.dart';
+import '../../../../../common/widgets/images/t_user_avatar.dart';
 import '../../../../../utils/constants/colors.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/helpers/helper_functions.dart';
@@ -28,25 +30,12 @@ class TSessionImageSlider extends StatelessWidget {
       return _InitialsAvatar(initials: '?');
     }
     if (tutor.image != null && tutor.image!.isNotEmpty) {
-      return CircleAvatar(
+      return TUserAvatar(
+        imageKeyOrUrl: tutor.image,
         radius: 22,
+        fallbackInitial: tutor.name,
         backgroundColor: Colors.white.withValues(alpha: 0.15),
-        child: ClipOval(
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child:
-                tutor.image!.startsWith('http')
-                    ? Image.network(
-                      tutor.image!,
-                      fit: BoxFit.cover,
-                      errorBuilder:
-                          (_, _, _) =>
-                              _InitialsAvatar(initials: _initials(tutor.name)),
-                    )
-                    : Image.asset(tutor.image!, fit: BoxFit.cover),
-          ),
-        ),
+        foregroundColor: Colors.white,
       );
     }
     return _InitialsAvatar(initials: _initials(tutor.name));
@@ -94,28 +83,13 @@ class TSessionImageSlider extends StatelessWidget {
                   }
 
                   if (THelperFunctions.isNetworkImagePath(image)) {
-                    return Image.network(
-                      cleaned,
+                    return TNetworkImage(
+                      imageKeyOrUrl: cleaned,
                       fit: BoxFit.cover,
                       width: double.infinity,
                       height: double.infinity,
-                      loadingBuilder: (context, child, progress) {
-                        if (progress == null) {
-                          return AnimatedOpacity(
-                            opacity: 1,
-                            duration: const Duration(milliseconds: 220),
-                            child: child,
-                          );
-                        }
-                        return _ShimmerPlaceholder();
-                      },
-                      errorBuilder:
-                          (_, _, _) => Image.asset(
-                            TImages.tutorPromo1,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                          ),
+                      showShimmer: true,
+                      fallbackAsset: TImages.tutorPromo1,
                     );
                   }
 
@@ -308,15 +282,14 @@ class _ThumbTile extends StatelessWidget {
             opacity: isSelected ? 1.0 : 0.6,
             child:
                 imageUrl.startsWith('http')
-                    ? Image.network(
-                      imageUrl,
+                    ? TNetworkImage(
+                      imageKeyOrUrl: imageUrl,
                       fit: BoxFit.cover,
                       width: double.infinity,
                       height: double.infinity,
-                      errorBuilder:
-                          (_, _, _) => Container(
-                            color: Colors.white.withValues(alpha: 0.1),
-                          ),
+                      fallbackWidget: Container(
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
                     )
                     : Image.asset(
                       imageUrl,
@@ -338,17 +311,12 @@ class _InitialsAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CircleAvatar(
+    return TUserAvatar(
+      imageKeyOrUrl: null,
       radius: 22,
+      fallbackInitial: initials,
       backgroundColor: TColors.primary,
-      child: Text(
-        initials,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 15,
-        ),
-      ),
+      foregroundColor: Colors.white,
     );
   }
 }

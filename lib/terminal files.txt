@@ -5,11 +5,9 @@ flutter pub get
 amplify codegen models
 
 
-make vc work NOT PLAYING
-IMAGE DOESNT UPDATE IN TUTORING SESSION AND PROFILE PAGE  
-MAKE HOMEPAGE REACTIVE TO CHANGES TO INFO LIKE NAME CHANGE AND PFP CHANGE
-Qr code SAVE NT WORKING AND I WANT THE IMAGE TO JUST BE A QRCODE AND CEENTERED IN THE CARD AND ALSO THE PERSON THAT MADE THE PUCHASE IS THE ONLY ONE TO RECIEVE IT 
-
+make vc sends double message the first message plays and doesnt record and play properly
+qr card should exit after clicking save and the qrcode should be at the center of the image and fill the image right noow its at a small corner top left
 
 and try making voice call work  - last thing to do
 remember me 
+CACHE IMAHES ISNG THE WIDGET AND CHAT AND Review PAYMENT GETWAY AND TUTOR Checking 

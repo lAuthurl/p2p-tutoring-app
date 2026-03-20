@@ -8,6 +8,7 @@ import 'package:line_awesome_flutter/line_awesome_flutter.dart';
 import '../../../Feautures/checkout/controllers/paystack_card_controller.dart';
 import '../../../Feautures/checkout/screens/paystack_card_entry_screen.dart';
 import '../../../Feautures/dashboard/Home/controllers/subject_controller.dart';
+import '../../../common/widgets/images/t_user_avatar.dart';
 import '../../../common/widgets/shimmers/shimmer.dart';
 import '../../../../../data/repository/authentication_repository/authentication_repository.dart';
 import '../../../../../utils/constants/colors.dart';
@@ -103,34 +104,14 @@ class ProfileScreen extends StatelessWidget {
                                           height: 86,
                                           radius: 100,
                                         )
-                                        : CircleAvatar(
+                                        : TUserAvatar(
+                                          imageKeyOrUrl: imageUrl,
                                           radius: 43,
+                                          fallbackInitial:
+                                              user?.username ?? '?',
                                           backgroundColor: Colors.white
                                               .withValues(alpha: 0.25),
-                                          backgroundImage:
-                                              (imageUrl != null &&
-                                                      imageUrl.isNotEmpty)
-                                                  ? NetworkImage(imageUrl)
-                                                  : null,
-                                          child:
-                                              (imageUrl == null ||
-                                                      imageUrl.isEmpty)
-                                                  ? Text(
-                                                    (user?.username != null &&
-                                                            user!
-                                                                .username
-                                                                .isNotEmpty)
-                                                        ? user.username[0]
-                                                            .toUpperCase()
-                                                        : '?',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 30,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  )
-                                                  : null,
+                                          foregroundColor: Colors.white,
                                         ),
                               ),
                               Positioned(

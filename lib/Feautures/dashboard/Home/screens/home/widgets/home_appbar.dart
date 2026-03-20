@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../../../common/widgets/appbar/home_appbar.dart';
+import '../../../../../../common/widgets/images/t_network_image.dart';
 import '../../../../../../personalization/controllers/user_controller.dart';
 import '../../../../../../personalization/screens/profile/profile_screen.dart';
 import '../../../../../chat/screens/message_counter_icon.dart';
@@ -38,7 +39,7 @@ class THomeAppBar extends StatelessWidget {
         child: ClipOval(
           child:
               image.startsWith('http')
-                  ? Image.network(image, fit: BoxFit.cover)
+                  ? TNetworkImage(imageKeyOrUrl: image, fit: BoxFit.cover)
                   : Image.asset(image, fit: BoxFit.cover),
         ),
       );
