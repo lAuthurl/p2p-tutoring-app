@@ -42,7 +42,7 @@ Built with a **mobile-first approach**, the app delivers a seamless experience a
 
 ### 🎓 User Management
 
-* Register as **Tutor**, **Tutee**, or both
+* Register as both **Tutor** and **Tutee**
 * Secure authentication
 * Profile management
 
@@ -50,7 +50,6 @@ Built with a **mobile-first approach**, the app delivers a seamless experience a
 
 * Search by course or subject
 * View tutor profiles and ratings
-* Smart matching
 
 ### 📅 Session Booking
 
