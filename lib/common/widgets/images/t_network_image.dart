@@ -1,14 +1,20 @@
 // lib/common/widgets/images/t_network_image.dart
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:p2p_tutoring_app/personalization/controllers/user_controller.dart';
 import 'package:p2p_tutoring_app/utils/constants/image_strings.dart';
 
-/// Displays a network image from an S3 key or URL.
+import '../../../services/image_cache_sevice.dart';
+
+/// Displays a network image from an S3 key or URL with two-layer caching:
 ///
-/// Resolves a fresh pre-signed URL at build time so the image never
-/// shows a 403 due to an expired signature. Falls back to [fallbackAsset]
-/// on error or while loading.
+///   • URL resolution cache  — ImageCacheService (in-memory, 13-min TTL)
+///   • Pixel cache           — CachedNetworkImage (disk + memory)
+///
+/// This means:
+///   • S3 pre-signed URLs are refreshed at most once per 13 minutes per key
+///   • The decoded image pixels are cached on disk so re-renders are instant
+///   • No flicker on widget rebuilds — CachedNetworkImage reuses the disk hit
 class TNetworkImage extends StatelessWidget {
   const TNetworkImage({
     super.key,
@@ -27,43 +33,38 @@ class TNetworkImage extends StatelessWidget {
   final BoxFit fit;
   final double? width;
   final double? height;
-
-  /// Asset path shown on error or when image is null.
-  /// Defaults to TImages.tutorPromo1.
   final String? fallbackAsset;
-
-  /// Custom widget shown on error instead of an asset.
-  /// Takes priority over [fallbackAsset] if both are provided.
   final Widget? fallbackWidget;
-
-  /// Show a circular progress indicator while loading.
   final bool showLoadingIndicator;
-
-  /// Show a shimmer placeholder while resolving/loading.
   final bool showShimmer;
-
   final BorderRadius? borderRadius;
+
+  Widget _fallback() =>
+      fallbackWidget ??
+      Image.asset(
+        fallbackAsset ?? TImages.tutorPromo1,
+        fit: fit,
+        width: width,
+        height: height,
+      );
 
   @override
   Widget build(BuildContext context) {
-    final effectiveFallback =
-        fallbackWidget ??
-        Image.asset(
-          fallbackAsset ?? TImages.tutorPromo1,
-          fit: fit,
-          width: width,
-          height: height,
-        );
-
     if (imageKeyOrUrl == null || imageKeyOrUrl!.isEmpty) {
-      return effectiveFallback;
+      return _fallback();
     }
 
     Widget result = FutureBuilder<String?>(
-      future: UserController.resolveS3Url(imageKeyOrUrl),
+      // ValueKey ensures the future reruns only when the raw key actually changes,
+      // not on every parent rebuild
+      key: ValueKey(imageKeyOrUrl),
+      future: ImageCacheService.instance.resolve(imageKeyOrUrl),
       builder: (context, snapshot) {
+        // ── Loading state ──────────────────────────────────────────────────
         if (snapshot.connectionState == ConnectionState.waiting) {
-          if (showShimmer) return _Shimmer(width: width, height: height);
+          if (showShimmer) {
+            return _Shimmer(width: width, height: height);
+          }
           if (showLoadingIndicator) {
             return SizedBox(
               width: width,
@@ -77,51 +78,43 @@ class TNetworkImage extends StatelessWidget {
               ),
             );
           }
-          // Transparent placeholder while resolving
+          // Transparent gap while resolving (avoids layout shifts)
           return SizedBox(width: width, height: height);
         }
 
+        // ── Error / null ───────────────────────────────────────────────────
         if (!snapshot.hasData || snapshot.data == null) {
-          return effectiveFallback;
+          return _fallback();
         }
 
-        final url = snapshot.data!;
-
-        return Image.network(
-          url,
+        // ── Resolved URL — hand off to CachedNetworkImage for pixel caching ─
+        return CachedNetworkImage(
+          imageUrl: snapshot.data!,
           fit: fit,
           width: width,
           height: height,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) {
-              return AnimatedOpacity(
-                opacity: 1,
-                duration: const Duration(milliseconds: 200),
-                child: child,
-              );
-            }
+          fadeInDuration: const Duration(milliseconds: 200),
+          fadeOutDuration: const Duration(milliseconds: 100),
+          placeholder: (context, url) {
             if (showShimmer) {
               return _Shimmer(width: width, height: height);
             }
             if (showLoadingIndicator) {
-              return Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    value:
-                        progress.expectedTotalBytes != null
-                            ? progress.cumulativeBytesLoaded /
-                                (progress.expectedTotalBytes ?? 1)
-                            : null,
+              return SizedBox(
+                width: width,
+                height: height,
+                child: const Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
               );
             }
             return SizedBox(width: width, height: height);
           },
-          errorBuilder: (_, __, ___) => effectiveFallback,
+          errorWidget: (context, url, error) => _fallback(),
         );
       },
     );

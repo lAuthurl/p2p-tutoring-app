@@ -1,97 +1,125 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: avoid_print, unnecessary_underscores
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../../../common/widgets/appbar/home_appbar.dart';
-import '../../../../../../common/widgets/images/t_network_image.dart';
 import '../../../../../../personalization/controllers/user_controller.dart';
 import '../../../../../../personalization/screens/profile/profile_screen.dart';
+import '../../../../../../services/image_cache_sevice.dart';
 import '../../../../../chat/screens/message_counter_icon.dart';
 import '../../../../../../utils/constants/colors.dart';
 import '../../../../../../utils/constants/sizes.dart';
 import '../../../../../booking/screens/t_booking_counter_icon.dart';
 import '../../../../../sessions/controllers/tutoring_controller.dart';
 import '../../../../../favourites/screens/favorites_counter_icon.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class THomeAppBar extends StatelessWidget {
   const THomeAppBar({super.key});
 
-  Widget _profileAvatar(String? name, String? image) {
-    const double avatarRadius = 22;
+  Widget _profileAvatar(String? name, String? rawImage) {
+    const double r = 22;
 
-    final Widget avatarCore;
+    final initials =
+        name != null && name.isNotEmpty
+            ? name
+                .trim()
+                .split(' ')
+                .map((e) => e[0])
+                .take(2)
+                .join()
+                .toUpperCase()
+            : '?';
 
-    if (image != null && image.isNotEmpty) {
-      avatarCore = Container(
-        width: avatarRadius * 2,
-        height: avatarRadius * 2,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: TColors.primary, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: TColors.primary.withValues(alpha: 0.35),
-              blurRadius: 8,
-              spreadRadius: 1,
-            ),
-          ],
+    // Initials avatar — shown immediately while URL resolves
+    final Widget initialsAvatar = Container(
+      width: r * 2,
+      height: r * 2,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [TColors.primary, TColors.primary.withValues(alpha: 0.6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: ClipOval(
-          child:
-              image.startsWith('http')
-                  ? TNetworkImage(imageKeyOrUrl: image, fit: BoxFit.cover)
-                  : Image.asset(image, fit: BoxFit.cover),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1.5,
         ),
-      );
-    } else {
-      final initials =
-          name != null && name.isNotEmpty
-              ? name
-                  .trim()
-                  .split(' ')
-                  .map((e) => e[0])
-                  .take(2)
-                  .join()
-                  .toUpperCase()
-              : '?';
-
-      avatarCore = Container(
-        width: avatarRadius * 2,
-        height: avatarRadius * 2,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            colors: [TColors.primary, TColors.primary.withValues(alpha: 0.6)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+        boxShadow: [
+          BoxShadow(
+            color: TColors.primary.withValues(alpha: 0.4),
+            blurRadius: 10,
+            spreadRadius: 1,
           ),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.3),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: TColors.primary.withValues(alpha: 0.4),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Center(
-          child: Text(
-            initials,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 17,
-              letterSpacing: 0.5,
-            ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 17,
+            letterSpacing: 0.5,
           ),
         ),
+      ),
+    );
+
+    if (rawImage == null || rawImage.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: initialsAvatar,
       );
     }
 
-    return Padding(padding: const EdgeInsets.only(left: 8), child: avatarCore);
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: FutureBuilder<String?>(
+        // ValueKey ensures future only reruns when rawImage actually changes
+        key: ValueKey(rawImage),
+        // FIX: use ImageCacheService so URL resolution is cached and
+        // consistent with TUserAvatar / TNetworkImage everywhere else
+        future: ImageCacheService.instance.resolve(rawImage),
+        builder: (context, snapshot) {
+          final url = snapshot.data;
+
+          if (url == null || url.isEmpty) {
+            return initialsAvatar;
+          }
+
+          return Container(
+            width: r * 2,
+            height: r * 2,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: TColors.primary, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: TColors.primary.withValues(alpha: 0.35),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            // FIX: use CachedNetworkImage for pixel-level caching so the
+            // image doesn't re-download on every Obx rebuild
+            child: ClipOval(
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                width: r * 2,
+                height: r * 2,
+                placeholder: (_, __) => initialsAvatar,
+                errorWidget: (_, __, ___) => initialsAvatar,
+                fadeInDuration: const Duration(milliseconds: 200),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -104,14 +132,14 @@ class THomeAppBar extends StatelessWidget {
       title: Obx(() {
         final user = userController.currentUser.value;
         final name = user?.username ?? 'User';
-        final image = user?.profilePicture;
+        final rawImage = user?.profilePicture;
         final firstName = name.trim().split(' ').first;
 
         return GestureDetector(
           onTap: () => Get.to(() => const ProfileScreen()),
           child: Row(
             children: [
-              _profileAvatar(name, image),
+              _profileAvatar(name, rawImage),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -157,19 +185,16 @@ class THomeAppBar extends StatelessWidget {
         );
       }),
       actions: [
-        // ── Favourites counter ──────────────────────────────
         const TFavouriteCounterIcon(
           iconColor: TColors.white,
           counterBgColor: Colors.pink,
           counterTextColor: Colors.white,
         ),
-        // ── Inbox counter ───────────────────────────────────
         InboxCounterIcon(
           iconColor: TColors.white,
           counterBgColor: Colors.redAccent,
           counterTextColor: Colors.white,
         ),
-        // ── Booking counter ─────────────────────────────────
         const TBookingCounterIcon(
           iconColor: TColors.white,
           counterBgColor: TColors.black,

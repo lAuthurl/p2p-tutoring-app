@@ -14,7 +14,7 @@ class LoginScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final loginController = Get.put(LoginController(), permanent: true);
+    Get.put(LoginController(), permanent: true);
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
@@ -30,7 +30,6 @@ class LoginScreen extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   Image.asset(TImages.tWelcomeScreenImage, fit: BoxFit.cover),
-                  // Bottom fade into dark background
                   Positioned(
                     bottom: 0,
                     left: 0,
@@ -61,7 +60,6 @@ class LoginScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Heading
                   Text(
                     'Welcome Back 👋',
                     style: TextStyle(
@@ -88,81 +86,6 @@ class LoginScreen extends StatelessWidget {
 
                   // ── Form ──────────────────────────────────────
                   const LoginFormWidget(),
-
-                  const SizedBox(height: TSizes.lg),
-
-                  // ── Divider ───────────────────────────────────
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Divider(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          thickness: 0.5,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Text(
-                          'or continue with',
-                          style: TextStyle(
-                            color: TColors.textDarkSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Divider(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          thickness: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: TSizes.lg),
-
-                  // ── Google button ──────────────────────────────
-                  Obx(
-                    () => GestureDetector(
-                      onTap:
-                          loginController.isGoogleLoading.value
-                              ? null
-                              : () => loginController.googleSignIn(),
-                      child: Container(
-                        width: double.infinity,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Image.asset(
-                              'assets/logo/google-logo.png',
-                              height: 20,
-                              width: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              loginController.isGoogleLoading.value
-                                  ? 'Signing in...'
-                                  : 'Sign in with Google',
-                              style: TextStyle(
-                                color: TColors.textDarkPrimary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
 
                   const SizedBox(height: TSizes.xl),
 

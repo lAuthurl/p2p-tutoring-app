@@ -34,7 +34,8 @@ class LoginController extends GetxController {
   final email = TextEditingController();
   final password = TextEditingController();
 
-  final rememberMe = false.obs;
+  // FIX: default to true so Remember Me is always checked on first use
+  final rememberMe = true.obs;
   final GlobalKey<FormState> loginFormKey = GlobalKey<FormState>();
 
   bool _isNavigating = false;
@@ -46,11 +47,15 @@ class LoginController extends GetxController {
 
     email.text = localStorage.read('REMEMBER_ME_EMAIL') ?? '';
     username.text = localStorage.read('REMEMBER_ME_USERNAME') ?? '';
-    rememberMe.value = localStorage.read('REMEMBER_ME') ?? false;
+
+    // FIX: read persisted value; if never written before, default to true
+    final stored = localStorage.read<bool>('REMEMBER_ME');
+    rememberMe.value = stored ?? true;
 
     ever<bool>(rememberMe, (val) async {
       localStorage.write('REMEMBER_ME', val);
       if (!val) {
+        // User unchecked Remember Me — wipe saved credentials immediately
         localStorage.remove('REMEMBER_ME_EMAIL');
         localStorage.remove('REMEMBER_ME_USERNAME');
         await SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
@@ -62,9 +67,28 @@ class LoginController extends GetxController {
 
   // =========================================================
   // AUTO LOGIN
+  // FIX: skip auto-login entirely when rememberMe is false.
+  // Sign the user out so app restart forces a fresh login.
   // =========================================================
 
   Future<void> _autoLogin() async {
+    // If Remember Me is off, sign out so the user must log in manually.
+    // AuthenticationRepository already handles the redirect — don't duplicate it.
+    if (!rememberMe.value) {
+      try {
+        await Amplify.Auth.signOut();
+      } catch (_) {}
+      print('ℹ️ Auto-login skipped: Remember Me is off — session cleared');
+      return;
+    }
+
+    // If AuthenticationRepository already navigated (normal startup path),
+    // skip — we don't want a second competing navigation call that causes flash.
+    if (AuthenticationRepository.instance.startupNavigationDone) {
+      print('ℹ️ Auto-login skipped: startup navigation already handled');
+      return;
+    }
+
     try {
       final session = await Amplify.Auth.fetchAuthSession();
       if (!session.isSignedIn) return;
@@ -130,8 +154,6 @@ class LoginController extends GetxController {
 
   // =========================================================
   // RESOLVE LOGIN IDENTIFIER
-  // Cognito uses email as username. If user typed display-username,
-  // look up their email from DataStore.
   // =========================================================
 
   Future<String> _resolveLoginIdentifier() async {
@@ -196,20 +218,16 @@ class LoginController extends GetxController {
 
   // =========================================================
   // PREPARE USER SESSION
-  // Queries by real userId first, falls back to email to prevent
-  // duplicate records from DataStore sync race conditions.
   // =========================================================
 
   Future<void> _prepareUserSession({dynamic googleUser}) async {
     final authUser = await Amplify.Auth.getCurrentUser();
 
-    // Null-safe token
     String token = '';
     try {
-      token = await TNotificationService.getToken() ?? ''; // ✅ null-safe
+      token = await TNotificationService.getToken() ?? '';
     } catch (_) {}
 
-    // Step 1: Try finding by real userId
     User? existingUser;
 
     final byId = await Amplify.DataStore.query(
@@ -220,8 +238,6 @@ class LoginController extends GetxController {
     if (byId.isNotEmpty) {
       existingUser = byId.first;
     } else {
-      // ✅ Step 2: Fallback to email lookup — catches records saved with
-      // wrong id (email placeholder) before confirmation was complete
       final lookupEmail =
           googleUser?.email ??
           (email.text.trim().isNotEmpty ? email.text.trim() : null);
@@ -240,7 +256,6 @@ class LoginController extends GetxController {
     late User currentUser;
 
     if (existingUser != null) {
-      // Update existing — preserve all profile data, only refresh mutable fields
       currentUser = existingUser.copyWith(
         username: googleUser?.displayName ?? existingUser.username,
         email: googleUser?.email ?? existingUser.email,
@@ -249,7 +264,6 @@ class LoginController extends GetxController {
         updatedAt: TemporalDateTime.now(),
       );
     } else {
-      // Truly new user (e.g. first-time Google sign-in)
       currentUser = User(
         id: authUser.userId,
         username:

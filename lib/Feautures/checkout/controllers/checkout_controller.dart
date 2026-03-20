@@ -204,36 +204,54 @@ class CheckoutController extends GetxController {
   }
 
   // =========================================================================
-  // ✅ FIXED: renders a clean centered QR code on a white card — no clutter
+  // FIX: QR rendered at full canvas size so it fills the image correctly.
+  //
+  // Root cause of the tiny top-left QR:
+  //   • The old code multiplied canvas dimensions by pixelRatio (3×) making
+  //     a 2700×2700 logical canvas, then drew a 600×600 QR at offset (150,150).
+  //     Result: QR occupied ~5% of the image area, top-left corner only.
+  //
+  // Fix:
+  //   • Draw at logical size (cardSize × cardSize) with small padding.
+  //   • Pass pixelRatio only to toImage() so the final PNG is high-resolution
+  //     without affecting where anything is drawn on the canvas.
   // =========================================================================
   Future<File?> _renderQrToFile({
     required String qrData,
     required String ref,
   }) async {
     try {
-      const double cardSize = 900;
-      const double pixelRatio = 3.0;
-      const double qrSize = 600;
-      const double padding = (cardSize - qrSize) / 2;
-      const double cornerRadius = 48.0;
+      // All drawing is done in scaled coordinates.
+      // scale = 3 means the output PNG is 3× the logical size — sharp on any screen.
+      const double scale = 3.0;
+      const double logicalSize = 900.0; // logical canvas size
+      const double logicalPad = 40.0; // padding around QR
+      const double logicalQr = logicalSize - logicalPad * 2;
+      const double cornerRadius = 36.0;
+
+      // Physical pixel dimensions of the output image
+      final int physicalSize = (logicalSize * scale).toInt(); // 2700
 
       final recorder = ui.PictureRecorder();
+      // Culling rect must match the PHYSICAL size because we scale the canvas
       final canvas = Canvas(
         recorder,
-        const Rect.fromLTWH(0, 0, cardSize, cardSize),
+        Rect.fromLTWH(0, 0, logicalSize * scale, logicalSize * scale),
       );
 
-      // ── White card background ──────────────────────────────────────────
-      final bgPaint = Paint()..color = Colors.white;
+      // Scale ALL drawing operations so they fill the physical canvas
+      canvas.scale(scale, scale);
+
+      // ── White background ───────────────────────────────────────────────
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          const Rect.fromLTWH(0, 0, cardSize, cardSize),
+          Rect.fromLTWH(0, 0, logicalSize, logicalSize),
           const Radius.circular(cornerRadius),
         ),
-        bgPaint,
+        Paint()..color = Colors.white,
       );
 
-      // ── Centered QR code ───────────────────────────────────────────────
+      // ── QR code centred with padding ───────────────────────────────────
       final qrPainter = QrPainter(
         data: qrData,
         version: QrVersions.auto,
@@ -249,16 +267,13 @@ class CheckoutController extends GetxController {
       );
 
       canvas.save();
-      canvas.translate(padding, padding);
-      qrPainter.paint(canvas, const Size(qrSize, qrSize));
+      canvas.translate(logicalPad, logicalPad);
+      qrPainter.paint(canvas, Size(logicalQr, logicalQr));
       canvas.restore();
 
-      // ── Finalise ───────────────────────────────────────────────────────
+      // toImage dimensions must match the physical canvas size exactly
       final picture = recorder.endRecording();
-      final img = await picture.toImage(
-        (cardSize * pixelRatio).toInt(),
-        (cardSize * pixelRatio).toInt(),
-      );
+      final img = await picture.toImage(physicalSize, physicalSize);
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return null;
 
@@ -275,7 +290,7 @@ class CheckoutController extends GetxController {
   }
 
   // =========================================================================
-  // ✅ FIXED: QR sent only to the purchasing student's chat thread
+  // QR SEND
   // =========================================================================
   Future<void> _sendQrCode({
     required String sessionId,
@@ -292,7 +307,6 @@ class CheckoutController extends GetxController {
         return;
       }
 
-      // ✅ Show download sheet ONLY to the student (purchaser)
       if (Get.context != null) {
         await _showQrDownloadSheet(
           context: Get.context!,
@@ -302,7 +316,6 @@ class CheckoutController extends GetxController {
         );
       }
 
-      // ✅ Send QR notice ONLY to student's own chat thread
       final studentChatId = '${sessionId}_$studentUserId';
       const qrNotice =
           '📍 Physical Session QR Code\n\n'
@@ -358,7 +371,6 @@ class CheckoutController extends GetxController {
       final sessionId = item.sessionId;
       if (sessionId == null) return;
 
-      // ✅ Student-only chat thread
       final chatId = '${sessionId}_$userId';
 
       final currentUser = UserController.instance.currentUser.value;
@@ -405,7 +417,6 @@ class CheckoutController extends GetxController {
 
       safePrint('✅ CheckoutController: booking confirmation sent to $chatId');
 
-      // ✅ Physical session — generate QR for student only
       if (_isPhysicalSession(attrs)) {
         safePrint('📍 Physical session — generating QR for student');
 
@@ -969,12 +980,9 @@ class _QrDownloadSheet extends StatelessWidget {
           // ── Action buttons ───────────────────────────────────────
           Row(
             children: [
-              // ✅ FIXED: Save uses gal package to save to gallery
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () async {
-                    await _saveToGallery(context);
-                  },
+                  onPressed: () => _saveToGallery(context),
                   icon: const Icon(Icons.download_rounded, size: 18),
                   label: const Text(
                     'Save',
@@ -991,7 +999,6 @@ class _QrDownloadSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              // Share
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
@@ -1038,19 +1045,19 @@ class _QrDownloadSheet extends StatelessWidget {
     );
   }
 
-  // ✅ FIXED: uses gal to properly save PNG to device photo gallery
   Future<void> _saveToGallery(BuildContext context) async {
     try {
-      // Request permission first
       final hasAccess = await Gal.hasAccess(toAlbum: true);
       if (!hasAccess) {
         await Gal.requestAccess(toAlbum: true);
       }
 
-      // Save the PNG file to the gallery
       await Gal.putImage(qrFile.path, album: 'TutorLink');
 
       if (context.mounted) {
+        // FIX: dismiss the sheet first, then show the snackbar
+        Navigator.of(context).pop();
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Row(

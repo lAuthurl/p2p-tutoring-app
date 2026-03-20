@@ -35,10 +35,28 @@ class AuthenticationRepository extends GetxController {
   String get getPhoneNo => currentUser?.phoneNumber ?? '';
 
   static const _kIsFirstTime = 'isFirstTime';
+  static const _kRememberMe = 'REMEMBER_ME';
+
+  // ── Navigation gate ─────────────────────────────────────────────────────────
+  // Set to true as soon as initializeCurrentUser fires its ONE navigation call.
+  // LoginController._autoLogin and HomeController must check this before
+  // calling Get.offAllNamed so they never race with the startup redirect.
+  bool _startupNavigationDone = false;
+
+  /// True once the initial startup navigation has fired.
+  /// LoginController and HomeController check this to avoid a flash.
+  bool get startupNavigationDone => _startupNavigationDone;
 
   bool get _isFirstTime {
     final val = deviceStorage.read<bool>(_kIsFirstTime);
-    return val == true;
+    // null  → key never written → fresh install → show onboarding
+    // false → onboarding already seen → go to login
+    return val != false;
+  }
+
+  bool get _rememberMe {
+    final val = deviceStorage.read<bool>(_kRememberMe);
+    return val ?? true;
   }
 
   void markOnboardingComplete() {
@@ -87,19 +105,32 @@ class AuthenticationRepository extends GetxController {
             : Get.put(FavoritesController(), permanent: true);
 
     final futures = <Future>[favCtrl.reloadForUser()];
-
     if (Get.isRegistered<BookingController>()) {
       futures.add(BookingController.instance.reloadForUser());
     }
-
     await Future.wait(futures);
   }
 
   // =========================================================
   // INITIALIZE CURRENT USER
+  //
+  // This is the ONE place that performs the startup navigation.
+  // It sets _startupNavigationDone = true before calling
+  // screenRedirect so LoginController and HomeController know
+  // not to fire their own navigation calls.
   // =========================================================
 
   Future<void> initializeCurrentUser() async {
+    // Remember Me is off — sign out and go straight to login
+    if (!_rememberMe) {
+      try {
+        await Amplify.Auth.signOut();
+      } catch (_) {}
+      _currentUser.value = null;
+      _doStartupNavigate(null);
+      return;
+    }
+
     try {
       final authUser = await Amplify.Auth.getCurrentUser();
 
@@ -127,10 +158,11 @@ class AuthenticationRepository extends GetxController {
         await _reloadUserControllers();
       }
 
-      await screenRedirect(_currentUser.value);
+      _doStartupNavigate(_currentUser.value);
     } catch (_) {
       _currentUser.value = null;
 
+      // Try remembered credentials
       try {
         final bool remember =
             (deviceStorage.read('REMEMBER_ME') as bool?) ?? false;
@@ -143,7 +175,7 @@ class AuthenticationRepository extends GetxController {
           try {
             final cred = await loginWithEmailAndPassword(email, password);
             _currentUser.value = cred.user;
-            await screenRedirect(_currentUser.value);
+            _doStartupNavigate(_currentUser.value);
             return;
           } catch (_) {
             try {
@@ -159,7 +191,7 @@ class AuthenticationRepository extends GetxController {
                     email: email.trim(),
                   );
                   _currentUser.value = appUser;
-                  await screenRedirect(_currentUser.value);
+                  _doStartupNavigate(_currentUser.value);
                   return;
                 }
               }
@@ -168,41 +200,17 @@ class AuthenticationRepository extends GetxController {
         }
       } catch (_) {}
 
-      await screenRedirect(null);
+      _doStartupNavigate(null);
     }
   }
 
-  // =========================================================
-  // REFRESH CURRENT USER (no navigation)
-  // =========================================================
-
-  Future<AppUser?> refreshCurrentUserNoRedirect() async {
-    try {
-      final authUser = await Amplify.Auth.getCurrentUser();
-
-      bool emailVerified = false;
-      try {
-        final attrs = await Amplify.Auth.fetchUserAttributes();
-        for (final a in attrs) {
-          if (a.userAttributeKey.key == 'email_verified' &&
-              a.value.toLowerCase() == 'true') {
-            emailVerified = true;
-            break;
-          }
-        }
-      } catch (_) {}
-
-      final appUser = AppUser(
-        uid: authUser.userId,
-        email: authUser.username,
-        emailVerified: emailVerified,
-      );
-      _currentUser.value = appUser;
-      return appUser;
-    } catch (_) {
-      _currentUser.value = null;
-      return null;
-    }
+  // ── Single guarded navigation call for startup ───────────────────────────
+  // Called exactly once by initializeCurrentUser. Marks the gate so
+  // LoginController._autoLogin and HomeController._startAppFlow skip
+  // their own navigation calls on first load.
+  void _doStartupNavigate(AppUser? user) {
+    _startupNavigationDone = true;
+    screenRedirect(user);
   }
 
   // =========================================================
@@ -237,15 +245,6 @@ class AuthenticationRepository extends GetxController {
         Get.offAllNamed(TRoutes.mainDashboard);
       }
     } else {
-      // ✅ FIX: No route guards — offAllNamed always fires unconditionally.
-      //
-      // The old guards were:
-      //   if (Get.currentRoute != TRoutes.onboarding) { ... }
-      //   if (Get.currentRoute != TRoutes.logIn && ...) { ... }
-      //
-      // On cold start Get.currentRoute is '/' — neither guard matched, so
-      // offAllNamed() was silently skipped and whatever was rendering stayed
-      // on screen. Without the guards it always fires cleanly from the splash.
       if (_isFirstTime) {
         Get.offAllNamed(TRoutes.onboarding);
       } else {
@@ -261,9 +260,7 @@ class AuthenticationRepository extends GetxController {
   Future<void> onLoginSuccess() async {
     await Amplify.DataStore.start();
     AppBindings().dependencies();
-
     await _reloadUserControllers();
-
     Get.offAllNamed(TRoutes.mainDashboard);
   }
 
@@ -370,13 +367,11 @@ class AuthenticationRepository extends GetxController {
       final options = SignUpOptions(
         userAttributes: {AuthUserAttributeKey.email: email},
       );
-
       await Amplify.Auth.signUp(
         username: email,
         password: password,
         options: options,
       );
-
       final appUser = AppUser(uid: email, email: email);
       _currentUser.value = appUser;
       return AppUserCredential(user: appUser);
@@ -407,15 +402,12 @@ class AuthenticationRepository extends GetxController {
     final code = confirmationCode.trim();
     if (uname.isEmpty) throw 'Username is required to confirm verification.';
     if (code.isEmpty) throw 'Confirmation code is required.';
-
     try {
       final res = await Amplify.Auth.confirmSignUp(
         username: uname,
         confirmationCode: code,
       );
-      if (res.isSignUpComplete) {
-        await refreshCurrentUserNoRedirect();
-      }
+      if (res.isSignUpComplete) await refreshCurrentUserNoRedirect();
     } on AmplifyException catch (e) {
       throw e.message;
     } catch (_) {
@@ -425,9 +417,8 @@ class AuthenticationRepository extends GetxController {
 
   Future<void> resendConfirmationCode(String username) async {
     final uname = username.trim();
-    if (uname.isEmpty) {
+    if (uname.isEmpty)
       throw 'Username is required to resend confirmation code.';
-    }
     try {
       await Amplify.Auth.resendSignUpCode(username: uname);
     } on AmplifyException catch (e) {
@@ -471,9 +462,7 @@ class AuthenticationRepository extends GetxController {
       final authUser = await Amplify.Auth.getCurrentUser();
       final appUser = AppUser(uid: authUser.userId, email: authUser.username);
       _currentUser.value = appUser;
-
       await _reloadUserControllers();
-
       return AppUserCredential(user: appUser);
     } on AmplifyException catch (e) {
       throw e.message;
@@ -495,13 +484,43 @@ class AuthenticationRepository extends GetxController {
   }
 
   // =========================================================
+  // REFRESH CURRENT USER (no navigation)
+  // =========================================================
+
+  Future<AppUser?> refreshCurrentUserNoRedirect() async {
+    try {
+      final authUser = await Amplify.Auth.getCurrentUser();
+      bool emailVerified = false;
+      try {
+        final attrs = await Amplify.Auth.fetchUserAttributes();
+        for (final a in attrs) {
+          if (a.userAttributeKey.key == 'email_verified' &&
+              a.value.toLowerCase() == 'true') {
+            emailVerified = true;
+            break;
+          }
+        }
+      } catch (_) {}
+      final appUser = AppUser(
+        uid: authUser.userId,
+        email: authUser.username,
+        emailVerified: emailVerified,
+      );
+      _currentUser.value = appUser;
+      return appUser;
+    } catch (_) {
+      _currentUser.value = null;
+      return null;
+    }
+  }
+
+  // =========================================================
   // LOGOUT
   // =========================================================
 
   Future<void> logout() async {
     try {
       _clearAllUserState();
-
       await Amplify.Auth.signOut();
       try {
         await deviceStorage.remove('REMEMBER_ME');
@@ -510,6 +529,8 @@ class AuthenticationRepository extends GetxController {
         await SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
         await deviceStorage.write(_kIsFirstTime, false);
       } catch (_) {}
+      // Reset gate so next cold start works correctly
+      _startupNavigationDone = false;
       Get.offAllNamed(TRoutes.logIn);
     } catch (_) {
       throw 'Something went wrong. Please try again';
@@ -518,21 +539,18 @@ class AuthenticationRepository extends GetxController {
 
   Future<void> logoutSilent() async {
     _clearAllUserState();
-
     try {
       await Amplify.Auth.signOut();
     } catch (_) {}
-
     try {
       await deviceStorage.erase();
       await deviceStorage.write(_kIsFirstTime, false);
     } catch (_) {}
-
     try {
       await GetStorage().erase();
     } catch (_) {}
-
     _currentUser.value = null;
+    _startupNavigationDone = false;
   }
 
   Future<void> signOutNoClear() async {

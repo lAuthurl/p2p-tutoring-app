@@ -5,9 +5,4 @@ flutter pub get
 amplify codegen models
 
 
-make vc sends double message the first message plays and doesnt record and play properly
-qr card should exit after clicking save and the qrcode should be at the center of the image and fill the image right noow its at a small corner top left
-
 and try making voice call work  - last thing to do
-remember me 
-CACHE IMAHES ISNG THE WIDGET AND CHAT AND Review PAYMENT GETWAY AND TUTOR Checking 

@@ -10,6 +10,7 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../../../common/widgets/images/t_user_avatar.dart';
 import '../../../../common/widgets/texts/section_heading.dart';
+import '../../../../services/session_access_cache.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../../../utils/device/device_utility.dart';
@@ -49,9 +50,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
   String? _currentUserId;
 
   bool _hasPaid = false;
-
-  // ✅ FIXED: start as true only — set to false immediately once
-  // ownership is confirmed so tutors never see the "Checking…" state.
   bool _checkingPayment = true;
 
   static final RouteObserver<ModalRoute> _routeObserver =
@@ -66,8 +64,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
     _creationController = Get.put(SessionCreationController(), tag: widget.tag);
 
     _initializeAttributes(widget.session);
+
+    // Reviews and access check run concurrently
     _fetchReviews();
-    // ✅ Check ownership FIRST — if owner, skip payment check entirely
     _initAccess();
   }
 
@@ -83,33 +82,44 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
     _recheckPayment();
   }
 
+  /// Called when returning from checkout or review screen.
+  /// Invalidates the payment cache so a fresh check runs.
   Future<void> _recheckPayment() async {
-    // ✅ Tutors never need to recheck — they always have access
     if (_isFreeSession || _currentUserId == null || _isOwner) return;
+    // Bust the cache so the fetcher re-runs
+    SessionAccessCache.instance.invalidatePayment(widget.session.id);
     setState(() => _checkingPayment = true);
     await _checkPaymentStatus();
   }
 
-  // ✅ NEW: single entry point that runs ownership check first,
-  // then conditionally runs the payment check only for non-owners.
   Future<void> _initAccess() async {
+    // 1. Get current user id
     try {
       final user = await Amplify.Auth.getCurrentUser();
       if (!mounted) return;
       setState(() => _currentUserId = user.userId);
     } catch (_) {
-      if (mounted) setState(() => _checkingPayment = false);
+      if (mounted) {
+        setState(() => _checkingPayment = false);
+      }
       return;
     }
 
-    // Check ownership
-    final tutorId = await _tutoringController.currentUserTutorId;
+    final userId = _currentUserId!;
+
+    // 2. Tutor ownership — cached 60 min
+    final isOwner = await SessionAccessCache.instance.getIsTutor(
+      userId: userId,
+      sessionId: widget.session.id,
+      fetcher: () async {
+        final tutorId = await _tutoringController.currentUserTutorId;
+        return tutorId != null && tutorId == widget.session.tutor?.id;
+      },
+    );
+
     if (!mounted) return;
 
-    final isOwner = tutorId != null && tutorId == widget.session.tutor?.id;
-
     if (isOwner) {
-      // ✅ Tutor identified — no payment check needed, unlock everything
       setState(() {
         _isOwner = true;
         _checkingPayment = false;
@@ -117,7 +127,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
       return;
     }
 
-    // Not a tutor — run payment check for student
     setState(() => _isOwner = false);
     await _checkPaymentStatus();
   }
@@ -134,21 +143,37 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
     }
 
     if (_isOwner || _currentUserId == null) {
-      if (mounted) setState(() => _checkingPayment = false);
+      if (mounted) {
+        setState(() => _checkingPayment = false);
+      }
       return;
     }
 
+    final userId = _currentUserId!;
+    final sessionId = widget.session.id;
+
+    // Payment status — cached 10 min, busted after checkout
+    final paid = await SessionAccessCache.instance.getHasPaid(
+      userId: userId,
+      sessionId: sessionId,
+      fetcher: () => _fetchPaymentFromApi(userId, sessionId),
+    );
+
+    if (mounted) {
+      setState(() {
+        _hasPaid = paid;
+        _checkingPayment = false;
+      });
+    }
+  }
+
+  /// Raw GraphQL payment check — only called on cache miss.
+  Future<bool> _fetchPaymentFromApi(String userId, String sessionId) async {
     try {
       const queryDoc = r"""
         query ListPaymentsByUser($userId: ID!, $limit: Int) {
           listUserSessionPaymentsByUser(userId: $userId, limit: $limit) {
-            items {
-              id
-              userId
-              sessionId
-              hasPaid
-              _deleted
-            }
+            items { id userId sessionId hasPaid _deleted }
           }
         }
       """;
@@ -158,7 +183,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
               .query(
                 request: GraphQLRequest<String>(
                   document: queryDoc,
-                  variables: {'userId': _currentUserId!, 'limit': 200},
+                  variables: {'userId': userId, 'limit': 200},
                 ),
               )
               .response;
@@ -166,24 +191,23 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
       if (response.errors.isEmpty && response.data != null) {
         final decoded = jsonDecode(response.data!) as Map<String, dynamic>;
         final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
-        final listObj =
-            root['listUserSessionPaymentsByUser'] as Map<String, dynamic>?;
-        final items = listObj?['items'] as List<dynamic>? ?? [];
+        final items =
+            (root['listUserSessionPaymentsByUser']
+                    as Map<String, dynamic>?)?['items']
+                as List<dynamic>? ??
+            [];
 
-        final paid = items.any((raw) {
+        return items.any((raw) {
           final item = raw as Map<String, dynamic>;
-          return item['sessionId'] == widget.session.id &&
+          return item['sessionId'] == sessionId &&
               item['hasPaid'] == true &&
               item['_deleted'] != true;
         });
-
-        if (mounted) setState(() => _hasPaid = paid);
       }
     } catch (e) {
-      safePrint('_checkPaymentStatus error: $e');
-    } finally {
-      if (mounted) setState(() => _checkingPayment = false);
+      safePrint('_fetchPaymentFromApi error: $e');
     }
+    return false;
   }
 
   @override
@@ -211,20 +235,25 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
         }
       }
     }
-
     const defaultAttrs = {
       "Mode": ["Online", "Offline"],
       "Duration": ["1hr", "2hr"],
     };
-
-    final merged = {...defaultAttrs, ...sessionAttrs};
-    _creationController.initializeAttributesForSession(merged);
+    _creationController.initializeAttributesForSession({
+      ...defaultAttrs,
+      ...sessionAttrs,
+    });
   }
 
   Future<void> _fetchReviews() async {
     setState(() => _loadingReviews = true);
     try {
-      final reviews = await _tutoringController.fetchReviews(widget.session.id);
+      // Reviews — cached 5 min, busted after new review submitted
+      final reviews = await SessionAccessCache.instance.getReviews<Review>(
+        sessionId: widget.session.id,
+        fetcher: () => _tutoringController.fetchReviews(widget.session.id),
+      );
+
       reviews.sort((a, b) {
         final aIsCreator =
             a.user?.email != null &&
@@ -239,6 +268,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
         final bDate = b.createdAt?.getDateTimeInUtc() ?? DateTime(0);
         return bDate.compareTo(aDate);
       });
+
       if (mounted) {
         setState(() {
           _reviews = reviews;
@@ -247,13 +277,15 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
       }
     } catch (e) {
       Get.snackbar(
-        "Error",
-        "Failed to fetch reviews",
+        'Error',
+        'Failed to fetch reviews',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.redAccent,
         colorText: Colors.white,
       );
-      if (mounted) setState(() => _loadingReviews = false);
+      if (mounted) {
+        setState(() => _loadingReviews = false);
+      }
     }
   }
 
@@ -269,15 +301,15 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
         if (tutors.isNotEmpty) return tutors.first;
       }
       Get.snackbar(
-        "Error",
-        "Tutor information not available",
+        'Error',
+        'Tutor information not available',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.redAccent,
         colorText: Colors.white,
       );
       return null;
     } catch (e, st) {
-      safePrint("❌ Failed to fetch tutor for session ${session.id}: $e\n$st");
+      safePrint('❌ Failed to fetch tutor for session ${session.id}: $e\n$st');
       return null;
     }
   }
@@ -285,11 +317,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
   Future<void> _bookSession(TutoringSession session) async {
     try {
       final tutoringController = Get.find<TutoringController>(tag: widget.tag);
-
       final attrs = Map<String, String>.from(
         _creationController.selectedAttributes,
       );
-
       await tutoringController.addSessionToBooking(
         session,
         selectedAttributes: attrs.isEmpty ? null : attrs,
@@ -304,6 +334,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
   Future<void> _openReviewScreen() async {
     if (_isOwner) {
       await Get.to(() => SessionReviewScreen(session: widget.session));
+      // Bust reviews cache so the list refreshes on return
+      SessionAccessCache.instance.invalidateReviews(widget.session.id);
       _fetchReviews();
       return;
     }
@@ -332,6 +364,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
     }
 
     await Get.to(() => SessionReviewScreen(session: widget.session));
+    SessionAccessCache.instance.invalidateReviews(widget.session.id);
     _fetchReviews();
   }
 
@@ -399,11 +432,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: ReadMoreText(
-                          session.description ?? "No description provided.",
+                          session.description ?? 'No description provided.',
                           trimLines: 4,
                           trimMode: TrimMode.Line,
-                          trimCollapsedText: "  Show more",
-                          trimExpandedText: "  Show less",
+                          trimCollapsedText: '  Show more',
+                          trimExpandedText: '  Show less',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             height: 1.65,
                             color: colorScheme.onSurface.withValues(alpha: 0.8),
@@ -426,7 +459,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const _SectionLabel(title: "Reviews"),
+                          const _SectionLabel(title: 'Reviews'),
                           Tooltip(
                             message:
                                 (!canReview && !_checkingPayment)
@@ -446,10 +479,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
                               ),
                               label: Text(
                                 canReview
-                                    ? "Write a review"
+                                    ? 'Write a review'
                                     : _checkingPayment
-                                    ? "Checking…"
-                                    : "Write a review 🔒",
+                                    ? 'Checking…'
+                                    : 'Write a review 🔒',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -563,7 +596,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
                                   vertical: 13,
                                 ),
                               ),
-                              child: Text("See all ${_reviews.length} reviews"),
+                              child: Text('See all ${_reviews.length} reviews'),
                             ),
                           ),
                         ),
@@ -576,6 +609,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
             ),
           ),
 
+          // ── Bottom CTA ─────────────────────────────────────────────────────
           Positioned(
             bottom: 0,
             left: 0,
@@ -615,7 +649,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
                         Icon(Iconsax.calendar_add, size: 18),
                         SizedBox(width: 8),
                         Text(
-                          "Book Session",
+                          'Book Session',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
@@ -634,14 +668,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
   }
 }
 
+// ── Supporting widgets (unchanged) ───────────────────────────────────────────
+
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.title});
   final String title;
-
   @override
-  Widget build(BuildContext context) {
-    return TSectionHeading(title: title, showActionButton: false);
-  }
+  Widget build(BuildContext context) =>
+      TSectionHeading(title: title, showActionButton: false);
 }
 
 class _ActionRow extends StatelessWidget {
@@ -666,8 +700,6 @@ class _ActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
-    // ✅ Tutors always have chat enabled — no checking needed
     final chatEnabled = isOwner || isFreeSession || hasPaid;
 
     final activeButtonStyle = OutlinedButton.styleFrom(
@@ -695,7 +727,7 @@ class _ActionRow extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: onTutorTap,
                 icon: const Icon(Iconsax.profile_circle, size: 17),
-                label: const Text("Tutor Profile"),
+                label: const Text('Tutor Profile'),
                 style: activeButtonStyle,
               ),
             ),
@@ -703,15 +735,12 @@ class _ActionRow extends StatelessWidget {
             Expanded(
               child: Tooltip(
                 message:
-                    // ✅ Tutors never see the lock tooltip
                     (!isOwner && !chatEnabled && !checking)
                         ? 'Book & pay to unlock chat'
                         : '',
                 preferBelow: false,
                 child: OutlinedButton.icon(
                   onPressed:
-                      // ✅ Tutor: always tappable, goes straight to Inbox
-                      // Student: only tappable when chatEnabled
                       (isOwner || chatEnabled)
                           ? () {
                             if (isOwner) {
@@ -729,7 +758,6 @@ class _ActionRow extends StatelessWidget {
                           }
                           : null,
                   icon:
-                      // ✅ Tutor: always show inbox icon, no spinner
                       isOwner
                           ? const Icon(Iconsax.message_text, size: 17)
                           : checking
@@ -743,7 +771,6 @@ class _ActionRow extends StatelessWidget {
                             size: 17,
                           ),
                   label: Text(
-                    // ✅ Tutor: always "Inbox", no spinner, no lock
                     isOwner
                         ? 'Inbox'
                         : checking
@@ -761,8 +788,6 @@ class _ActionRow extends StatelessWidget {
             ),
           ],
         ),
-
-        // ✅ Lock banner only shown to non-owner unpaid students
         if (!isOwner && !isFreeSession && !checking && !hasPaid) ...[
           const SizedBox(height: 10),
           Container(
@@ -824,7 +849,7 @@ class _EmptyReviews extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            "No reviews yet",
+            'No reviews yet',
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
               color: colorScheme.onSurface.withValues(alpha: 0.45),
@@ -832,7 +857,7 @@ class _EmptyReviews extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            "Be the first to share your experience",
+            'Be the first to share your experience',
             style: theme.textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurface.withValues(alpha: 0.3),
             ),
@@ -857,12 +882,11 @@ class _ReviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = review;
-    final username = r.user?.username ?? "Anonymous";
+    final username = r.user?.username ?? 'Anonymous';
     final dateStr =
         r.createdAt != null
-            ? r.createdAt!.getDateTimeInUtc().toLocal().toString().split(" ")[0]
+            ? r.createdAt!.getDateTimeInUtc().toLocal().toString().split(' ')[0]
             : '';
-
     final isCreator =
         r.user?.email != null &&
         r.tutor?.email != null &&
@@ -982,7 +1006,6 @@ class _ReviewCard extends StatelessWidget {
 
 class _CreatorTag extends StatelessWidget {
   const _CreatorTag();
-
   @override
   Widget build(BuildContext context) {
     return Container(

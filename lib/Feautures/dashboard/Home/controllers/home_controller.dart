@@ -30,6 +30,13 @@ class HomeController extends GetxController {
   final _tutorCache = <String, Tutor>{};
   final _sessionSubjectMap = <String, String>{};
 
+  // Track session IDs whose tutor resolved to null (DataStore not ready yet)
+  // so we can back-fill them once DataStore syncs.
+  final _pendingTutorSessionIds = <String>{};
+
+  // DataStore observer subscription for Tutor records
+  StreamSubscription? _tutorObserverSub;
+
   @override
   void onInit() {
     super.onInit();
@@ -55,6 +62,12 @@ class HomeController extends GetxController {
     if (userController.currentUser.value != null) _startAppFlow();
   }
 
+  @override
+  void onClose() {
+    _tutorObserverSub?.cancel();
+    super.onClose();
+  }
+
   // =========================================================================
   // STARTUP FLOW
   // =========================================================================
@@ -72,27 +85,39 @@ class HomeController extends GetxController {
       }
 
       final user = userController.currentUser.value!;
-      await _ensureUserExists(user);
       _ensureBookingController();
       await subjectController.fetchSubjects();
 
-      await _waitForDataStoreReady();
-      await Future.delayed(const Duration(milliseconds: 800));
+      // FIX 1: Wait up to 8 s for DataStore sync so tutors are available
+      // when sessions are resolved. Falls through on timeout — back-fill
+      // handles the rest via the Tutor observer.
+      await _waitForDataStoreReady(timeoutSeconds: 8);
 
       await _loadAllSessionsFromGraphQL();
+
+      // FIX 2: Start observing Tutor records so any that arrive after
+      // initial load automatically fill in the missing tutor info.
+      _observeTutorUpdates();
 
       debugPrint('HomeController: ready for ${user.username}');
       isReady.value = true;
     } catch (e) {
       debugPrint('HomeController startup error: $e');
       await _loadAllSessionsFromDataStore();
+      _observeTutorUpdates();
       isReady.value = true;
     } finally {
       isLoading.value = false;
+
+      // FIX 3: After marking ready, schedule a back-fill pass for any
+      // sessions that still have no tutor (DataStore was slow to sync).
+      _scheduleBackFill();
     }
   }
 
-  Future<void> _waitForDataStoreReady() async {
+  // FIX 1: Smarter DataStore wait — resolves as soon as syncQueriesReady
+  // fires, with a configurable timeout instead of a hard 2 s cap.
+  Future<void> _waitForDataStoreReady({int timeoutSeconds = 8}) async {
     final completer = Completer<void>();
     late final StreamSubscription sub;
     sub = Amplify.Hub.listen(HubChannel.DataStore, (event) {
@@ -103,9 +128,11 @@ class HomeController extends GetxController {
     });
     try {
       await completer.future.timeout(
-        const Duration(seconds: 2),
+        Duration(seconds: timeoutSeconds),
         onTimeout: () {
-          debugPrint('HomeController: syncQueriesReady timed out — proceeding');
+          debugPrint(
+            'HomeController: syncQueriesReady timed out after ${timeoutSeconds}s — proceeding',
+          );
           sub.cancel();
         },
       );
@@ -114,17 +141,85 @@ class HomeController extends GetxController {
     }
   }
 
-  Future<void> _ensureUserExists(User user) async {
-    try {
-      final existing = await Amplify.DataStore.query(
-        User.classType,
-        where: User.ID.eq(user.id),
-      );
-      if (existing.isEmpty) {
-        await Amplify.DataStore.save(user);
+  // FIX 2: Observe DataStore Tutor records. When a Tutor record syncs in
+  // (INSERT or UPDATE), update the cache and patch any sessions that were
+  // missing tutor info on first load.
+  void _observeTutorUpdates() {
+    _tutorObserverSub?.cancel();
+    _tutorObserverSub = Amplify.DataStore.observe(Tutor.classType).listen((
+      event,
+    ) {
+      final tutor = event.item;
+      _tutorCache[tutor.id] = tutor;
+
+      bool changed = false;
+
+      // Patch sessions waiting for this tutor
+      for (int i = 0; i < allSessions.length; i++) {
+        final s = allSessions[i];
+        final needsTutor = s.tutor == null || s.tutor!.name.isEmpty;
+
+        // Check if this session's tutorId matches the arrived tutor
+        // We stored tutorId in a side channel during GraphQL parse
+        final sessionTutorId = _sessionTutorIdMap[s.id];
+        if (sessionTutorId == tutor.id && needsTutor) {
+          allSessions[i] = s.copyWith(tutor: tutor);
+          _pendingTutorSessionIds.remove(s.id);
+          changed = true;
+        }
       }
-    } catch (e) {
-      debugPrint('HomeController: _ensureUserExists error: $e');
+
+      if (changed) {
+        allSessions.refresh();
+        _applyFilters();
+        debugPrint(
+          'HomeController: back-filled tutor ${tutor.name} via observer',
+        );
+      }
+    }, onError: (e) => debugPrint('HomeController: tutor observer error: $e'));
+  }
+
+  // FIX 3: After initial load, retry resolving tutors for sessions that
+  // came back null. Runs after a short delay to give DataStore time to
+  // finish the initial sync pass.
+  void _scheduleBackFill() {
+    if (_pendingTutorSessionIds.isEmpty) return;
+    Future.delayed(const Duration(seconds: 3), () async {
+      if (!isReady.value) return;
+      await _backFillMissingTutors();
+    });
+  }
+
+  Future<void> _backFillMissingTutors() async {
+    if (_pendingTutorSessionIds.isEmpty) return;
+    debugPrint(
+      'HomeController: back-filling ${_pendingTutorSessionIds.length} sessions with missing tutors',
+    );
+
+    bool changed = false;
+    final ids = Set<String>.from(_pendingTutorSessionIds);
+
+    for (final sessionId in ids) {
+      final idx = allSessions.indexWhere((s) => s.id == sessionId);
+      if (idx == -1) continue;
+
+      final tutorId = _sessionTutorIdMap[sessionId];
+      if (tutorId == null) continue;
+
+      // Bust the cache so we actually re-query DataStore
+      _tutorCache.remove(tutorId);
+      final tutor = await _resolveTutorById(tutorId);
+      if (tutor != null) {
+        allSessions[idx] = allSessions[idx].copyWith(tutor: tutor);
+        _pendingTutorSessionIds.remove(sessionId);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      allSessions.refresh();
+      _applyFilters();
+      debugPrint('HomeController: back-fill complete');
     }
   }
 
@@ -137,6 +232,10 @@ class HomeController extends GetxController {
   // =========================================================================
   // SESSION LOADING
   // =========================================================================
+
+  // Side-channel map: sessionId → tutorId from GraphQL response.
+  // Used by the back-fill and observer to match arriving tutors to sessions.
+  final _sessionTutorIdMap = <String, String>{};
 
   Future<void> _loadAllSessionsFromGraphQL() async {
     const queryDoc = r"""
@@ -207,6 +306,11 @@ class HomeController extends GetxController {
           _sessionSubjectMap[id] = subjectId;
         }
 
+        // Store tutorId in side-channel for back-fill / observer use
+        if (tutorId != null && tutorId.isNotEmpty) {
+          _sessionTutorIdMap[id] = tutorId;
+        }
+
         TutoringSession session = TutoringSession(
           id: id,
           title: item['title'] as String? ?? 'Session',
@@ -228,7 +332,12 @@ class HomeController extends GetxController {
 
         if (tutorId != null && tutorId.isNotEmpty) {
           final tutor = await _resolveTutorById(tutorId);
-          if (tutor != null) session = session.copyWith(tutor: tutor);
+          if (tutor != null) {
+            session = session.copyWith(tutor: tutor);
+          } else {
+            // DataStore didn't have this tutor yet — mark for back-fill
+            _pendingTutorSessionIds.add(id);
+          }
         }
 
         if (subjectId != null && subjectId.isNotEmpty) {
@@ -241,7 +350,7 @@ class HomeController extends GetxController {
 
       allSessions.assignAll(resolved);
       debugPrint(
-        'HomeController: ${resolved.length} sessions loaded from AppSync',
+        'HomeController: ${resolved.length} sessions loaded, ${_pendingTutorSessionIds.length} awaiting tutor back-fill',
       );
     } catch (e) {
       debugPrint('HomeController: _loadAllSessionsFromGraphQL error: $e');
@@ -336,13 +445,7 @@ class HomeController extends GetxController {
     _sessionSubjectMap[sessionId] = subjectId;
   }
 
-  // =========================================================================
-  // ✅ NEW: Refresh tutor data in all sessions after a profile update.
-  // Called by UserController after name/image changes so the home grid
-  // and session cards immediately show the updated tutor info.
-  // =========================================================================
   void refreshTutorInSessions(Tutor updatedTutor) {
-    // Update cache first so future resolves get fresh data
     _tutorCache[updatedTutor.id] = updatedTutor;
 
     bool changed = false;
@@ -357,10 +460,6 @@ class HomeController extends GetxController {
     if (changed) {
       allSessions.refresh();
       _applyFilters();
-      debugPrint(
-        'HomeController: refreshed tutor ${updatedTutor.id} '
-        'across ${allSessions.where((s) => s.tutor?.id == updatedTutor.id).length} sessions',
-      );
     }
   }
 
@@ -505,7 +604,6 @@ class HomeController extends GetxController {
       return bTime.compareTo(aTime);
     });
     popularSessions.value = byPopularity;
-
     recentSessions.value = filtered;
   }
 
@@ -528,15 +626,11 @@ class HomeController extends GetxController {
     final created = s.createdAt?.getDateTimeInUtc();
     if (created != null) {
       final ageInDays = DateTime.now().toUtc().difference(created).inDays;
-      if (ageInDays <= 30) {
-        score += (1 - ageInDays / 30) * 10;
-      }
+      if (ageInDays <= 30) score += (1 - ageInDays / 30) * 10;
     }
 
     final price = s.pricePerSession ?? 0;
-    if (price > 0) {
-      score += (price.clamp(0, 10000) / 10000) * 10;
-    }
+    if (price > 0) score += (price.clamp(0, 10000) / 10000) * 10;
 
     return score;
   }
@@ -565,6 +659,10 @@ class HomeController extends GetxController {
     searchQuery.value = '';
     _tutorCache.clear();
     _sessionSubjectMap.clear();
+    _sessionTutorIdMap.clear();
+    _pendingTutorSessionIds.clear();
+    _tutorObserverSub?.cancel();
+    _tutorObserverSub = null;
   }
 
   // =========================================================================

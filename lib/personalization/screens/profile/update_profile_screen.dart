@@ -12,13 +12,28 @@ import '../../../../../personalization/controllers/user_controller.dart';
 import '../../../common/widgets/images/t_user_avatar.dart';
 import 'profile_form.dart';
 
-class UpdateProfileScreen extends StatelessWidget {
+// FIX: converted to StatefulWidget so assignDataToProfile() is called in
+// initState, not inside build() — which caused "setState during build".
+class UpdateProfileScreen extends StatefulWidget {
   const UpdateProfileScreen({super.key});
 
   @override
+  State<UpdateProfileScreen> createState() => _UpdateProfileScreenState();
+}
+
+class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
+  late final UserController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = UserController.instance;
+    // Safe to call here — not inside a build phase
+    _controller.assignDataToProfile();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final controller = UserController.instance;
-    controller.assignDataToProfile();
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -30,10 +45,9 @@ class UpdateProfileScreen extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                // Primary banner
                 Container(
                   width: double.infinity,
-                  height: 260, // was 240
+                  height: 260,
                   decoration: const BoxDecoration(
                     color: TColors.dashboardAppbarBackground,
                     borderRadius: BorderRadius.only(
@@ -73,7 +87,6 @@ class UpdateProfileScreen extends StatelessWidget {
                                 ),
                               ),
                               const Spacer(),
-                              // Balance the back arrow visually
                               const SizedBox(width: 48),
                             ],
                           ),
@@ -83,14 +96,14 @@ class UpdateProfileScreen extends StatelessWidget {
 
                         // Tappable avatar
                         Obx(() {
-                          final user = controller.currentUser.value;
+                          final user = _controller.currentUser.value;
                           final imageUrl = user?.profilePicture;
                           return GestureDetector(
                             onTap:
-                                controller.imageUploading.value
+                                _controller.imageUploading.value
                                     ? null
                                     : () =>
-                                        controller.uploadUserProfilePicture(),
+                                        _controller.uploadUserProfilePicture(),
                             child: Stack(
                               children: [
                                 Container(
@@ -102,7 +115,7 @@ class UpdateProfileScreen extends StatelessWidget {
                                     ),
                                   ),
                                   child:
-                                      controller.imageUploading.value
+                                      _controller.imageUploading.value
                                           ? const TShimmerEffect(
                                             width: 86,
                                             height: 86,
@@ -118,7 +131,6 @@ class UpdateProfileScreen extends StatelessWidget {
                                             foregroundColor: Colors.white,
                                           ),
                                 ),
-                                // Edit badge
                                 Positioned(
                                   bottom: 0,
                                   right: 0,
@@ -147,9 +159,8 @@ class UpdateProfileScreen extends StatelessWidget {
 
                         const SizedBox(height: 10),
 
-                        // Name
                         Obx(() {
-                          final user = controller.currentUser.value;
+                          final user = _controller.currentUser.value;
                           final name =
                               (user?.username.isNotEmpty ?? false)
                                   ? user!.username

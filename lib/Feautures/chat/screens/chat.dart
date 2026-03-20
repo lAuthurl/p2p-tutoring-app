@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:audio_session/audio_session.dart';
@@ -43,7 +44,9 @@ class _InboxScreenState extends State<InboxScreen> {
     for (final session in controller.activeSessions) {
       controller.observeChat(session.id);
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   @override
@@ -87,9 +90,7 @@ class _InboxScreenState extends State<InboxScreen> {
                 final sessionMap = controller.sessionMessages;
                 final baseSessions = controller.activeSessions;
                 final baseIds = baseSessions.map((s) => s.id).toSet();
-
-                // ignore: unnecessary_statement
-                controller.unreadCounts.entries;
+                controller.unreadCounts.entries; // reactive touch
 
                 final chatIds =
                     sessionMap.keys
@@ -359,6 +360,238 @@ class _EmptyInbox extends StatelessWidget {
   }
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// VOICE BUBBLE
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── Waveform painter ──────────────────────────────────────────────────────────
+//
+// IDLE:    bars at 50% height, single flat dim colour, NO playhead, NO animation.
+// PLAYING: bars at full height with ripple pulse near playhead, two-tone
+//          played/unplayed split, visible playhead line.
+//
+class _WaveformPainter extends CustomPainter {
+  _WaveformPainter({
+    required this.barHeights,
+    required this.progress,
+    required this.playedColor,
+    required this.unplayedColor,
+    required this.idleColor,
+    required this.playheadColor,
+    required this.animValue,
+    required this.isPlaying,
+  });
+
+  final List<double> barHeights;
+  final double progress;
+  final Color playedColor;
+  final Color unplayedColor;
+  final Color idleColor;
+  final Color playheadColor;
+  final double animValue;
+  final bool isPlaying;
+
+  static const double _barW = 3.0;
+  static const double _gap = 2.5;
+  static const double _idleScale = 0.50;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final playheadX = size.width * progress.clamp(0.0, 1.0);
+
+    for (int i = 0; i < barHeights.length; i++) {
+      final x = i * (_barW + _gap);
+      double h = barHeights[i] * size.height;
+      Color color;
+
+      if (isPlaying) {
+        final dist = (x / size.width - progress).abs();
+        if (dist < 0.16) {
+          h *= 1.0 + 0.32 * (1.0 - dist / 0.16) * sin(animValue * 2 * pi);
+        }
+        color = x < playheadX ? playedColor : unplayedColor;
+      } else {
+        h *= _idleScale;
+        color = idleColor;
+      }
+
+      h = h.clamp(3.0, size.height);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, (size.height - h) / 2, _barW, h),
+          const Radius.circular(2),
+        ),
+        Paint()..color = color,
+      );
+    }
+
+    if (isPlaying && progress > 0.01 && progress < 0.99) {
+      canvas.drawLine(
+        Offset(playheadX, 2),
+        Offset(playheadX, size.height - 2),
+        Paint()
+          ..color = playheadColor
+          ..strokeWidth = 2.0
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter old) =>
+      old.progress != progress ||
+      old.animValue != animValue ||
+      old.isPlaying != isPlaying;
+}
+
+// ── VoiceBubble ───────────────────────────────────────────────────────────────
+//
+// FIX: No longer uses a local AnimationController.
+// Instead it receives `animValue` (0.0–1.0) ticked by the parent _ChatScreenState
+// via a single app-level Ticker. This means:
+//   • No controller lifecycle / key destruction issues.
+//   • `isPlaying` flip is always reflected immediately on next tick.
+//   • Only one Ticker runs for the whole screen regardless of message count.
+//
+class VoiceBubble extends StatelessWidget {
+  const VoiceBubble({
+    super.key,
+    required this.message,
+    required this.isMe,
+    required this.isPlaying,
+    required this.progress,
+    required this.animValue,
+    required this.onTap,
+    this.realDurationSecs, // null until first onProgress event
+  });
+
+  final ChatMessage message;
+  final bool isMe;
+  final bool isPlaying;
+  final double progress;
+  final double animValue;
+  final VoidCallback onTap;
+  final double? realDurationSecs;
+
+  static const int _barCount = 28;
+
+  static List<double> _barsFor(String id) {
+    final rng = Random(id.hashCode);
+    return List.generate(_barCount, (i) {
+      final t = i / (_barCount - 1);
+      final env = 1.0 - (2 * t - 1).abs() * 0.55;
+      return 0.20 + rng.nextDouble() * 0.62 * env;
+    });
+  }
+
+  String _timeLabel(double prog) {
+    // Use real duration once available, fall back to placeholder until first play
+    final total = realDurationSecs ?? 0.0;
+    String fmt(int s) => '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+    if (total <= 0) {
+      // Duration not yet known — show blank or dashes until played once
+      return isPlaying ? '...' : '--:--';
+    }
+    return isPlaying
+        ? '${fmt((total * prog).floor())} / ${fmt(total.floor())}'
+        : fmt(total.floor());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bars = _barsFor(message.id);
+
+    final playedColor = isMe ? Colors.white : TColors.primary;
+    final unplayedColor =
+        isMe
+            ? Colors.white.withValues(alpha: 0.28)
+            : TColors.primary.withValues(alpha: 0.22);
+    final idleColor =
+        isMe
+            ? Colors.white.withValues(alpha: 0.32)
+            : TColors.primary.withValues(alpha: 0.25);
+    final playheadColor =
+        isMe
+            ? Colors.white.withValues(alpha: 0.92)
+            : TColors.primary.withValues(alpha: 0.82);
+    final labelColor =
+        isMe
+            ? Colors.white.withValues(alpha: isPlaying ? 0.80 : 0.48)
+            : Colors.black.withValues(alpha: isPlaying ? 0.50 : 0.28);
+    final iconColor = isMe ? Colors.white : TColors.primary;
+    final iconBg =
+        isMe
+            ? Colors.white.withValues(alpha: isPlaying ? 0.30 : 0.14)
+            : TColors.primary.withValues(alpha: isPlaying ? 0.20 : 0.09);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        width: 210,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Play / Pause button
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              child: Icon(
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                size: 21,
+                color: iconColor,
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Waveform — rebuilt every tick from parent setState
+                  SizedBox(
+                    height: 34,
+                    child: CustomPaint(
+                      painter: _WaveformPainter(
+                        barHeights: bars,
+                        progress: progress,
+                        playedColor: playedColor,
+                        unplayedColor: unplayedColor,
+                        idleColor: idleColor,
+                        playheadColor: playheadColor,
+                        animValue: animValue,
+                        isPlaying: isPlaying,
+                      ),
+                      size: const Size(double.infinity, 34),
+                    ),
+                  ),
+
+                  const SizedBox(height: 5),
+
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: labelColor,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.3,
+                    ),
+                    child: Text(_timeLabel(progress)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── ChatScreen ────────────────────────────────────────────────────────────────
 class ChatScreen extends StatefulWidget {
   final String sessionId;
@@ -376,13 +609,15 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen>
+    with SingleTickerProviderStateMixin {
   final TutoringController controller = Get.find();
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   FlutterSoundRecorder? _recorder;
   FlutterSoundPlayer? _player;
+  bool _audioReady = false;
   StreamSubscription? _playerSubscription;
 
   bool _isRecording = false;
@@ -390,17 +625,58 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _currentUserId;
   String? _currentlyPlayingId;
   final Map<String, double> _playbackProgress = {};
+  // Real duration in seconds per message id — populated from onProgress events
+  final Map<String, double> _audioDurations = {};
+  // Local file cache: message id → downloaded temp path (avoids re-downloading)
+  final Map<String, String> _localAudioCache = {};
 
   final RxList<ChatMessage> _messages = <ChatMessage>[].obs;
+  Worker? _messagesWorker;
+
+  // ── Single AnimationController drives ALL waveform animations ──────────────
+  // Replaces the raw Ticker — AnimationController is available directly from
+  // SingleTickerProviderStateMixin which is already on this State class.
+  late final AnimationController _waveformCtrl;
+  double _waveAnimValue = 0.0;
 
   @override
   void initState() {
     super.initState();
+
+    // AnimationController cycles 0→1 every 1600 ms.
+    // The listener only calls setState while something is playing,
+    // so the screen doesn't rebuild unnecessarily when idle.
+    _waveformCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+    _waveformCtrl.addListener(() {
+      if (_currentlyPlayingId != null && mounted) {
+        setState(() {
+          _waveAnimValue = _waveformCtrl.value;
+        });
+      }
+    });
+
     _initAudio();
     _fetchCurrentUser();
     _fetchMessagesFromAppSync();
     controller.observeChat(widget.sessionId);
     _textController.addListener(() => setState(() {}));
+
+    _messagesWorker = ever(controller.sessionMessages, (_) {
+      final updated = controller.sessionMessages[widget.sessionId];
+      if (updated != null && mounted) {
+        final seen = <String>{};
+        final deduped =
+            updated.where((m) => seen.add(m.id)).toList()..sort(
+              (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now())
+                  .compareTo(b.createdAt?.getDateTimeInUtc() ?? DateTime.now()),
+            );
+        _messages.assignAll(deduped);
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       controller.markSessionRead(widget.sessionId);
     });
@@ -409,6 +685,8 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     controller.clearCurrentOpenSession();
+    _waveformCtrl.dispose();
+    _messagesWorker?.dispose();
     _playerSubscription?.cancel();
     _recorder?.closeRecorder();
     _player?.closePlayer();
@@ -420,30 +698,27 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _fetchCurrentUser() async {
     try {
       final user = await Amplify.Auth.getCurrentUser();
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() => _currentUserId = user.userId);
     } catch (_) {
-      if (mounted) setState(() => _currentUserId = null);
+      if (mounted) {
+        setState(() => _currentUserId = null);
+      }
     }
   }
 
   Future<void> _fetchMessagesFromAppSync() async {
-    if (mounted) setState(() => _loadingMessages = true);
+    if (mounted) {
+      setState(() => _loadingMessages = true);
+    }
     try {
       const queryDoc = r"""
         query ListMessagesBySession($sessionId: String!, $limit: Int) {
           listChatMessagesBySession(sessionId: $sessionId, limit: $limit) {
             items {
-              id
-              sessionId
-              senderId
-              senderName
-              text
-              audioUrl
-              isVoice
-              createdAt
-              _version
-              _deleted
+              id sessionId senderId senderName text audioUrl isVoice createdAt _version _deleted
             }
           }
         }
@@ -471,11 +746,15 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       );
       _messages.assignAll(parsed);
+      // Prefetch durations in background so labels show before first play
+      _prefetchVoiceDurations(parsed);
     } catch (e) {
       print('❌ ChatScreen._fetchMessagesFromAppSync: $e');
       _loadFromDataStore();
     } finally {
-      if (mounted) setState(() => _loadingMessages = false);
+      if (mounted) {
+        setState(() => _loadingMessages = false);
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
   }
@@ -490,17 +769,15 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final decoded = jsonDecode(responseData) as Map<String, dynamic>;
       final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
-      final listObj =
-          root['listChatMessagesBySession'] as Map<String, dynamic>?;
-      final items = listObj?['items'] as List<dynamic>? ?? [];
-
+      final items =
+          (root['listChatMessagesBySession'] as Map<String, dynamic>?)?['items']
+              as List<dynamic>? ??
+          [];
       for (final raw in items) {
         final item = raw as Map<String, dynamic>;
         if (item['_deleted'] == true) continue;
-
         final id = item['id'] as String?;
         if (id == null) continue;
-
         final createdAtStr = item['createdAt'] as String?;
         result.add(
           ChatMessage(
@@ -525,20 +802,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _deleteMessage(ChatMessage message) async {
-    // Optimistic removal
     _messages.removeWhere((m) => m.id == message.id);
-
     try {
-      const getDoc = r"""
-        query GetChatMessage($id: ID!) {
-          getChatMessage(id: $id) {
-            id
-            _version
-            _deleted
-          }
-        }
-      """;
-
+      const getDoc =
+          r"""query GetChatMessage($id: ID!) { getChatMessage(id: $id) { id _version _deleted } }""";
       final getResponse =
           await Amplify.API
               .query(
@@ -552,22 +819,19 @@ class _ChatScreenState extends State<ChatScreen> {
       int version = 1;
       if (getResponse.errors.isEmpty && getResponse.data != null) {
         final decoded = jsonDecode(getResponse.data!) as Map<String, dynamic>;
-        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
-        final obj = root['getChatMessage'] as Map<String, dynamic>?;
-        if (obj == null || obj['_deleted'] == true) return;
+        final obj =
+            ((decoded['data'] as Map<String, dynamic>?) ??
+                    decoded)['getChatMessage']
+                as Map<String, dynamic>?;
+        if (obj == null || obj['_deleted'] == true) {
+          return;
+        }
         final v = obj['_version'];
         if (v != null) version = (v as num).toInt();
       }
 
-      const mutationDoc = r"""
-        mutation DeleteChatMessage($input: DeleteChatMessageInput!) {
-          deleteChatMessage(input: $input) {
-            id
-            _version
-          }
-        }
-      """;
-
+      const mutationDoc =
+          r"""mutation DeleteChatMessage($input: DeleteChatMessageInput!) { deleteChatMessage(input: $input) { id _version } }""";
       final response =
           await Amplify.API
               .mutate(
@@ -592,15 +856,12 @@ class _ChatScreenState extends State<ChatScreen> {
           if (fresh != null) await _deleteMessage(fresh);
           return;
         }
-        // Roll back on non-conflict error
-        print('❌ ChatScreen._deleteMessage error: ${response.errors}');
         _messages.add(message);
         _messages.sort(
           (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now())
               .compareTo(b.createdAt?.getDateTimeInUtc() ?? DateTime.now()),
         );
       } else {
-        print('✅ ChatScreen: deleted message ${message.id}');
         final chatMessages = controller.sessionMessages[widget.sessionId] ?? [];
         controller.sessionMessages[widget.sessionId] =
             chatMessages.where((m) => m.id != message.id).toList();
@@ -654,15 +915,16 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ✅ FIXED: configure audio session to route to loudspeaker
   Future<void> _initAudio() async {
     _recorder = FlutterSoundRecorder();
     _player = FlutterSoundPlayer();
     await _recorder!.openRecorder();
     await _player!.openPlayer();
+    // Fire onProgress events every 100 ms so the waveform and duration
+    // label update smoothly and duration is available almost immediately
+    await _player!.setSubscriptionDuration(const Duration(milliseconds: 100));
     await _player!.setVolume(1.0);
 
-    // Configure audio session for media playback through loudspeaker
     try {
       final session = await AudioSession.instance;
       await session.configure(
@@ -684,73 +946,272 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       );
     } catch (e) {
-      print('⚠️ ChatScreen._initAudio: audio session config error: $e');
+      print('⚠️ _initAudio: audio session config error: $e');
     }
+
+    if (mounted) {
+      setState(() => _audioReady = true);
+    }
+    print('✅ ChatScreen: audio ready');
   }
 
   Future<void> _sendTextMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _currentUserId == null) return;
-    await controller.sendMessage(widget.sessionId, text);
+    if (text.isEmpty || _currentUserId == null) {
+      return;
+    }
     _textController.clear();
-    await _fetchMessagesFromAppSync();
+    await controller.sendMessage(widget.sessionId, text);
     _scrollToBottom();
   }
 
   Future<void> _toggleRecording() async {
     if (!_isRecording) {
       final status = await Permission.microphone.request();
-      if (!status.isGranted) return;
+      if (!status.isGranted) {
+        return;
+      }
       final dir = await getTemporaryDirectory();
       final path =
-          '${dir.path}/${widget.sessionId}_'
-          '${DateTime.now().millisecondsSinceEpoch}.aac';
+          '${dir.path}/${widget.sessionId}_${DateTime.now().millisecondsSinceEpoch}.aac';
       await _recorder!.startRecorder(toFile: path, codec: Codec.aacADTS);
-      setState(() => _isRecording = true);
+      setState(() {
+        _isRecording = true;
+      });
     } else {
       final path = await _recorder!.stopRecorder();
-      setState(() => _isRecording = false);
+      setState(() {
+        _isRecording = false;
+      });
       if (path != null && _currentUserId != null) {
         await controller.sendVoiceMessage(widget.sessionId, File(path));
-        await _fetchMessagesFromAppSync();
+      } else {
+        print('⚠️ _toggleRecording: path or userId null, skipping voice send');
       }
     }
   }
 
-  // ✅ FIXED: audio session configured for loudspeaker in _initAudio()
-  //    so playback automatically routes to speaker on Android/iOS
-  Future<void> _playVoice(ChatMessage message) async {
-    if (message.audioUrl == null) return;
+  // Silently downloads all voice messages and reads their duration so the
+  // label shows the correct length before the user taps play.
+  // Runs concurrently with a cap of 3 simultaneous downloads to avoid
+  // saturating the network on long chat histories.
+  Future<void> _prefetchVoiceDurations(List<ChatMessage> messages) async {
+    final voiceMessages =
+        messages
+            .where(
+              (m) =>
+                  m.isVoice == true &&
+                  m.audioUrl != null &&
+                  !_audioDurations.containsKey(m.id),
+            )
+            .toList();
 
-    // Tap same message again = stop
-    if (_currentlyPlayingId == message.id) {
-      await _player!.stopPlayer();
-      if (mounted) setState(() => _currentlyPlayingId = null);
+    if (voiceMessages.isEmpty) return;
+
+    // Process in batches of 3
+    for (int i = 0; i < voiceMessages.length; i += 3) {
+      final batch = voiceMessages.skip(i).take(3).toList();
+      await Future.wait(batch.map((m) => _fetchDurationFor(m)));
+    }
+  }
+
+  // Downloads the file (or uses cache) and reads duration by opening a silent
+  // probe player, waiting for the first onProgress event, then stopping.
+  // This avoids FlutterSoundHelper.duration() which requires FFmpeg (LITE flavor).
+  Future<void> _fetchDurationFor(ChatMessage message) async {
+    try {
+      final localPath = await _fetchAndCacheAudio(message);
+      if (localPath == null) return;
+
+      final probe = FlutterSoundPlayer();
+      await probe.openPlayer();
+      await probe.setSubscriptionDuration(const Duration(milliseconds: 50));
+
+      final completer = Completer<double>();
+      StreamSubscription? sub;
+
+      await probe.startPlayer(
+        fromURI: localPath,
+        codec: Codec.aacADTS,
+        whenFinished: () {
+          if (!completer.isCompleted) completer.complete(0.0);
+        },
+      );
+
+      sub = probe.onProgress!.listen((event) {
+        final ms = event.duration.inMilliseconds;
+        if (ms > 0 && !completer.isCompleted) {
+          completer.complete(ms / 1000.0);
+        }
+      });
+
+      final secs = await completer.future.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => 0.0,
+      );
+
+      sub.cancel();
+      await probe.stopPlayer();
+      await probe.closePlayer();
+
+      if (secs > 0 && mounted) {
+        setState(() {
+          _audioDurations[message.id] = secs;
+        });
+        print(
+          '✅ prefetch duration for ${message.id}: ${secs.toStringAsFixed(1)}s',
+        );
+      }
+    } catch (e) {
+      print('⚠️ _fetchDurationFor ${message.id}: $e');
+    }
+  }
+
+  // Extracts the S3 storage key from a full pre-signed URL.
+  // e.g. "https://bucket.s3.region.amazonaws.com/chat/sessionId/file.aac?X-Amz-..."
+  // → "chat/sessionId/file.aac"
+  String? _s3KeyFromUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      // Path starts with '/' — strip leading slash
+      final rawPath =
+          uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
+      if (rawPath.isEmpty) return null;
+      return rawPath;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Gets a fresh pre-signed URL from Amplify Storage for the given S3 key,
+  // then downloads the file to a local temp path.
+  // On second play the cached file is returned instantly (no re-download).
+  Future<String?> _fetchAndCacheAudio(ChatMessage message) async {
+    // Already cached locally — return immediately
+    if (_localAudioCache.containsKey(message.id)) {
+      return _localAudioCache[message.id];
+    }
+
+    final storedUrl = message.audioUrl;
+    if (storedUrl == null) return null;
+
+    try {
+      final dir = await getTemporaryDirectory();
+      final filePath = '${dir.path}/voice_${message.id}.aac';
+      final file = File(filePath);
+
+      // If the file already exists on disk (e.g. app restart) skip download
+      if (await file.exists()) {
+        _localAudioCache[message.id] = filePath;
+        print('✅ _fetchAndCacheAudio: using cached file for ${message.id}');
+        return filePath;
+      }
+
+      // Re-fetch a fresh pre-signed URL — the stored URL may have expired (403)
+      final s3Key = _s3KeyFromUrl(storedUrl);
+      if (s3Key == null) {
+        print('❌ _fetchAndCacheAudio: could not parse S3 key from $storedUrl');
+        return null;
+      }
+
+      print('🔄 _fetchAndCacheAudio: refreshing URL for key $s3Key');
+      final urlResult =
+          await Amplify.Storage.getUrl(
+            path: StoragePath.fromString(s3Key),
+          ).result;
+      final freshUrl = urlResult.url.toString();
+
+      // Download using Dart HttpClient
+      final client = HttpClient();
+      final request = await client.getUrl(Uri.parse(freshUrl));
+      final response = await request.close();
+
+      if (response.statusCode == 200) {
+        await response.pipe(file.openWrite());
+        _localAudioCache[message.id] = filePath;
+        print('✅ _fetchAndCacheAudio: downloaded ${message.id} to $filePath');
+        return filePath;
+      } else {
+        print(
+          '❌ _fetchAndCacheAudio: HTTP ${response.statusCode} for ${message.id}',
+        );
+        return null;
+      }
+    } catch (e) {
+      print('❌ _fetchAndCacheAudio error: $e');
+      return null;
+    }
+  }
+
+  Future<void> _playVoice(ChatMessage message) async {
+    if (!_audioReady || message.audioUrl == null) {
       return;
     }
 
-    // Stop any currently playing audio before starting new one
+    // Tap the currently playing message → stop it
+    if (_currentlyPlayingId == message.id) {
+      await _player!.stopPlayer();
+      if (mounted) {
+        setState(() {
+          _currentlyPlayingId = null;
+        });
+      }
+      return;
+    }
+
+    // Stop whatever was playing
     if (_player!.isPlaying) {
       await _player!.stopPlayer();
     }
 
+    // Cancel previous subscription before starting new player session
+    _playerSubscription?.cancel();
+    _playerSubscription = null;
+
+    // Refresh the S3 URL and download to a local file.
+    // Pre-signed S3 URLs expire — re-fetching avoids 403 errors on older messages.
+    final localPath = await _fetchAndCacheAudio(message);
+    if (localPath == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not load voice message. Try again.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Set playing state BEFORE startPlayer so the waveform animates immediately
+    if (mounted) {
+      setState(() {
+        _currentlyPlayingId = message.id;
+      });
+    }
+
     await _player!.startPlayer(
-      fromURI: message.audioUrl,
+      fromURI: localPath,
       codec: Codec.aacADTS,
       whenFinished: () {
-        if (mounted) setState(() => _currentlyPlayingId = null);
+        if (mounted) {
+          setState(() {
+            _currentlyPlayingId = null;
+            _playbackProgress[message.id] = 0.0;
+          });
+        }
       },
     );
 
-    _playerSubscription?.cancel();
+    // Drive playhead progress and capture real duration.
+    // setSubscriptionDuration(100ms) in _initAudio ensures this fires within
+    // 100ms of playback starting, so '--:--' is visible for at most one tick.
     _playerSubscription = _player!.onProgress!.listen((event) {
-      final duration = event.duration.inMilliseconds;
-      final position = event.position.inMilliseconds;
-      if (mounted) {
+      final durationMs = event.duration.inMilliseconds;
+      final positionMs = event.position.inMilliseconds;
+      if (mounted && durationMs > 0) {
         setState(() {
-          _currentlyPlayingId = message.id;
-          _playbackProgress[message.id] =
-              duration == 0 ? 0.0 : position / duration;
+          _playbackProgress[message.id] = positionMs / durationMs;
+          _audioDurations[message.id] = durationMs / 1000.0;
         });
       }
     });
@@ -758,7 +1219,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
+      if (!_scrollController.hasClients) {
+        return;
+      }
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 300),
@@ -938,6 +1401,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         itemBuilder: (_, index) {
                           final message = messages[index];
                           final isMe = message.senderId == _currentUserId;
+                          // FIX: isPlaying derived from _currentlyPlayingId which is
+                          // set BEFORE startPlayer, so bubble shows active immediately
                           final isPlaying = _currentlyPlayingId == message.id;
 
                           final showDate =
@@ -1000,10 +1465,24 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ),
                                     child:
                                         (message.isVoice ?? false)
-                                            ? _voiceBubble(
-                                              message,
-                                              isMe,
-                                              isPlaying,
+                                            // FIX: pass _waveAnimValue from the parent ticker
+                                            // so animation is driven externally — no per-bubble
+                                            // AnimationController needed
+                                            ? VoiceBubble(
+                                              message: message,
+                                              isMe: isMe,
+                                              isPlaying: isPlaying,
+                                              progress:
+                                                  _playbackProgress[message
+                                                      .id] ??
+                                                  0.0,
+                                              animValue:
+                                                  isPlaying
+                                                      ? _waveAnimValue
+                                                      : 0.0,
+                                              onTap: () => _playVoice(message),
+                                              realDurationSecs:
+                                                  _audioDurations[message.id],
                                             )
                                             : Text(
                                               message.text ?? '',
@@ -1141,67 +1620,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _voiceBubble(ChatMessage msg, bool isMe, bool isPlaying) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: () => _playVoice(msg),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color:
-                  isMe
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : TColors.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              size: 18,
-              color: isMe ? Colors.white : TColors.primary,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 100,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: _playbackProgress[msg.id] ?? 0,
-                  minHeight: 3,
-                  backgroundColor:
-                      isMe
-                          ? Colors.white.withValues(alpha: 0.25)
-                          : Colors.black.withValues(alpha: 0.08),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    isMe ? Colors.white : TColors.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Voice message',
-                style: TextStyle(
-                  fontSize: 10,
-                  color:
-                      isMe
-                          ? Colors.white.withValues(alpha: 0.6)
-                          : Colors.black.withValues(alpha: 0.4),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
