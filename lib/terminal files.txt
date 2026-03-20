@@ -5,17 +5,10 @@ flutter pub get
 amplify codegen models
 
 
-make vc work 
-make image upload work
-make algorithm for feautured lecturers 
-sessions should be truely sorted by recent on default
-filter for your sessions
-
-logout details sometimes still there when logout button is initiated , i need the details clared for privacy 
-SLIGHT SHOW OF HOMEPAGE ON LOAD APP
-
-
-NUMBER PEOPLE WILLING TO TEACH AND REMOVES THE SESSION FROM  THE LOADED SESSIOND IF THE MAXPEOPLE IS REACHED BUT STILL STAYS IN FAVORITE ALSO AFTER PAYMENT AUTO FAVORITE THE SESSION 
+make vc work NOT PLAYING
+IMAGE DOESNT UPDATE IN TUTORING SESSION AND PROFILE PAGE  
+MAKE HOMEPAGE REACTIVE TO CHANGES TO INFO LIKE NAME CHANGE AND PFP CHANGE
+Qr code SAVE NT WORKING AND I WANT THE IMAGE TO JUST BE A QRCODE AND CEENTERED IN THE CARD AND ALSO THE PERSON THAT MADE THE PUCHASE IS THE ONLY ONE TO RECIEVE IT 
 
 
 and try making voice call work  - last thing to do

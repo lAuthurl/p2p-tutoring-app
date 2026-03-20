@@ -7,8 +7,8 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:p2p_tutoring_app/common/widgets/loaders/circular_loader.dart';
 
 import '../../../models/ModelProvider.dart';
-import '../../Feautures/Booking/controllers/booking_controller.dart';
-import '../../Feautures/Courses/controllers/tutoring_controller.dart';
+import '../../Feautures/booking/controllers/booking_controller.dart';
+import '../../Feautures/sessions/controllers/tutoring_controller.dart';
 import '../../Feautures/dashboard/Home/controllers/subject_controller.dart';
 import '../../data/repository/authentication_repository/authentication_repository.dart';
 import '../../utils/helpers/network_manager.dart';

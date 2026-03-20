@@ -5,12 +5,12 @@ import 'package:get/get.dart';
 import '../../../../../../common/widgets/appbar/home_appbar.dart';
 import '../../../../../../personalization/controllers/user_controller.dart';
 import '../../../../../../personalization/screens/profile/profile_screen.dart';
-import '../../../../../Courses/screens/product_detail/message_counter_icon.dart';
+import '../../../../../chat/screens/message_counter_icon.dart';
 import '../../../../../../utils/constants/colors.dart';
 import '../../../../../../utils/constants/sizes.dart';
-import '../../../../../Booking/screens/t_booking_counter_icon.dart';
-import '../../../../../Courses/controllers/tutoring_controller.dart';
-import '../../../../../favourites/favorites_counter_icon.dart';
+import '../../../../../booking/screens/t_booking_counter_icon.dart';
+import '../../../../../sessions/controllers/tutoring_controller.dart';
+import '../../../../../favourites/screens/favorites_counter_icon.dart';
 
 class THomeAppBar extends StatelessWidget {
   const THomeAppBar({super.key});

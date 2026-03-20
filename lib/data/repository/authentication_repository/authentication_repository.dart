@@ -2,12 +2,12 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:flutter/services.dart';
-import '../../../Feautures/dashboard/Home/controllers/favorites_controller.dart';
-import '../../../Feautures/Courses/controllers/tutoring_controller.dart';
+import '../../../Feautures/favourites/controllers/favorites_controller.dart';
+import '../../../Feautures/sessions/controllers/tutoring_controller.dart';
 import '../../../bindings/app_bindings.dart';
 import '../../../data/models/app_user.dart';
 import '../../../routes/routes.dart';
-import '../../../screens/login/login_screen.dart';
+import '../../../authentication/screens/login/login_screen.dart';
 import '../../../personalization/controllers/user_controller.dart';
 import '../../../utils/exceptions/format_exceptions.dart';
 import '../../../utils/exceptions/platform_exceptions.dart';
@@ -15,7 +15,7 @@ import '../../../utils/local_storage/storage_utility.dart';
 import '../../../utils/security/password_hash.dart';
 import '../../../utils/local_storage/secure_storage_service.dart';
 import '../user_repository/user_repository.dart';
-import '../../../Feautures/Booking/controllers/booking_controller.dart';
+import '../../../Feautures/booking/controllers/booking_controller.dart';
 
 class AuthenticationRepository extends GetxController {
   static AuthenticationRepository get instance => Get.find();
@@ -64,12 +64,7 @@ class AuthenticationRepository extends GetxController {
   // CLEAR ALL USER STATE ON LOGOUT
   // =========================================================
 
-  /// Clears every per-user controller in one place.
-  /// Call this before signOut so nothing bleeds to the next account.
   void _clearAllUserState() {
-    // ✅ FIX: clear TutoringController sessions so favoriteSessions()
-    // doesn't try to filter a stale previous-user session list against
-    // the new user's favoriteIds (which always produces []).
     if (Get.isRegistered<TutoringController>()) {
       TutoringController.instance.clearSessionState();
     }
@@ -85,8 +80,6 @@ class AuthenticationRepository extends GetxController {
   // RELOAD USER CONTROLLERS AFTER LOGIN
   // =========================================================
 
-  /// Always ensures FavoritesController is registered before reloading.
-  /// Never skips due to a missing isRegistered guard.
   Future<void> _reloadUserControllers() async {
     final favCtrl =
         Get.isRegistered<FavoritesController>()
@@ -244,15 +237,19 @@ class AuthenticationRepository extends GetxController {
         Get.offAllNamed(TRoutes.mainDashboard);
       }
     } else {
+      // ✅ FIX: No route guards — offAllNamed always fires unconditionally.
+      //
+      // The old guards were:
+      //   if (Get.currentRoute != TRoutes.onboarding) { ... }
+      //   if (Get.currentRoute != TRoutes.logIn && ...) { ... }
+      //
+      // On cold start Get.currentRoute is '/' — neither guard matched, so
+      // offAllNamed() was silently skipped and whatever was rendering stayed
+      // on screen. Without the guards it always fires cleanly from the splash.
       if (_isFirstTime) {
-        if (Get.currentRoute != TRoutes.onboarding) {
-          Get.offAllNamed(TRoutes.onboarding);
-        }
+        Get.offAllNamed(TRoutes.onboarding);
       } else {
-        if (Get.currentRoute != TRoutes.logIn &&
-            Get.currentRoute != TRoutes.signUp) {
-          Get.offAllNamed(TRoutes.logIn);
-        }
+        Get.offAllNamed(TRoutes.logIn);
       }
     }
   }
@@ -265,8 +262,6 @@ class AuthenticationRepository extends GetxController {
     await Amplify.DataStore.start();
     AppBindings().dependencies();
 
-    // ✅ FIX: await reload BEFORE navigating so the dashboard renders
-    // with data already populated, not racing against the network call.
     await _reloadUserControllers();
 
     Get.offAllNamed(TRoutes.mainDashboard);

@@ -1,6 +1,6 @@
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
-import 'package:p2p_tutoring_app/screens/on_boarding/on_boarding_screen.dart';
+import 'package:p2p_tutoring_app/authentication/screens/on_boarding/on_boarding_screen.dart';
 
 class FadeInAnimationController extends GetxController {
   static FadeInAnimationController get find => Get.find();

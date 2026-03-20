@@ -5,8 +5,8 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:p2p_tutoring_app/bindings/general_bindings.dart';
 import 'app.dart';
-import 'amplify_init.dart';
-import 'data_store_manager.dart';
+import 'services/amplify_init.dart';
+import 'services/data_store_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -1,6 +1,5 @@
 // ignore_for_file: avoid_print
 
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p2p_tutoring_app/utils/constants/colors.dart';
@@ -10,7 +9,7 @@ import '../../../../../common/widgets/layouts/grid_layout.dart';
 import '../../../../../common/widgets/texts/section_heading.dart';
 import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/device/device_utility.dart';
-import '../../../../Courses/screens/create_tutoring_session_screen.dart';
+import '../../../../sessions/screens/session_creation/create_tutoring_session_screen.dart';
 import 'view_all_sessions.dart';
 import 'widgets/header_search_container.dart';
 import 'widgets/home_appbar.dart';
@@ -18,8 +17,7 @@ import 'widgets/promo_slider.dart';
 import 'widgets/t_header_subjects.dart';
 import '../../../../../common/widgets/custom_shapes/containers/primary_header_container.dart';
 import '../../../../../utils/constants/image_strings.dart';
-import '../../../../Courses/screens/product_cards/t_session_card_vertical.dart';
-import '../../../../../models/ModelProvider.dart';
+import '../../../../sessions/screens/product_cards/t_session_card_vertical.dart';
 
 /// HomeScreen with reactive session filtering and search
 class HomeScreen extends StatelessWidget {
@@ -32,7 +30,6 @@ class HomeScreen extends StatelessWidget {
     final searchController = TextEditingController();
 
     return Scaffold(
-      // ✅ Slightly darker than surface so cards (which are surface) stand out
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Get.to(() => const CreateTutoringSessionScreen()),
@@ -44,7 +41,6 @@ class HomeScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header stays on its own themed container — unaffected
             TPrimaryHeaderContainer(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,7 +108,13 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Featured Lectures Section
+// ---------------------------------------------------------------------------
+// Featured Lectures Section
+// ---------------------------------------------------------------------------
+// The controller's _applyFilters() already ranks sessions by composite score
+// into featuredSessions — we just read it directly. No random shuffle needed.
+// ---------------------------------------------------------------------------
+
 class _FeaturedSection extends StatelessWidget {
   const _FeaturedSection();
 
@@ -123,31 +125,12 @@ class _FeaturedSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TSectionHeading(title: 'Featured Lectures'),
+        const TSectionHeading(title: 'Featured Lectures'),
         const SizedBox(height: TSizes.spaceBtwItems),
         Obx(() {
-          final today = DateTime.now();
-          final seed = today.year * 10000 + today.month * 100 + today.day;
-          final random = Random(seed);
+          final featured = controller.featuredSessions;
 
-          List<TutoringSession> pickRandom(
-            List<TutoringSession> list,
-            int count,
-          ) {
-            if (list.isEmpty) return [];
-            final shuffled = List<TutoringSession>.from(list)..shuffle(random);
-            return shuffled.take(count).toList();
-          }
-
-          final randomPopular = pickRandom(controller.popularSessions, 2);
-          final randomRecent = pickRandom(controller.recentSessions, 2);
-
-          final selectedSessions =
-              {
-                for (var s in [...randomPopular, ...randomRecent]) s.id: s,
-              }.values.toList();
-
-          if (selectedSessions.isEmpty) {
+          if (featured.isEmpty) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(16),
@@ -161,10 +144,9 @@ class _FeaturedSection extends StatelessWidget {
           }
 
           return TGridLayout(
-            itemCount: selectedSessions.length,
+            itemCount: featured.length,
             itemBuilder:
-                (_, index) =>
-                    TSessionCardVertical(session: selectedSessions[index]),
+                (_, index) => TSessionCardVertical(session: featured[index]),
           );
         }),
       ],
@@ -172,7 +154,13 @@ class _FeaturedSection extends StatelessWidget {
   }
 }
 
-/// All Lectures Section (limit 6)
+// ---------------------------------------------------------------------------
+// All Lectures Section (limit 6, sorted newest-first)
+// ---------------------------------------------------------------------------
+// filteredSessions is now pre-sorted by createdAt descending in the controller,
+// so .take(6) naturally gives the 6 most recent sessions.
+// ---------------------------------------------------------------------------
+
 class _PopularSection extends StatelessWidget {
   const _PopularSection();
 
@@ -186,13 +174,11 @@ class _PopularSection extends StatelessWidget {
         TSectionHeading(
           title: 'All Lectures',
           onPressed: () {
-            final allSessions = controller.filteredSessions.toList();
+            // filteredSessions is already newest-first — dedupe and pass through
             final uniqueSessions =
-                {for (var s in allSessions) s.id: s}.values.toList();
-            uniqueSessions.sort(
-              (a, b) => (b.createdAt?.getDateTimeInUtc() ?? DateTime(0))
-                  .compareTo(a.createdAt?.getDateTimeInUtc() ?? DateTime(0)),
-            );
+                {
+                  for (var s in controller.filteredSessions) s.id: s,
+                }.values.toList();
             Get.to(
               () => AllLecturesScreen(
                 title: 'All Lectures',
@@ -203,13 +189,13 @@ class _PopularSection extends StatelessWidget {
         ),
         const SizedBox(height: TSizes.spaceBtwItems),
         Obx(() {
-          final allSessions = controller.filteredSessions.toList();
+          // filteredSessions is already sorted newest-first by the controller.
+          // Dedupe by id then take 6 — no manual sort needed here.
           final uniqueSessions =
-              {for (var s in allSessions) s.id: s}.values.toList();
-          uniqueSessions.sort(
-            (a, b) => (b.createdAt?.getDateTimeInUtc() ?? DateTime(0))
-                .compareTo(a.createdAt?.getDateTimeInUtc() ?? DateTime(0)),
-          );
+              {
+                for (var s in controller.filteredSessions) s.id: s,
+              }.values.toList();
+
           final limitedSessions = uniqueSessions.take(6).toList();
 
           if (limitedSessions.isEmpty) {

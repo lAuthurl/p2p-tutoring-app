@@ -1,49 +1,40 @@
-Perfect! Here’s your **full README** combined with the GitHub and AWS Amplify push instructions integrated into the **Deployment** section, keeping all your previous content intact and structured for immediate use:
+# 🎓 Peer-to-Peer (P2P) Tutoring Application
+
+> A cross-platform academic support platform that connects students with peer tutors for collaborative learning.
 
 ---
 
-# 📋 Table of Contents
+## 📋 Table of Contents
 
-- About The Project
-- Key Features
-- Tech Stack
-- Project Structure
-- Getting Started
-- Environment Setup
-- Application Features
-- PWA Capabilities
-- Backend & Cloud Integration
-- Team Contributions
-- Development Workflow
-- Deployment
-- License
-- Contact
-- Acknowledgments
+* 🎯 About The Project
+* ✨ Key Features
+* 🛠️ Tech Stack
+* 📁 Project Structure
+* 🚀 Getting Started
+* 🔧 Environment Setup
+* 🎯 Application Features
+* 📱 PWA Capabilities
+* ☁️ Backend & Cloud Integration
+* 👥 Team Contributions
+* 🔄 Development Workflow
+* 🚀 Deployment
+* 📄 License
+* 📞 Contact
+* 🙏 Acknowledgments
 
 ---
 
 ## 🎯 About The Project
 
-The **Peer-to-Peer (P2P) Tutoring Application** is a student-centered academic support platform designed to connect learners who need help in specific courses with fellow students who can tutor them.
+The **Peer-to-Peer (P2P) Tutoring Application** is designed to connect students who need help in specific courses with peers who can tutor them.
 
-The system encourages **collaborative learning**, **knowledge sharing**, and **academic mentorship** within a university environment, using **Babcock University** as the case study.
+It promotes:
 
-### Core Objectives
+* 🤝 Collaborative learning
+* 📚 Knowledge sharing
+* 🎯 Academic improvement
 
-- Improve students’ academic performance through peer tutoring
-- Provide an accessible platform for booking and managing tutoring sessions
-- Promote collaborative and supportive learning communities
-- Digitize and streamline the tutoring process
-
-### Key Highlights
-
-📚 Course-based tutor matching
-👥 Role-based users (Tutor, Tutee, Admin)
-📅 Session scheduling and management
-💬 In-app communication and feedback
-📱 Mobile-first & cross-platform experience
-🔐 Secure authentication and data protection
-☁️ Cloud-hosted backend for scalability
+Built with a **mobile-first approach**, the app delivers a seamless experience across devices.
 
 ---
 
@@ -51,61 +42,61 @@ The system encourages **collaborative learning**, **knowledge sharing**, and **a
 
 ### 🎓 User Management
 
-- Student registration as **Tutor**, **Tutee**, or both
-- Secure authentication and profile management
-- Tutor verification and approval by admin
+* Register as **Tutor**, **Tutee**, or both
+* Secure authentication
+* Profile management
 
-### 🔍 Tutor Discovery & Matching
+### 🔍 Tutor Discovery
 
-- Search tutors by course or subject
-- View tutor profiles, availability, and ratings
-- Intelligent matching based on user preferences
+* Search by course or subject
+* View tutor profiles and ratings
+* Smart matching
 
-### 📅 Session Scheduling
+### 📅 Session Booking
 
-- Request, accept, or reject tutoring sessions
-- Reschedule or cancel sessions
-- View upcoming and completed sessions
+* Book, or cancel bookings
+* Track upcoming sessions
 
-### 💬 Communication & Feedback
+### 💬 Communication
 
-- In-app messaging between tutors and tutees
-- Session status notifications
-- Post-session feedback and ratings
+* In-app messaging
+* Notifications
+* Feedback & ratings
 
-### 🛡️ Administration
+### 💳 Payments
 
-- Admin dashboard for system oversight
-- Manage users, tutors, and sessions
-- Monitor platform usage and performance
+* Integrated with **Paystack**
 
 ---
 
 ## 🛠️ Tech Stack
 
-### Frontend
+### 📱 Frontend
 
-- **Flutter** – Cross-platform UI framework
-- **Dart** – Programming language
-- **Material UI** – Responsive design components
+* Flutter (Dart)
+* Material UI
 
-### Backend & Cloud (AWS)
+### ☁️ Backend & Cloud
 
-- **Amazon Cognito** – Authentication & authorization
-- **AWS Lambda** – Serverless business logic
-- **Amazon API Gateway** – RESTful APIs
-- **Amazon RDS** – Relational database
-- **Amazon CloudWatch** – Monitoring & logging
+* AWS Amplify
+* Amazon Cognito
+* AWS Lambda
+* API Gateway
+* Amazon RDS
+* CloudWatch
 
-### Development Tools
+### 🧰 Tools
 
-- Git & GitHub – Version control
-- Figma – UI/UX design
-- Postman – API testing
+* Git & GitHub
+* VS Code / Android Studio
+* Postman
 
 ---
 
 ## 📁 Project Structure
+
+<details>
+<summary>📂 Click to expand</summary>
 
 ```
 p2p_tutoring_app/
@@ -116,13 +107,27 @@ p2p_tutoring_app/
 ├── windows/
 ├── linux/
 ├── lib/
-│   ├── screens/
+│   ├── Feautures/
+│   │   ├── booking/
+│   │   ├── chat/
+│   │   ├── checkout/
+│   │   ├── dashboard/
+│   │   ├── favourites/
+│   │   ├── sessions/
+│   │   └── Tutor/
+│   ├── common/
 │   ├── widgets/
 │   ├── models/
 │   ├── services/
-│   ├── providers/
+│   ├── bindings/
+│   ├── data/
+│   ├── personalization/
+│   ├── routes/
+│   ├── authentication/
 │   ├── utils/
-│   └── main.dart
+│   ├── app.dart
+│   ├── main.dart
+│   └── amplifyconfiguration.dart
 ├── backend/
 │   ├── auth/
 │   ├── lambdas/
@@ -130,32 +135,27 @@ p2p_tutoring_app/
 │   └── database/
 ├── docs/
 ├── pubspec.yaml
-├── analysis_options.yaml
 ├── README.md
 ```
 
-Features by area:
-
-- Frontend (`lib/`): UI screens, reusable widgets, data models, API/auth services, state providers, and utility helpers.
-- Backend (`backend/`): auth configuration, serverless Lambdas, API specs, database schema artifacts.
-- Docs (`docs/`): diagrams, API contracts, deployment runbooks, architecture documentation.
+</details>
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### ✅ Prerequisites
 
-- Flutter SDK
-- Dart SDK
-- AWS Account
-- Git
-- VS Code or Android Studio
+* Flutter SDK
+* Dart SDK
+* Git
+* AWS Account
+* VS Code / Android Studio
 
-### Installation
+### ⚙️ Installation
 
 ```bash
-git clone https://github.com/your-repo/p2p-tutoring-app.git
+git clone https://github.com/lAuthurl/p2p-tutoring-app.git
 cd p2p-tutoring-app
 flutter pub get
 flutter run
@@ -165,15 +165,14 @@ flutter run
 
 ## 🔧 Environment Setup
 
-### AWS Configuration
+### ☁️ AWS Configuration
 
-1. Create an AWS account
-2. Set up Amazon Cognito User Pool
-3. Create API Gateway endpoints
-4. Deploy Lambda functions
-5. Configure Amazon RDS database
+* Configure Amplify
+* Set up Cognito
+* Configure API Gateway & Lambda
+* Set up database
 
-### Environment Variables
+### 🔑 Environment Variables
 
 ```
 AWS_REGION=us-east-1
@@ -183,84 +182,177 @@ API_BASE_URL=https://api.example.com
 DB_ENDPOINT=xxxx
 ```
 
-> Note: Copy `.env.example` to `.env` and replace placeholder values. Do not commit `.env`.
-
 ---
 
 ## 🎯 Application Features
 
-1. **Authentication System** – Secure signup/login, role-based access, persistent sessions
-2. **Dashboard** – Personalized dashboard, upcoming sessions, notifications
-3. **Tutor Profiles** – Course expertise, availability, ratings
-4. **Tutoring Sessions** – Booking, session history, post-session feedback
-5. **Administration** – Tutor approval, user moderation, system monitoring
+The application provides a robust set of features to support peer-to-peer tutoring, powered by a **mobile-first interface** and a **schema-driven backend**:
+
+* 🔐 **Authentication & User Roles** – Secure signup/login and profile management
+* 📊 **Session Tracking Dashboard** – View upcoming and completed sessions, track bookings, and session status
+* 👤 **Tutor Profiles** – Detailed tutor information including skills, bio, availability, and ratings
+* 📅 **Booking System** – Book tutoring sessions with flexible time slots and session attributes
+* 💬 **In-App Messaging** – Communicate in real-time with tutors or tutees for coordination and support
+* ⭐ **Ratings & Feedback** – Submit reviews after sessions to ensure quality and build tutor reputation
+* 💳 **Payments & Transactions** – Manage payments via Paystack and track session payment history
 
 ---
 
-## 📱 PWA Capabilities
+## 📱 App Capabilities
 
-- Installable on mobile and desktop
-- Offline viewing of cached content
-- App-like experience
+* 🔄 **Live Data Synchronization** – Instant updates for chats, bookings, and tutor availability
+* 🌐 **Online-First Architecture** – Designed for continuous connectivity to maintain data accuracy
+* ⚡ **Scalable Cloud Performance** – Powered by AWS for reliability, speed, and growth
 
 ---
 
 ## ☁️ Backend & Cloud Integration
 
-### Authentication Flow
+### 🔐 Authentication Flow
 
-User Registration → Cognito Verification → Role Assignment → Dashboard
+`Register → Verify → Role Assignment → Access App`
 
-### Database Structure (RDS)
+---
 
-- **Users** (userId, role, profile data)
-- **Tutors** (subjects, availability, ratings)
-- **Sessions** (date, time, status, feedback)
-- **Messages** (sender, receiver, timestamp)
+## 🗄️ Database Structure
 
-### Security Highlights
+The application uses a **relational, model-driven schema (AWS Amplify GraphQL)** with the following core entities:
 
-- Role-based authorization
-- Encrypted API communication
-- Secure credential handling
+### 👤 User
+
+* Stores user profile and authentication-related data
+* Supports roles (Tutor / Tutee)
+* Linked to bookings, reviews, and activity
+
+### 🎓 Tutor
+
+* Represents tutor-specific profile data
+* Contains skills, bio, and teaching information
+* Linked to sessions and reviews
+
+### 📚 Subject
+
+* Defines available courses or subjects
+* Connected to tutoring sessions
+
+### 🧑‍🏫 TutoringSession
+
+* Core entity for tutoring services
+* Linked to tutor and subject
+* Contains pricing, availability, and session details
+* Tracks enrollment and reviews
+
+### 📅 Booking
+
+* Represents a user’s session booking
+* Stores total price, status, and selected options
+* Linked to user and session
+
+### 🧾 BookingItem
+
+* Detailed breakdown of each booking
+* Includes time slot, pricing, tutor/session info
+* Supports flexible session configurations
+
+### ⚙️ SessionAttribute
+
+* Custom attributes for sessions (e.g., duration, format)
+* Enhances session flexibility
+
+### ⭐ Review
+
+* Stores ratings and feedback
+* Linked to user, tutor, and session
+
+### 💬 ChatMessage
+
+* Handles in-app messaging
+* Supports text and voice messages
+* Organized per session
+
+### ❤️ UserFavorite
+
+* Allows users to save/bookmark sessions
+
+### 💳 UserSessionPayment
+
+* Tracks payment status for sessions
+* Stores transaction details (amount, reference, date)
+
+---
+
+### 🔗 Relationship Overview
+
+* A **User** can create multiple **Bookings**, **Reviews**, and **Favorites**
+* A **Tutor** can have multiple **TutoringSessions** and **Reviews**
+* A **TutoringSession** belongs to a **Tutor** and a **Subject**
+* A **Booking** contains multiple **BookingItems**
+* A **Review** connects **User + Tutor + Session**
+* A **ChatMessage** is tied to a specific **Session**
+
+---
+
+### 🔒 Security
+
+* Role-based access
+* Encrypted communication
+* Secure credentials
 
 ---
 
 ## 👥 Team Contributions
 
-- **Member 1 – Project Lead & Authentication:** coordination, system architecture, auth
-- **Member 2 – User Profiles & Roles:** tutor/tutee management, permissions
-- **Member 3 – Tutor Discovery & Matching:** search/filter, availability logic
-- **Member 1 – Session Scheduling:** booking/rescheduling
-- **Member 2 – Communication & Feedback:** messaging, ratings
-- **Member 3 – Administration Module:** admin dashboard
-- **Member 1 – UI/UX Design:** layouts, experience optimization
-- **Member 2 & 3 – Testing & Documentation:** testing, diagrams
+* **Member 1 – Project Lead & Authentication:** coordination, system architecture, auth
+* **Member 2 – User Profiles & Roles:** tutor/tutee management, permissions
+* **Member 3 – Tutor Discovery & Matching:** search/filter, availability logic
+* **Member 1 – Session booking:** booking
+* **Member 2 – Communication & Feedback:** messaging, ratings
+* **Member 1 – UI/UX Design:** layouts, experience optimization
+* **Member 2 & 3 – Testing & Documentation:** testing, diagrams
 
 ---
 
 ## 🔄 Development Workflow
 
-- Agile Scrum methodology
-- Sprint-based development
-- Git feature-branch workflow
+The project follows a **structured, feature-focused workflow** to ensure smooth development and consistency across the application.
 
-### Commit Convention
+### ⚙️ Workflow Process
 
-- `feat:` New feature
-- `fix:` Bug fix
-- `docs:` Documentation
-- `refactor:` Code restructuring
+* 🧩 **Feature Breakdown** – Tasks are divided into core features such as booking, messaging, and payments
+* 🎨 **Implementation** – UI and logic are developed using Flutter components (screens, controllers, widgets)
+* 🔗 **Integration** – Features are connected to backend services and existing data models
+* 🧪 **Testing** – Each feature is tested to ensure proper functionality and data accuracy
+
+### 🌿 Version Control
+
+* Work is organized using feature branches:
+
+  ```bash
+  git checkout -b feature/your-feature
+  ```
+* Changes are committed using standard conventions (see below)
+
+### 🚀 Delivery Flow
+
+* Completed features are reviewed and merged into the main branch
+* Updates are deployed to keep the application in sync
+
+---
+
+### 📝 Commit Convention
+
+```
+feat: New feature
+fix: Bug fix
+docs: Documentation
+refactor: Code improvement
+```
 
 ---
 
 ## 🚀 Deployment
 
-### Backend
-
-- Deployed on **AWS Cloud** (Lambda + API Gateway + RDS)
-
-#### Push Backend to AWS Amplify
+### ☁️ Backend (AWS Amplify)
 
 ```bash
 npm install -g @aws-amplify/cli
@@ -268,85 +360,57 @@ amplify configure
 amplify init
 ```
 
-- Framework: Flutter
-- Environment: `dev`
-- AWS Profile: `<your-aws-profile>`
-
-Add backend services:
-
 ```bash
-amplify add auth       # Cognito
-amplify add storage    # S3
-amplify add api        # REST/GraphQL optional
+amplify add auth
+amplify add storage
+amplify add api
 ```
-
-Push changes:
 
 ```bash
 amplify push
 ```
 
-Pull backend config in another environment (optional):
-
-```bash
-amplify pull
-```
-
 ---
 
-### Frontend
-
-- Built with Flutter
-- Deployed on emulator, APK, or web
-
-#### Push Frontend to GitHub
+### 🌐 Frontend (GitHub)
 
 ```bash
 git init
 git add .
 git commit -m "Initial commit"
-git remote add origin https://github.com/your-repo/p2p-tutoring-app.git
+git remote add origin https://github.com/lAuthurl/p2p-tutoring-app.git
 git branch -M main
 git push -u origin main
-```
-
-For future updates:
-
-```bash
-git add .
-git commit -m "Describe your changes"
-git push
 ```
 
 ---
 
 ## 📄 License
 
-MIT License – see [LICENSE](https://github.com/BU-SENG/foss-project-blue-rush/blob/main/LICENSE)
+MIT License
 
 ---
 
 ## 📞 Contact
 
 **Project Lead**
-
 📧 Email: …
-🐙 GitHub: @|Authur|
+🐙 GitHub: @Authur
 
-**Repository**: [https://github.com/lAuthurl/p2p-tutoring-app.git](https://github.com/lAuthurl/p2p-tutoring-app.git)
-**Live Demo**: 🌐 …
+🔗 Repository:
+[https://github.com/lAuthurl/p2p-tutoring-app.git](https://github.com/lAuthurl/p2p-tutoring-app.git)
 
 ---
 
 ## 🙏 Acknowledgments
 
-- Flutter Documentation
-- AWS Documentation
-- Academic Supervisors
-- Peer reviewers and testers
+We gratefully acknowledge the following contributions and resources that made this project possible:
+
+* **Flutter Documentation** – for guiding the cross-platform UI and widget design
+* **AWS Documentation** – for support with Amplify, Cognito, Lambda, API Gateway, and RDS integration
+* **Academic Supervisors** – for mentorship, feedback, and guidance throughout the project
+* **Peer Testers and Contributors** – for rigorous testing, suggestions, and helping refine the user experience
+* **Open-Source Libraries & Community** – including Paystack, `qr_flutter`, and other Dart/Flutter packages that accelerated development
+* **Schema & Architecture Inspiration** – conceptual frameworks and best practices that informed our relational model design and workflow
 
 ---
-
-If you want, I can also **add a small diagram or visual workflow** for the GitHub + Amplify deployment steps to make the README more intuitive.
-
-Do you want me to do that next?

@@ -8,7 +8,7 @@ import '../../../utils/constants/image_strings.dart';
 import '../../../utils/helpers/network_manager.dart';
 import '../../../utils/popups/full_screen_loader.dart';
 import '../../../utils/popups/loaders.dart';
-import '../../screens/signup/verify_email.dart';
+import '../screens/signup/verify_email.dart';
 import '../../../utils/security/password_hash.dart';
 import 'package:p2p_tutoring_app/personalization/screens/profile/profile_screen.dart';
 

@@ -14,7 +14,7 @@ import '../../../utils/helpers/network_manager.dart';
 import '../../../utils/local_storage/secure_storage_service.dart';
 import '../../../utils/popups/exports.dart';
 import '../../../utils/constants/image_strings.dart';
-import '../../Feautures/Booking/controllers/booking_controller.dart';
+import '../../Feautures/booking/controllers/booking_controller.dart';
 import '../../Feautures/dashboard/Home/controllers/home_controller.dart';
 import '../../Feautures/dashboard/Home/controllers/subject_controller.dart';
 import '../../data/services/notifications/notification_service.dart';

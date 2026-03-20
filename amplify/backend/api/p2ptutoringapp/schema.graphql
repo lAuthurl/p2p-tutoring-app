@@ -103,6 +103,8 @@ type TutoringSession @model
   pricePerSession: Float
   isFeatured: Boolean
   hasPaid: Boolean @default(value: "false")
+  maxStudents: Int
+  enrolledCount: Int @default(value: "0")
 
   createdAt: AWSDateTime
   updatedAt: AWSDateTime

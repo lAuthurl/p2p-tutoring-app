@@ -2,14 +2,21 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 
 import '../../../../models/ModelProvider.dart';
 import '../../../personalization/controllers/user_controller.dart';
-import '../../Booking/controllers/booking_controller.dart';
-import '../../Courses/controllers/tutoring_controller.dart';
+import '../../booking/controllers/booking_controller.dart';
+import '../../sessions/controllers/tutoring_controller.dart';
+import '../../favourites/controllers/favorites_controller.dart';
+import '../../dashboard/Home/controllers/home_controller.dart';
 import '../models/paystack_card_model.dart';
 import 'paystack_card_controller.dart';
 import '../screens/paystack_card_entry_screen.dart';
@@ -81,8 +88,9 @@ class CheckoutController extends GetxController {
   }
 
   // =========================================================================
-  // PERSIST PAYMENT — direct AppSync mutations + auto chat message
+  // PERSIST PAYMENT
   // =========================================================================
+
   Future<void> _persistPaymentRecords(
     BookingController bookingCtrl,
     double total,
@@ -91,7 +99,6 @@ class CheckoutController extends GetxController {
     final userId = UserController.instance.currentUser.value?.id;
     if (userId == null) throw Exception('User not authenticated');
 
-    // Snapshot items before clearing the cart.
     final items = List<BookingItem>.from(bookingCtrl.bookingItems);
 
     for (final item in items) {
@@ -105,7 +112,9 @@ class CheckoutController extends GetxController {
           ref: ref,
         );
 
-        // ✅ Send automatic chat message so the tutor knows what was booked.
+        await _autoFavoriteSession(item.sessionId!);
+        await _incrementEnrolledCount(item.sessionId!);
+
         await _sendBookingConfirmationMessage(
           item: item,
           userId: userId,
@@ -119,30 +128,469 @@ class CheckoutController extends GetxController {
   }
 
   // =========================================================================
+  // AUTO-FAVORITE
+  // =========================================================================
+
+  Future<void> _autoFavoriteSession(String sessionId) async {
+    try {
+      final favCtrl =
+          Get.isRegistered<FavoritesController>()
+              ? FavoritesController.instance
+              : Get.put(FavoritesController(), permanent: true);
+
+      if (!favCtrl.isFavourite(sessionId)) {
+        await favCtrl.toggleFavorite(sessionId);
+        safePrint('✅ CheckoutController: session $sessionId auto-favorited');
+      }
+    } catch (e) {
+      safePrint('⚠️ CheckoutController._autoFavoriteSession: $e');
+    }
+  }
+
+  // =========================================================================
+  // INCREMENT ENROLLED COUNT
+  // =========================================================================
+
+  Future<void> _incrementEnrolledCount(String sessionId) async {
+    try {
+      if (Get.isRegistered<HomeController>()) {
+        await HomeController.instance.incrementEnrolledCount(sessionId);
+      }
+    } catch (e) {
+      safePrint('⚠️ CheckoutController._incrementEnrolledCount: $e');
+    }
+  }
+
+  // =========================================================================
+  // QR CODE HELPERS
+  // =========================================================================
+
+  /// Returns true when the selected attributes indicate an offline/physical
+  /// session — checks Mode, Location, or Type keys.
+  bool _isPhysicalSession(Map<String, dynamic> attrs) {
+    final mode =
+        (attrs['Mode'] ?? attrs['mode'] ?? '').toString().toLowerCase();
+    final location =
+        (attrs['Location'] ?? attrs['location'] ?? '').toString().toLowerCase();
+    final type =
+        (attrs['Type'] ?? attrs['type'] ?? '').toString().toLowerCase();
+    return mode.contains('offline') ||
+        mode.contains('physical') ||
+        mode.contains('in-person') ||
+        location.contains('physical') ||
+        type.contains('physical');
+  }
+
+  /// Builds the QR payload — a structured JSON string containing all session
+  /// details needed for verification at the physical meeting point.
+  String _buildQrPayload({
+    required String sessionId,
+    required String bookingRef,
+    required String sessionTitle,
+    required String studentName,
+    required String tutorName,
+    required Map<String, dynamic> attrs,
+    required double amountPaid,
+  }) {
+    final payload = {
+      'type': 'TUTORLINK_BOOKING',
+      'sessionId': sessionId,
+      'ref': bookingRef,
+      'session': sessionTitle,
+      'student': studentName,
+      'tutor': tutorName,
+      'attrs': attrs,
+      'paid': amountPaid,
+      'ts': DateTime.now().toUtc().toIso8601String(),
+    };
+    return jsonEncode(payload);
+  }
+
+  /// Renders the QR card to a PNG file using dart:ui PictureRecorder.
+  ///
+  /// This approach has zero widget-tree dependency — it draws directly onto
+  /// a Canvas, so it never crashes from missing BuildContext, InheritedTheme,
+  /// or off-screen rendering issues. No screenshot package needed.
+  Future<File?> _renderQrToFile({
+    required String qrData,
+    required String sessionTitle,
+    required String ref,
+    required String studentName,
+    required String tutorName,
+    required Map<String, dynamic> attrs,
+    required double amountPaid,
+  }) async {
+    try {
+      const double w = 900;
+      const double pixelRatio = 3.0;
+
+      // Build the attribute lines for display
+      final attrEntries = attrs.entries.toList();
+
+      // ── Measure total height dynamically ───────────────────────────────
+      // Header=120, QR=300, divider=40, details rows, footer=60, padding
+      const double headerH = 120;
+      const double qrH = 300;
+      const double dividerH = 48;
+      const double rowH = 44;
+      const double footerH = 56;
+      const double vPad = 28;
+
+      // rows: student + tutor + attrs + paid
+      final int rowCount = 2 + attrEntries.length + 1;
+      final double detailH = rowCount * rowH + (rowCount - 1) * 10;
+      final double totalH =
+          headerH + qrH + dividerH + detailH + footerH + vPad * 3;
+
+      // ── Paint onto canvas ───────────────────────────────────────────────
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, totalH));
+
+      final Paint bgPaint = Paint()..color = Colors.white;
+      final RRect cardRRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, w, totalH),
+        const Radius.circular(36),
+      );
+      canvas.drawRRect(cardRRect, bgPaint);
+
+      // ── Header gradient ─────────────────────────────────────────────────
+      final headerRect = Rect.fromLTWH(0, 0, w, headerH);
+      final headerRRect = RRect.fromRectAndCorners(
+        headerRect,
+        topLeft: const Radius.circular(36),
+        topRight: const Radius.circular(36),
+      );
+      final headerPaint =
+          Paint()
+            ..shader = const LinearGradient(
+              colors: [Color(0xFF0BA4DB), Color(0xFF0886B8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ).createShader(headerRect);
+      canvas.drawRRect(headerRRect, headerPaint);
+
+      // Header text — "TutorLink"
+      _drawText(
+        canvas,
+        'TutorLink',
+        const Offset(28, 22),
+        fontSize: 28,
+        color: Colors.white,
+        fontWeight: FontWeight.w800,
+      );
+
+      // "● Physical" badge
+      final badgePaint = Paint()..color = const Color(0xFF00C48C);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(720, 18, 160, 36),
+          const Radius.circular(20),
+        ),
+        badgePaint,
+      );
+      _drawText(
+        canvas,
+        '● Physical',
+        const Offset(730, 24),
+        fontSize: 18,
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+      );
+
+      // Session title
+      _drawText(
+        canvas,
+        sessionTitle.length > 40
+            ? '${sessionTitle.substring(0, 40)}…'
+            : sessionTitle,
+        const Offset(28, 68),
+        fontSize: 26,
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+      );
+
+      // ── QR code ─────────────────────────────────────────────────────────
+      // QrPainter draws directly onto the canvas — no widget tree needed.
+      // color/emptyColor are deprecated; use eyeStyle + dataModuleStyle instead.
+      final qrPainter = QrPainter(
+        data: qrData,
+        version: QrVersions.auto,
+        errorCorrectionLevel: QrErrorCorrectLevel.M,
+        eyeStyle: const QrEyeStyle(
+          eyeShape: QrEyeShape.square,
+          color: Color(0xFF1A1A2E),
+        ),
+        dataModuleStyle: const QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square,
+          color: Color(0xFF1A1A2E),
+        ),
+        // emptyColor removed — background is already white from the card paint
+      );
+      const double qrSize = 260;
+      final double qrX = (w - qrSize) / 2;
+      // qrY is runtime-computed so must be final, not const
+      final double qrY = headerH + 20;
+
+      canvas.save();
+      canvas.translate(qrX, qrY);
+      qrPainter.paint(canvas, const Size(qrSize, qrSize));
+      canvas.restore();
+
+      // ── Divider + label ─────────────────────────────────────────────────
+      // dividerY is a runtime value — all Offset() uses must be non-const
+      final double dividerY = qrY + qrSize + 16;
+      final dividerPaint =
+          Paint()
+            ..color = const Color(0xFFE0E0E0)
+            ..strokeWidth = 1.5;
+      canvas.drawLine(
+        Offset(24, dividerY + 12),
+        Offset(300, dividerY + 12),
+        dividerPaint,
+      );
+      canvas.drawLine(
+        Offset(600, dividerY + 12),
+        Offset(w - 24, dividerY + 12),
+        dividerPaint,
+      );
+      _drawText(
+        canvas,
+        'SCAN TO VERIFY',
+        Offset(320, dividerY + 2), // non-const — dividerY is runtime
+        fontSize: 16,
+        color: const Color(0xFFAAAAAA),
+        fontWeight: FontWeight.w700,
+        letterSpacing: 2,
+      );
+
+      // ── Detail rows ─────────────────────────────────────────────────────
+      double rowY = dividerY + dividerH;
+
+      void drawRow(IconData icon, String label, String value, Color color) {
+        // Icon chip background
+        final chipPaint = Paint()..color = color.withValues(alpha: 0.12);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(24, rowY, 48, 36),
+            const Radius.circular(10),
+          ),
+          chipPaint,
+        );
+        // Label
+        _drawText(
+          canvas,
+          '$label:',
+          Offset(82, rowY + 6),
+          fontSize: 20,
+          color: const Color(0xFF999999),
+          fontWeight: FontWeight.w500,
+        );
+        // Value
+        _drawText(
+          canvas,
+          value.length > 36 ? '${value.substring(0, 36)}…' : value,
+          Offset(220, rowY + 6),
+          fontSize: 20,
+          color: const Color(0xFF1A1A2E),
+          fontWeight: FontWeight.w700,
+        );
+        rowY += rowH + 10;
+      }
+
+      drawRow(
+        Icons.person_rounded,
+        'Student',
+        studentName,
+        const Color(0xFF0BA4DB),
+      );
+      drawRow(
+        Icons.school_rounded,
+        'Tutor',
+        tutorName,
+        const Color(0xFF7C3AED),
+      );
+      for (final e in attrEntries) {
+        drawRow(
+          Icons.tune_rounded,
+          e.key,
+          e.value.toString(),
+          const Color(0xFFF59E0B),
+        );
+      }
+      drawRow(
+        Icons.payments_rounded,
+        'Paid',
+        '₦${amountPaid.toStringAsFixed(2)}',
+        const Color(0xFF00C48C),
+      );
+
+      // ── Footer ──────────────────────────────────────────────────────────
+      final double footerY = totalH - footerH;
+      final footerBgPaint = Paint()..color = const Color(0xFFF8F8F8);
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(
+          Rect.fromLTWH(0, footerY, w, footerH),
+          bottomLeft: const Radius.circular(36),
+          bottomRight: const Radius.circular(36),
+        ),
+        footerBgPaint,
+      );
+      _drawText(
+        canvas,
+        'Ref: $ref',
+        Offset(24, footerY + 16),
+        fontSize: 18,
+        color: const Color(0xFFAAAAAA),
+        fontWeight: FontWeight.w600,
+      );
+      _drawText(
+        canvas,
+        'tutorlink.app',
+        Offset(w - 200, footerY + 16),
+        fontSize: 18,
+        color: const Color(0xFF0BA4DB),
+        fontWeight: FontWeight.w600,
+      );
+
+      // ── Finalise image ───────────────────────────────────────────────────
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(
+        (w * pixelRatio).toInt(),
+        (totalH * pixelRatio).toInt(),
+      );
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return null;
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/booking_qr_${ref.replaceAll('_', '')}.png',
+      );
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+      return file;
+    } catch (e, st) {
+      safePrint('⚠️ _renderQrToFile error: $e\n$st');
+      return null;
+    }
+  }
+
+  /// Draws text onto a Canvas at [offset] with the given style parameters.
+  void _drawText(
+    Canvas canvas,
+    String text,
+    Offset offset, {
+    required double fontSize,
+    required Color color,
+    FontWeight fontWeight = FontWeight.w400,
+    double letterSpacing = 0,
+  }) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: fontSize,
+          color: color,
+          fontWeight: fontWeight,
+          letterSpacing: letterSpacing,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, offset);
+  }
+
+  /// Sends the QR image to both tutor and student chat threads.
+  /// The image is saved to device storage and can be downloaded/shared.
+  Future<void> _sendQrCode({
+    required String sessionId,
+    required String studentUserId,
+    required String tutorUserId,
+    required String qrData,
+    required String sessionTitle,
+    required String ref,
+    required String studentName,
+    required String tutorName,
+    required Map<String, dynamic> attrs,
+    required double amountPaid,
+  }) async {
+    try {
+      final qrFile = await _renderQrToFile(
+        qrData: qrData,
+        sessionTitle: sessionTitle,
+        ref: ref,
+        studentName: studentName,
+        tutorName: tutorName,
+        attrs: attrs,
+        amountPaid: amountPaid,
+      );
+
+      if (qrFile == null) {
+        safePrint('⚠️ _sendQrCode: QR render failed, skipping QR message');
+        return;
+      }
+
+      // Show download/share bottom sheet to student
+      if (Get.context != null) {
+        await _showQrDownloadSheet(
+          context: Get.context!,
+          qrFile: qrFile,
+          sessionTitle: sessionTitle,
+          ref: ref,
+        );
+      }
+
+      // Send QR notice message in both chat threads
+      // Student thread: {sessionId}_{studentUserId}
+      // Tutor thread: {sessionId}_{tutorUserId} if different
+      final studentChatId = '${sessionId}_$studentUserId';
+      final tutorChatId = '${sessionId}_$tutorUserId';
+
+      const qrNotice =
+          '📍 Physical Session QR Code\n\n'
+          'A verification QR code has been generated for this booking. '
+          'Both you and your tutor have a copy. Show it at the start of '
+          'your session for instant verification.\n\n'
+          '🔒 Ref: ';
+
+      final fullNotice = '$qrNotice$ref';
+
+      if (Get.isRegistered<TutoringController>()) {
+        final tc = TutoringController.instance;
+        await tc.sendMessage(studentChatId, fullNotice);
+        if (tutorChatId != studentChatId) {
+          await tc.sendMessage(tutorChatId, fullNotice);
+        }
+      }
+
+      safePrint('✅ QR code notice sent for session $sessionId');
+    } catch (e) {
+      safePrint('⚠️ _sendQrCode error: $e');
+    }
+  }
+
+  /// Bottom sheet shown to the student with download + share options.
+  Future<void> _showQrDownloadSheet({
+    required BuildContext context,
+    required File qrFile,
+    required String sessionTitle,
+    required String ref,
+  }) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder:
+          (_) => _QrDownloadSheet(
+            qrFile: qrFile,
+            sessionTitle: sessionTitle,
+            ref: ref,
+          ),
+    );
+  }
+
+  // =========================================================================
   // AUTO CHAT MESSAGE
   // =========================================================================
 
-  /// Sends a structured booking confirmation message into the session's
-  /// chat thread immediately after payment succeeds.
-  ///
-  /// Format example:
-  /// ────────────────────────────────
-  /// 📋 New Booking Confirmed
-  ///
-  /// 📚 Session: Advanced Mathematics
-  /// 👤 Student: Lewin
-  ///
-  /// 🗓 Selected Options:
-  ///   • Mode: Online
-  ///   • Duration: 2hr
-  ///   • Payment: Before Session
-  ///
-  /// 💳 Amount Paid: ₦5,500.00
-  /// 🔖 Reference: PSK_1718123456789
-  /// ────────────────────────────────
-  ///
-  /// The chatId follows the convention: {sessionId}_{userId}
-  /// so the tutor's inbox can route it to the correct thread.
   Future<void> _sendBookingConfirmationMessage({
     required BookingItem item,
     required String userId,
@@ -153,24 +601,20 @@ class CheckoutController extends GetxController {
       final sessionId = item.sessionId;
       if (sessionId == null) return;
 
-      // Build the chat thread ID — same convention used everywhere else.
       final chatId = '${sessionId}_$userId';
 
-      // Resolve the student's display name.
       final currentUser = UserController.instance.currentUser.value;
       final studentName =
           (currentUser?.username.isNotEmpty ?? false)
               ? currentUser!.username
               : 'Student';
 
-      // Parse selected attributes from the JSON stored on the BookingItem.
       final attrsJson = item.selectedAttributes;
       final Map<String, dynamic> attrs =
           (attrsJson != null && attrsJson.isNotEmpty)
               ? (jsonDecode(attrsJson) as Map<String, dynamic>)
               : {};
 
-      // Build the attributes bullet list.
       final attrLines = attrs.entries
           .map((e) => '  • ${e.key}: ${e.value}')
           .join('\n');
@@ -190,14 +634,10 @@ class CheckoutController extends GetxController {
         '🔖 Reference: $ref',
       ].join('\n');
 
-      // Use TutoringController.sendMessage which saves to DataStore and
-      // syncs to AppSync, triggering the tutor's observeChat listener.
       if (Get.isRegistered<TutoringController>()) {
         await TutoringController.instance.sendMessage(chatId, messageText);
         safePrint('✅ CheckoutController: booking confirmation sent to $chatId');
       } else {
-        // Fallback: send directly via AppSync mutation if TutoringController
-        // isn't registered (e.g. during a cold-start checkout flow).
         await _sendMessageDirectly(
           chatId: chatId,
           userId: userId,
@@ -205,13 +645,52 @@ class CheckoutController extends GetxController {
           text: messageText,
         );
       }
+
+      // ✅ If physical/offline — generate and send QR to both parties
+      if (_isPhysicalSession(attrs)) {
+        safePrint('📍 Physical session detected — generating QR code');
+
+        // Resolve the tutor's userId so we can address their chat thread
+        String tutorUserId = userId; // fallback to student if unresolvable
+        try {
+          if (Get.isRegistered<HomeController>()) {
+            final sessions = HomeController.instance.allSessions;
+            final match = sessions.firstWhere(
+              (s) => s.id == sessionId,
+              orElse: () => sessions.first,
+            );
+            tutorUserId = match.tutor?.id ?? userId;
+          }
+        } catch (_) {}
+
+        final qrData = _buildQrPayload(
+          sessionId: sessionId,
+          bookingRef: ref,
+          sessionTitle: sessionTitle,
+          studentName: studentName,
+          tutorName: tutorName,
+          attrs: attrs,
+          amountPaid: totalPaid,
+        );
+
+        await _sendQrCode(
+          sessionId: sessionId,
+          studentUserId: userId,
+          tutorUserId: tutorUserId,
+          qrData: qrData,
+          sessionTitle: sessionTitle,
+          ref: ref,
+          studentName: studentName,
+          tutorName: tutorName,
+          attrs: attrs,
+          amountPaid: totalPaid,
+        );
+      }
     } catch (e) {
-      // Non-fatal — payment already succeeded. Log and continue.
       safePrint('⚠️ CheckoutController._sendBookingConfirmationMessage: $e');
     }
   }
 
-  /// Direct AppSync fallback for sending a chat message without DataStore.
   Future<void> _sendMessageDirectly({
     required String chatId,
     required String userId,
@@ -222,14 +701,7 @@ class CheckoutController extends GetxController {
       const mutationDoc = r"""
         mutation CreateChatMessage($input: CreateChatMessageInput!) {
           createChatMessage(input: $input) {
-            id
-            sessionId
-            senderId
-            senderName
-            text
-            isVoice
-            createdAt
-            _version
+            id sessionId senderId senderName text isVoice createdAt _version
           }
         }
       """;
@@ -263,6 +735,7 @@ class CheckoutController extends GetxController {
   // =========================================================================
   // UPDATE BOOKING ITEM PAID
   // =========================================================================
+
   Future<void> _updateBookingItemPaid(BookingItem item) async {
     try {
       const getDoc = r"""
@@ -293,9 +766,7 @@ class CheckoutController extends GetxController {
 
       const mutationDoc = r"""
         mutation UpdateBookingItem($input: UpdateBookingItemInput!) {
-          updateBookingItem(input: $input) {
-            id hasPaid _version
-          }
+          updateBookingItem(input: $input) { id hasPaid _version }
         }
       """;
 
@@ -318,7 +789,7 @@ class CheckoutController extends GetxController {
 
       if (response.errors.isNotEmpty) {
         safePrint(
-          '⚠️ CheckoutController._updateBookingItemPaid errors: ${response.errors}',
+          '⚠️ CheckoutController._updateBookingItemPaid: ${response.errors}',
         );
       } else {
         safePrint(
@@ -333,6 +804,7 @@ class CheckoutController extends GetxController {
   // =========================================================================
   // UPSERT USER SESSION PAYMENT
   // =========================================================================
+
   Future<void> _upsertUserSessionPayment({
     required String userId,
     required String sessionId,
@@ -345,9 +817,7 @@ class CheckoutController extends GetxController {
       const listDoc = r"""
         query ListPaymentsByUser($userId: ID!, $limit: Int) {
           listUserSessionPaymentsByUser(userId: $userId, limit: $limit) {
-            items {
-              id userId sessionId hasPaid _version _deleted
-            }
+            items { id userId sessionId hasPaid _version _deleted }
           }
         }
       """;
@@ -386,9 +856,7 @@ class CheckoutController extends GetxController {
       if (existingId != null) {
         const updateDoc = r"""
           mutation UpdateUserSessionPayment($input: UpdateUserSessionPaymentInput!) {
-            updateUserSessionPayment(input: $input) {
-              id hasPaid _version
-            }
+            updateUserSessionPayment(input: $input) { id hasPaid _version }
           }
         """;
 
@@ -417,9 +885,7 @@ class CheckoutController extends GetxController {
       } else {
         const createDoc = r"""
           mutation CreateUserSessionPayment($input: CreateUserSessionPaymentInput!) {
-            createUserSessionPayment(input: $input) {
-              id hasPaid _version
-            }
+            createUserSessionPayment(input: $input) { id hasPaid _version }
           }
         """;
 
@@ -453,6 +919,7 @@ class CheckoutController extends GetxController {
   // =========================================================================
   // PROCESSING DIALOG
   // =========================================================================
+
   void _showProcessingDialog(
     BuildContext context,
     PaystackCardModel card,
@@ -531,6 +998,7 @@ class CheckoutController extends GetxController {
   // =========================================================================
   // SUCCESS DIALOG
   // =========================================================================
+
   void _showSuccessDialog(BuildContext context, double amount, String ref) {
     showDialog(
       context: context,
@@ -640,5 +1108,231 @@ class CheckoutController extends GetxController {
             ),
           ),
     );
+  }
+}
+
+// =============================================================================
+// QR Download Bottom Sheet
+// =============================================================================
+
+class _QrDownloadSheet extends StatelessWidget {
+  const _QrDownloadSheet({
+    required this.qrFile,
+    required this.sessionTitle,
+    required this.ref,
+  });
+
+  final File qrFile;
+  final String sessionTitle;
+  final String ref;
+
+  static const _blue = Color(0xFF0BA4DB);
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        0,
+        24,
+        MediaQuery.of(context).viewInsets.bottom + 36,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Drag handle ──────────────────────────────────────────
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: cs.outline.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Icon + title ─────────────────────────────────────────
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [_blue, Color(0xFF0886B8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: _blue.withValues(alpha: 0.3),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.qr_code_2_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Text(
+            'Your QR Code is Ready',
+            style: tt.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Show this at your session for instant\nverification. Your tutor has one too.',
+            style: tt.bodyMedium?.copyWith(
+              color: cs.onSurface.withValues(alpha: 0.55),
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+
+          // ── QR preview ───────────────────────────────────────────
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.file(
+              qrFile,
+              width: 220,
+              height: 220,
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Ref: $ref',
+            style: TextStyle(
+              fontSize: 11,
+              color: cs.onSurface.withValues(alpha: 0.4),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // ── Action buttons ───────────────────────────────────────
+          Row(
+            children: [
+              // Save to device
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await _saveToGallery(context, qrFile);
+                  },
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: const Text(
+                    'Save',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _blue,
+                    side: const BorderSide(color: _blue, width: 1.2),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Share
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await SharePlus.instance.share(
+                      ShareParams(
+                        files: [XFile(qrFile.path)],
+                        text:
+                            'My TutorLink session QR code — $sessionTitle (Ref: $ref)',
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.share_rounded, size: 18),
+                  label: const Text(
+                    'Share',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Done',
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.4),
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveToGallery(BuildContext context, File file) async {
+    try {
+      // Use image_gallery_saver or gal package — whichever is in your pubspec.
+      // Example with the `gal` package:
+      // await Gal.putImage(file.path);
+      //
+      // If you use image_gallery_saver:
+      // await ImageGallerySaver.saveFile(file.path);
+      //
+      // For now we copy to downloads-equivalent using path_provider:
+      final dir = await getApplicationDocumentsDirectory();
+      final dest = File(
+        '${dir.path}/TutorLink_QR_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.copy(dest.path);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text('QR code saved to your device'),
+              ],
+            ),
+            backgroundColor: const Color(0xFF00C48C),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      safePrint('⚠️ _saveToGallery error: $e');
+    }
   }
 }

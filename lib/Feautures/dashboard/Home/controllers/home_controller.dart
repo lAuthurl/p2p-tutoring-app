@@ -7,7 +7,7 @@ import 'package:get/get.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import '../../../../models/ModelProvider.dart';
 import '../../../../personalization/controllers/user_controller.dart';
-import '../../../Booking/controllers/booking_controller.dart';
+import '../../../booking/controllers/booking_controller.dart';
 import '../controllers/subject_controller.dart';
 
 class HomeController extends GetxController {
@@ -138,19 +138,8 @@ class HomeController extends GetxController {
   // SESSION LOADING
   // =========================================================================
 
-  /// ✅ FIX: Load ALL sessions directly from the GraphQL JSON response.
-  ///
-  /// The previous approach fetched session IDs from AppSync then re-queried
-  /// DataStore for each one. DataStore only contains sessions belonging to
-  /// the current user's sync scope — sessions created by OTHER tutors are
-  /// never in the local DataStore, so they were silently dropped.
-  ///
-  /// Now we decode the full AppSync response using dart:convert and build
-  /// TutoringSession objects directly from the JSON maps. No DataStore
-  /// lookup needed — every session AppSync returns gets shown regardless
-  /// of which account created it.
   Future<void> _loadAllSessionsFromGraphQL() async {
-    // ✅ Request ALL fields we need in one query — no second DataStore fetch.
+    // ✅ maxStudents + enrolledCount added to query
     const queryDoc = r"""
       query ListAllSessionsFull($limit: Int) {
         listTutoringSessions(limit: $limit) {
@@ -164,6 +153,8 @@ class HomeController extends GetxController {
             subjectId
             isFeatured
             hasPaid
+            maxStudents
+            enrolledCount
             createdAt
             updatedAt
           }
@@ -186,7 +177,6 @@ class HomeController extends GetxController {
         return;
       }
 
-      // ✅ Parse response with dart:convert — reliable for nested JSON.
       final decoded = jsonDecode(response.data!) as Map<String, dynamic>;
       final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
       final listObj = root['listTutoringSessions'] as Map<String, dynamic>?;
@@ -209,15 +199,11 @@ class HomeController extends GetxController {
         final id = item['id'] as String?;
         if (id == null) continue;
 
-        // ✅ Build session directly from the GraphQL map — no DataStore query.
-        // This means sessions from ALL tutors are included, not just the
-        // current user's DataStore scope.
         final tutorId = item['tutorId'] as String?;
         final subjectId = item['subjectId'] as String?;
         final createdAtStr = item['createdAt'] as String?;
         final updatedAtStr = item['updatedAt'] as String?;
 
-        // Cache subject mapping.
         if (subjectId != null && subjectId.isNotEmpty) {
           _sessionSubjectMap[id] = subjectId;
         }
@@ -229,6 +215,9 @@ class HomeController extends GetxController {
           pricePerSession: (item['pricePerSession'] as num?)?.toDouble(),
           thumbnail: item['thumbnail'] as String?,
           isFeatured: item['isFeatured'] as bool?,
+          // ✅ NEW: read capacity fields from GraphQL response
+          maxStudents: item['maxStudents'] as int?,
+          enrolledCount: item['enrolledCount'] as int? ?? 0,
           createdAt:
               createdAtStr != null
                   ? TemporalDateTime.fromString(createdAtStr)
@@ -239,13 +228,11 @@ class HomeController extends GetxController {
                   : null,
         );
 
-        // Resolve tutor (cache-friendly — only one DataStore query per unique tutor).
         if (tutorId != null && tutorId.isNotEmpty) {
           final tutor = await _resolveTutorById(tutorId);
           if (tutor != null) session = session.copyWith(tutor: tutor);
         }
 
-        // Resolve subject.
         if (subjectId != null && subjectId.isNotEmpty) {
           final subject = await _resolveSubjectById(subjectId);
           if (subject != null) session = session.copyWith(subject: subject);
@@ -256,8 +243,7 @@ class HomeController extends GetxController {
 
       allSessions.assignAll(resolved);
       debugPrint(
-        'HomeController: ${resolved.length} sessions loaded from AppSync '
-        '(all tutors)',
+        'HomeController: ${resolved.length} sessions loaded from AppSync (all tutors)',
       );
     } catch (e) {
       debugPrint('HomeController: _loadAllSessionsFromGraphQL error: $e');
@@ -353,13 +339,118 @@ class HomeController extends GetxController {
   }
 
   // =========================================================================
-  // FILTERING
+  // CAPACITY HELPERS
+  // =========================================================================
+
+  /// Returns true when a session has a cap AND is full.
+  /// Used by _applyFilters to exclude full sessions from browse lists.
+  bool _isFull(TutoringSession s) {
+    final max = s.maxStudents;
+    if (max == null || max <= 0) return false;
+    return (s.enrolledCount ?? 0) >= max;
+  }
+
+  /// Remaining spots. Returns null when no cap is set (unlimited).
+  int? spotsLeft(TutoringSession s) {
+    final max = s.maxStudents;
+    if (max == null || max <= 0) return null;
+    return (max - (s.enrolledCount ?? 0)).clamp(0, max);
+  }
+
+  /// Increments enrolledCount on the local copy of a session after payment.
+  /// Also persists the new count to AppSync via a GraphQL mutation.
+  Future<void> incrementEnrolledCount(String sessionId) async {
+    final idx = allSessions.indexWhere((s) => s.id == sessionId);
+    if (idx == -1) return;
+
+    final old = allSessions[idx];
+    final newCount = (old.enrolledCount ?? 0) + 1;
+    final updated = old.copyWith(enrolledCount: newCount);
+
+    // Optimistic local update — UI reacts immediately
+    allSessions[idx] = updated;
+
+    // Persist to AppSync
+    try {
+      const mutationDoc = r"""
+        mutation IncrementEnrolled($id: ID!, $enrolledCount: Int!, $expectedVersion: Int!) {
+          updateTutoringSession(input: {
+            id: $id,
+            enrolledCount: $enrolledCount,
+            _version: $expectedVersion
+          }) {
+            id enrolledCount _version
+          }
+        }
+      """;
+
+      // Fetch current _version first to avoid conflict errors
+      const getDoc = r"""
+        query GetSessionVersion($id: ID!) {
+          getTutoringSession(id: $id) { id _version enrolledCount }
+        }
+      """;
+
+      final getResp =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: getDoc,
+                  variables: {'id': sessionId},
+                ),
+              )
+              .response;
+
+      int version = 1;
+      if (getResp.errors.isEmpty && getResp.data != null) {
+        final decoded = jsonDecode(getResp.data!) as Map<String, dynamic>;
+        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+        final obj = root['getTutoringSession'] as Map<String, dynamic>?;
+        if (obj != null) {
+          version = (obj['_version'] as num?)?.toInt() ?? 1;
+          // Use server's actual count + 1 to avoid races between devices
+          final serverCount = (obj['enrolledCount'] as num?)?.toInt() ?? 0;
+          final trustedCount = serverCount + 1;
+          // Re-patch local if server had a different value
+          if (trustedCount != newCount) {
+            allSessions[idx] = old.copyWith(enrolledCount: trustedCount);
+          }
+        }
+      }
+
+      await Amplify.API
+          .mutate(
+            request: GraphQLRequest<String>(
+              document: mutationDoc,
+              variables: {
+                'id': sessionId,
+                'enrolledCount': newCount,
+                'expectedVersion': version,
+              },
+            ),
+          )
+          .response;
+
+      debugPrint(
+        'HomeController: enrolledCount incremented for $sessionId → $newCount',
+      );
+    } catch (e) {
+      debugPrint('HomeController: incrementEnrolledCount error: $e');
+    }
+  }
+
+  // =========================================================================
+  // FILTERING & RANKING
   // =========================================================================
 
   void _applyFilters() {
     final selectedSubject = subjectController.selectedSubject.value;
     final query = searchQuery.value.toLowerCase();
 
+    // Step 1: apply subject + search filter
+    // ✅ Full sessions are excluded from browse lists (filteredSessions,
+    //    featuredSessions, popularSessions, recentSessions).
+    //    They remain in allSessions so favorites can still display them.
     final filtered =
         allSessions.where((s) {
           final resolvedSubjectId = _sessionSubjectMap[s.id] ?? s.subject?.id;
@@ -370,14 +461,91 @@ class HomeController extends GetxController {
               query.isEmpty ||
               s.title.toLowerCase().contains(query) ||
               (s.tutor?.name.toLowerCase().contains(query) ?? false);
-          return matchesSubject && matchesSearch;
+          // ✅ Exclude full sessions from public browse
+          final notFull = !_isFull(s);
+          return matchesSubject && matchesSearch && notFull;
         }).toList();
 
+    // Step 2: sort all sessions newest-first (true recency sort)
+    filtered.sort((a, b) {
+      final aTime = a.createdAt?.getDateTimeInUtc() ?? DateTime(0);
+      final bTime = b.createdAt?.getDateTimeInUtc() ?? DateTime(0);
+      return bTime.compareTo(aTime);
+    });
+
     filteredSessions.assignAll(filtered);
+
+    // Step 3: featured = top-scored sessions via composite quality signal.
+    final scored =
+        filtered.map((s) => (session: s, score: _featuredScore(s))).toList()
+          ..sort((a, b) => b.score.compareTo(a.score));
+
+    final topScored =
+        scored.where((e) => e.score > 0).take(4).map((e) => e.session).toList();
+
     featuredSessions.value =
-        filtered.where((s) => s.isFeatured ?? false).toList();
-    popularSessions.value = filtered.toList();
-    recentSessions.value = filtered.reversed.toList();
+        topScored.isNotEmpty ? topScored : filtered.take(4).toList();
+
+    // Step 4: popular = highest-priced first, then highest-rated, then newest.
+    final byPopularity = List<TutoringSession>.from(filtered)..sort((a, b) {
+      final priceDiff = (b.pricePerSession ?? 0).compareTo(
+        a.pricePerSession ?? 0,
+      );
+      if (priceDiff != 0) return priceDiff;
+      final ratingDiff = _avgRating(b).compareTo(_avgRating(a));
+      if (ratingDiff != 0) return ratingDiff;
+      final aTime = a.createdAt?.getDateTimeInUtc() ?? DateTime(0);
+      final bTime = b.createdAt?.getDateTimeInUtc() ?? DateTime(0);
+      return bTime.compareTo(aTime);
+    });
+    popularSessions.value = byPopularity;
+
+    // Step 5: recentSessions mirrors filteredSessions — already newest-first.
+    recentSessions.value = filtered;
+  }
+
+  /// Composite score used to rank "Featured" sessions.
+  double _featuredScore(TutoringSession s) {
+    double score = 0;
+
+    if (s.isFeatured == true) score += 40;
+    if (s.thumbnail != null && s.thumbnail!.isNotEmpty) score += 30;
+    if (s.description != null && s.description!.isNotEmpty) score += 20;
+    if (s.tutor?.name != null && s.tutor!.name.isNotEmpty) score += 10;
+
+    // Rating signal with confidence weighting
+    final reviews = s.reviews;
+    if (reviews != null && reviews.isNotEmpty) {
+      final count = reviews.length;
+      final avgRating =
+          reviews.fold<double>(0, (sum, r) => sum + r.rating) / count;
+      final confidence = (count.clamp(0, 10) / 10).toDouble();
+      score += (avgRating / 5) * 25 * confidence;
+    }
+
+    // Recency bonus — linear decay over 30 days
+    final created = s.createdAt?.getDateTimeInUtc();
+    if (created != null) {
+      final ageInDays = DateTime.now().toUtc().difference(created).inDays;
+      if (ageInDays <= 30) {
+        score += (1 - ageInDays / 30) * 10;
+      }
+    }
+
+    // Price signal — proportional up to ₦10,000
+    final price = s.pricePerSession ?? 0;
+    if (price > 0) {
+      score += (price.clamp(0, 10000) / 10000) * 10;
+    }
+
+    return score;
+  }
+
+  /// Average rating helper — returns 0.0 if no reviews.
+  double _avgRating(TutoringSession s) {
+    final reviews = s.reviews;
+    if (reviews == null || reviews.isEmpty) return 0.0;
+    return reviews.fold<double>(0, (sum, r) => sum + r.rating) / reviews.length;
   }
 
   void updateSearch(String query) => searchQuery.value = query;

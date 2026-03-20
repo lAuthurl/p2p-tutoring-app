@@ -5,9 +5,9 @@ import 'package:get/get.dart';
 import 'package:p2p_tutoring_app/Feautures/checkout/screens/widgets/billing_payment_section.dart';
 import 'package:p2p_tutoring_app/Feautures/checkout/screens/widgets/t_payment_section.dart';
 
-import '../../Booking/controllers/booking_controller.dart';
+import '../../booking/controllers/booking_controller.dart';
 import '../controllers/checkout_controller.dart';
-import '../../Booking/screens/widgets/booking_items.dart';
+import '../../booking/screens/widgets/booking_items.dart';
 
 class CheckoutScreen extends StatelessWidget {
   const CheckoutScreen({super.key});

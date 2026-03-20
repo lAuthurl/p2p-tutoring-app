@@ -15,14 +15,17 @@ class App extends StatelessWidget {
       initialBinding: GeneralBindings(),
       initialRoute: TRoutes.splash,
 
-      // Force dark mode
       themeMode: ThemeMode.dark,
-      theme: TAppTheme.darkTheme, // Only use darkTheme
-      darkTheme: TAppTheme.darkTheme, // Same dark theme
+      theme: TAppTheme.darkTheme,
+      darkTheme: TAppTheme.darkTheme,
       debugShowCheckedModeBanner: false,
       getPages: AppRoutes.pages,
 
-      home: const Scaffold(body: Center(child: CircularProgressIndicator())),
+      // ✅ REMOVED: home: Scaffold(CircularProgressIndicator())
+      // That `home` was rendering a spinner widget BEFORE initialRoute
+      // could resolve, causing the visible flash. When both `initialRoute`
+      // and `home` are set, GetX uses `home` as the very first frame —
+      // remove it so the splash is the only thing that ever renders.
     );
   }
 }

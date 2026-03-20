@@ -1,11 +1,11 @@
 import 'package:get/get.dart';
-import 'package:p2p_tutoring_app/Feautures/Booking/controllers/booking_controller.dart';
+import 'package:p2p_tutoring_app/Feautures/booking/controllers/booking_controller.dart';
 import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/home_controller.dart';
 import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/subject_controller.dart';
 import 'package:p2p_tutoring_app/personalization/controllers/theme_controller.dart';
 
 import '../Feautures/checkout/controllers/paystack_card_controller.dart';
-import '../Feautures/dashboard/Home/controllers/favorites_controller.dart';
+import '../Feautures/favourites/controllers/favorites_controller.dart';
 import '../utils/helpers/network_manager.dart';
 import '../data/services/notifications/notification_service.dart';
 

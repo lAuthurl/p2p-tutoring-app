@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../utils/constants/sizes.dart';
-import '../../../Booking/controllers/booking_controller.dart';
+import '../../../booking/controllers/booking_controller.dart';
 
 /// Displays the billing summary for the peer tutoring checkout,
 /// showing base total, app fee (commission), and total amount.

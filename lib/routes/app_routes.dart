@@ -2,22 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../bindings/notification_binding.dart';
-import '../screens/login/login_screen.dart';
-import '../screens/signup/signup_screen.dart';
-import '../screens/welcome/welcome_screen.dart';
-import '../screens/splash_screen/splash_screen.dart';
-import '../screens/on_boarding/on_boarding_screen.dart';
+import '../authentication/screens/login/login_screen.dart';
+import '../authentication/screens/signup/signup_screen.dart';
+import '../authentication/screens/welcome/welcome_screen.dart';
+import '../authentication/screens/splash_screen/splash_screen.dart';
+import '../authentication/screens/on_boarding/on_boarding_screen.dart';
 import '../personalization/screens/notification/notification_screen.dart';
 import '../personalization/screens/notification/notification_detail_screen.dart';
 import '../personalization/screens/profile/profile_screen.dart';
 import 'routes.dart';
 
 // Feature screens
-import '../Feautures/Booking/screens/booking_screen.dart';
+import '../Feautures/booking/screens/booking_screen.dart';
 import '../Feautures/dashboard/Home/screens/home/home.dart';
-import '../Feautures/favourites/favourite.dart';
+import '../Feautures/favourites/screens/favourite.dart';
 import '../Feautures/checkout/screens/checkout.dart';
-import '../screens/forget_password/forget_password_otp/otp_screen.dart';
+import '../authentication/screens/forget_password/forget_password_otp/otp_screen.dart';
 import '../common/widgets/success_screen/success_screen.dart';
 import '../personalization/screens/profile/re_authenticate_phone_otp_screen.dart';
 import 'package:p2p_tutoring_app/Feautures/dashboard/Home/controllers/home_controller.dart';

@@ -7,7 +7,7 @@ import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/image_strings.dart';
 import '../../../../utils/constants/text_strings.dart';
 import '../../models/model_on_boarding.dart';
-import '../../screens/on_boarding/on_boarding_page_widget.dart';
+import '../screens/on_boarding/on_boarding_page_widget.dart';
 import '../../../routes/routes.dart';
 import '../../../data/repository/authentication_repository/authentication_repository.dart';
 
