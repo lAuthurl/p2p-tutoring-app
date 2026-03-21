@@ -4,5 +4,6 @@ flutter clean
 flutter pub get
 amplify codegen models
 
-
-and try making voice call work  - last thing to do
+git add .
+git commit "feature"
+git push -u origin Member-1
