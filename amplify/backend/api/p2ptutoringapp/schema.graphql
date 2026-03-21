@@ -279,3 +279,30 @@ type UserSessionPayment @model
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
 }
+
+# -------------------------------
+# Call Session - for Agora calls
+# -------------------------------
+type CallSession @model
+  @auth(rules: [
+    { allow: owner, operations: [create, read, update, delete] },
+    { allow: private, operations: [read, update] },  # ✅ callee can read + update status
+    { allow: public, operations: [] }
+  ])
+{
+  id: ID!
+  sessionId: ID! @index(name: "bySession", queryField: "listCallSessionsBySession")  # ✅ queryable by sessionId
+  callerId: ID!  @index(name: "byCaller",  queryField: "listCallSessionsByCaller")   # ✅ caller can find their calls
+  calleeId: ID!  @index(name: "byCallee",  queryField: "listCallSessionsByCallee")   # ✅ callee can find incoming calls
+  status: CallStatus!
+  isVideo: Boolean!
+  agoraChannel: String!
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime   # ✅ needed to track status changes
+}
+
+enum CallStatus {
+  RINGING
+  ACTIVE
+  ENDED
+}

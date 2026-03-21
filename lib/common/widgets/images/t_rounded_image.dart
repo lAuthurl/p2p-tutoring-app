@@ -40,13 +40,13 @@ class TRoundedImage extends StatelessWidget {
     Widget imageWidget;
     if (cleaned.isEmpty) {
       // Use fallback placeholder asset
-      imageWidget = Image.asset(TImages.tutorPromo1, fit: fit);
+      imageWidget = Image.asset(TImages.courseOthers, fit: fit);
     } else if (useNetwork) {
       imageWidget = TNetworkImage(
         imageKeyOrUrl: cleaned,
         fit: fit ?? BoxFit.cover, // ✅ null fallback
         showLoadingIndicator: true,
-        fallbackAsset: TImages.tutorPromo1,
+        fallbackAsset: TImages.courseOthers,
       );
     } else {
       imageWidget = Image.asset(cleaned, fit: fit);

@@ -5,14 +5,13 @@ import 'package:get/get.dart';
 import '../../../../../../common/widgets/appbar/home_appbar.dart';
 import '../../../../../../personalization/controllers/user_controller.dart';
 import '../../../../../../personalization/screens/profile/profile_screen.dart';
-import '../../../../../../services/image_cache_sevice.dart';
+import '../../../../../../common/widgets/images/t_network_image.dart';
 import '../../../../../chat/screens/message_counter_icon.dart';
 import '../../../../../../utils/constants/colors.dart';
 import '../../../../../../utils/constants/sizes.dart';
 import '../../../../../booking/screens/t_booking_counter_icon.dart';
 import '../../../../../sessions/controllers/tutoring_controller.dart';
 import '../../../../../favourites/screens/favorites_counter_icon.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 class THomeAppBar extends StatelessWidget {
   const THomeAppBar({super.key});
@@ -31,7 +30,6 @@ class THomeAppBar extends StatelessWidget {
                 .toUpperCase()
             : '?';
 
-    // Initials avatar — shown immediately while URL resolves
     final Widget initialsAvatar = Container(
       width: r * 2,
       height: r * 2,
@@ -67,57 +65,34 @@ class THomeAppBar extends StatelessWidget {
       ),
     );
 
-    if (rawImage == null || rawImage.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(left: 8),
-        child: initialsAvatar,
-      );
-    }
-
     return Padding(
       padding: const EdgeInsets.only(left: 8),
-      child: FutureBuilder<String?>(
-        // ValueKey ensures future only reruns when rawImage actually changes
-        key: ValueKey(rawImage),
-        // FIX: use ImageCacheService so URL resolution is cached and
-        // consistent with TUserAvatar / TNetworkImage everywhere else
-        future: ImageCacheService.instance.resolve(rawImage),
-        builder: (context, snapshot) {
-          final url = snapshot.data;
-
-          if (url == null || url.isEmpty) {
-            return initialsAvatar;
-          }
-
-          return Container(
-            width: r * 2,
-            height: r * 2,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: TColors.primary, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: TColors.primary.withValues(alpha: 0.35),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ],
+      child: Container(
+        width: r * 2,
+        height: r * 2,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: TColors.primary, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: TColors.primary.withValues(alpha: 0.35),
+              blurRadius: 8,
+              spreadRadius: 1,
             ),
-            // FIX: use CachedNetworkImage for pixel-level caching so the
-            // image doesn't re-download on every Obx rebuild
-            child: ClipOval(
-              child: CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.cover,
-                width: r * 2,
-                height: r * 2,
-                placeholder: (_, __) => initialsAvatar,
-                errorWidget: (_, __, ___) => initialsAvatar,
-                fadeInDuration: const Duration(milliseconds: 200),
-              ),
-            ),
-          );
-        },
+          ],
+        ),
+        child: ClipOval(
+          child:
+              rawImage == null || rawImage.isEmpty
+                  ? initialsAvatar
+                  : TNetworkImage(
+                    imageKeyOrUrl: rawImage,
+                    fit: BoxFit.cover,
+                    width: r * 2,
+                    height: r * 2,
+                    fallbackWidget: initialsAvatar,
+                  ),
+        ),
       ),
     );
   }
@@ -134,6 +109,8 @@ class THomeAppBar extends StatelessWidget {
         final name = user?.username ?? 'User';
         final rawImage = user?.profilePicture;
         final firstName = name.trim().split(' ').first;
+
+        debugPrint('🖼️ THomeAppBar profilePicture: $rawImage');
 
         return GestureDetector(
           onTap: () => Get.to(() => const ProfileScreen()),

@@ -37,20 +37,11 @@ class AuthenticationRepository extends GetxController {
   static const _kIsFirstTime = 'isFirstTime';
   static const _kRememberMe = 'REMEMBER_ME';
 
-  // ── Navigation gate ─────────────────────────────────────────────────────────
-  // Set to true as soon as initializeCurrentUser fires its ONE navigation call.
-  // LoginController._autoLogin and HomeController must check this before
-  // calling Get.offAllNamed so they never race with the startup redirect.
   bool _startupNavigationDone = false;
-
-  /// True once the initial startup navigation has fired.
-  /// LoginController and HomeController check this to avoid a flash.
   bool get startupNavigationDone => _startupNavigationDone;
 
   bool get _isFirstTime {
     final val = deviceStorage.read<bool>(_kIsFirstTime);
-    // null  → key never written → fresh install → show onboarding
-    // false → onboarding already seen → go to login
     return val != false;
   }
 
@@ -113,23 +104,23 @@ class AuthenticationRepository extends GetxController {
 
   // =========================================================
   // INITIALIZE CURRENT USER
-  //
-  // This is the ONE place that performs the startup navigation.
-  // It sets _startupNavigationDone = true before calling
-  // screenRedirect so LoginController and HomeController know
-  // not to fire their own navigation calls.
+  // Stays on splash until fully resolved — no login flash
   // =========================================================
 
   Future<void> initializeCurrentUser() async {
-    // Remember Me is off — sign out and go straight to login
+    // Remember Me off — go straight to login, never onboarding
     if (!_rememberMe) {
       try {
         await Amplify.Auth.signOut();
       } catch (_) {}
       _currentUser.value = null;
-      _doStartupNavigate(null);
+      _startupNavigationDone = true;
+      Get.offAllNamed(TRoutes.logIn);
       return;
     }
+
+    // Stay on splash — collect result before any navigation
+    AppUser? resolvedUser;
 
     try {
       final authUser = await Amplify.Auth.getCurrentUser();
@@ -158,10 +149,8 @@ class AuthenticationRepository extends GetxController {
         await _reloadUserControllers();
       }
 
-      _doStartupNavigate(_currentUser.value);
+      resolvedUser = _currentUser.value;
     } catch (_) {
-      _currentUser.value = null;
-
       // Try remembered credentials
       try {
         final bool remember =
@@ -175,8 +164,7 @@ class AuthenticationRepository extends GetxController {
           try {
             final cred = await loginWithEmailAndPassword(email, password);
             _currentUser.value = cred.user;
-            _doStartupNavigate(_currentUser.value);
-            return;
+            resolvedUser = cred.user;
           } catch (_) {
             try {
               final storage = GetStorage();
@@ -191,23 +179,20 @@ class AuthenticationRepository extends GetxController {
                     email: email.trim(),
                   );
                   _currentUser.value = appUser;
-                  _doStartupNavigate(_currentUser.value);
-                  return;
+                  resolvedUser = appUser;
                 }
               }
             } catch (_) {}
           }
         }
       } catch (_) {}
-
-      _doStartupNavigate(null);
     }
+
+    // ONE navigation call after everything is resolved
+    _doStartupNavigate(resolvedUser);
   }
 
   // ── Single guarded navigation call for startup ───────────────────────────
-  // Called exactly once by initializeCurrentUser. Marks the gate so
-  // LoginController._autoLogin and HomeController._startAppFlow skip
-  // their own navigation calls on first load.
   void _doStartupNavigate(AppUser? user) {
     _startupNavigationDone = true;
     screenRedirect(user);
@@ -219,6 +204,7 @@ class AuthenticationRepository extends GetxController {
 
   Future<void> screenRedirect(AppUser? user) async {
     if (user != null) {
+      // ✅ Signed in — always go to dashboard, never onboarding
       deviceStorage.write(_kIsFirstTime, false);
 
       try {
@@ -245,9 +231,12 @@ class AuthenticationRepository extends GetxController {
         Get.offAllNamed(TRoutes.mainDashboard);
       }
     } else {
+      // ✅ Not signed in
       if (_isFirstTime) {
+        // Fresh install, never logged in — show onboarding
         Get.offAllNamed(TRoutes.onboarding);
       } else {
+        // Has used the app before but not signed in — go to login
         Get.offAllNamed(TRoutes.logIn);
       }
     }
@@ -417,8 +406,9 @@ class AuthenticationRepository extends GetxController {
 
   Future<void> resendConfirmationCode(String username) async {
     final uname = username.trim();
-    if (uname.isEmpty)
+    if (uname.isEmpty) {
       throw 'Username is required to resend confirmation code.';
+    }
     try {
       await Amplify.Auth.resendSignUpCode(username: uname);
     } on AmplifyException catch (e) {
@@ -529,7 +519,6 @@ class AuthenticationRepository extends GetxController {
         await SecureStorageService.instance.delete('REMEMBER_ME_PASSWORD');
         await deviceStorage.write(_kIsFirstTime, false);
       } catch (_) {}
-      // Reset gate so next cold start works correctly
       _startupNavigationDone = false;
       Get.offAllNamed(TRoutes.logIn);
     } catch (_) {

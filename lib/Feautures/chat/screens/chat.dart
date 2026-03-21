@@ -19,6 +19,7 @@ import '../../../../models/ModelProvider.dart';
 import '../../../../utils/constants/colors.dart';
 import '../../../../utils/constants/sizes.dart';
 import '../../sessions/controllers/tutoring_controller.dart';
+import '../controllers/call.dart';
 
 // ── InboxScreen ───────────────────────────────────────────────────────────────
 class InboxScreen extends StatefulWidget {
@@ -132,6 +133,8 @@ class _InboxScreenState extends State<InboxScreen> {
                             ? '🎤 Voice message'
                             : (lastMessage.text ?? '');
                     final studentName = lastMessage.senderName ?? 'Student';
+                    // ── senderId is now passed as otherUserId ──────────────
+                    final otherUserId = lastMessage.senderId ?? ''; // Null safe
                     final baseSession = baseSessions.firstWhereOrNull(
                       (s) => chatId.startsWith(s.id),
                     );
@@ -156,6 +159,7 @@ class _InboxScreenState extends State<InboxScreen> {
                             sessionId: chatId,
                             sessionTitle: sessionTitle,
                             otherUserName: studentName,
+                            otherUserId: otherUserId, // ← ADDED
                           ),
                         );
                       },
@@ -365,11 +369,6 @@ class _EmptyInbox extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ── Waveform painter ──────────────────────────────────────────────────────────
-//
-// IDLE:    bars at 50% height, single flat dim colour, NO playhead, NO animation.
-// PLAYING: bars at full height with ripple pulse near playhead, two-tone
-//          played/unplayed split, visible playhead line.
-//
 class _WaveformPainter extends CustomPainter {
   _WaveformPainter({
     required this.barHeights,
@@ -445,14 +444,6 @@ class _WaveformPainter extends CustomPainter {
 }
 
 // ── VoiceBubble ───────────────────────────────────────────────────────────────
-//
-// FIX: No longer uses a local AnimationController.
-// Instead it receives `animValue` (0.0–1.0) ticked by the parent _ChatScreenState
-// via a single app-level Ticker. This means:
-//   • No controller lifecycle / key destruction issues.
-//   • `isPlaying` flip is always reflected immediately on next tick.
-//   • Only one Ticker runs for the whole screen regardless of message count.
-//
 class VoiceBubble extends StatelessWidget {
   const VoiceBubble({
     super.key,
@@ -462,7 +453,7 @@ class VoiceBubble extends StatelessWidget {
     required this.progress,
     required this.animValue,
     required this.onTap,
-    this.realDurationSecs, // null until first onProgress event
+    this.realDurationSecs,
   });
 
   final ChatMessage message;
@@ -485,11 +476,9 @@ class VoiceBubble extends StatelessWidget {
   }
 
   String _timeLabel(double prog) {
-    // Use real duration once available, fall back to placeholder until first play
     final total = realDurationSecs ?? 0.0;
     String fmt(int s) => '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
     if (total <= 0) {
-      // Duration not yet known — show blank or dashes until played once
       return isPlaying ? '...' : '--:--';
     }
     return isPlaying
@@ -532,7 +521,6 @@ class VoiceBubble extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Play / Pause button
             AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               width: 38,
@@ -544,15 +532,12 @@ class VoiceBubble extends StatelessWidget {
                 color: iconColor,
               ),
             ),
-
             const SizedBox(width: 10),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Waveform — rebuilt every tick from parent setState
                   SizedBox(
                     height: 34,
                     child: CustomPaint(
@@ -569,9 +554,7 @@ class VoiceBubble extends StatelessWidget {
                       size: const Size(double.infinity, 34),
                     ),
                   ),
-
                   const SizedBox(height: 5),
-
                   AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 200),
                     style: TextStyle(
@@ -597,12 +580,14 @@ class ChatScreen extends StatefulWidget {
   final String sessionId;
   final String sessionTitle;
   final String otherUserName;
+  final String otherUserId; // ← NEW: needed to initiate the call
 
   const ChatScreen({
     super.key,
     required this.sessionId,
     required this.sessionTitle,
     required this.otherUserName,
+    required this.otherUserId, // ← NEW
   });
 
   @override
@@ -625,17 +610,12 @@ class _ChatScreenState extends State<ChatScreen>
   String? _currentUserId;
   String? _currentlyPlayingId;
   final Map<String, double> _playbackProgress = {};
-  // Real duration in seconds per message id — populated from onProgress events
   final Map<String, double> _audioDurations = {};
-  // Local file cache: message id → downloaded temp path (avoids re-downloading)
   final Map<String, String> _localAudioCache = {};
 
   final RxList<ChatMessage> _messages = <ChatMessage>[].obs;
   Worker? _messagesWorker;
 
-  // ── Single AnimationController drives ALL waveform animations ──────────────
-  // Replaces the raw Ticker — AnimationController is available directly from
-  // SingleTickerProviderStateMixin which is already on this State class.
   late final AnimationController _waveformCtrl;
   double _waveAnimValue = 0.0;
 
@@ -643,9 +623,6 @@ class _ChatScreenState extends State<ChatScreen>
   void initState() {
     super.initState();
 
-    // AnimationController cycles 0→1 every 1600 ms.
-    // The listener only calls setState while something is playing,
-    // so the screen doesn't rebuild unnecessarily when idle.
     _waveformCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1600),
@@ -695,24 +672,210 @@ class _ChatScreenState extends State<ChatScreen>
     super.dispose();
   }
 
+  // ── Call helpers ─────────────────────────────────────────────────────────────
+
+  /// Initiates a voice or video call to [widget.otherUserId].
+  /// Ensures [CallController] is registered before use.
+  Future<void> _startCall({required bool withVideo}) async {
+    if (widget.otherUserId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot start call: user ID unknown.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (!Get.isRegistered<CallController>()) {
+      Get.put(CallController());
+    }
+
+    await Get.find<CallController>().startCall(
+      sessionId: widget.sessionId,
+      calleeId: widget.otherUserId,
+      withVideo: withVideo,
+    );
+  }
+
+  /// Shows a bottom sheet with voice + video call options.
+  void _showCallOptions() {
+    final colorScheme = Theme.of(context).colorScheme;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder:
+          (_) => Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              MediaQuery.of(context).viewInsets.bottom + 32,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colorScheme.outline.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Header: who we're calling
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: TColors.primary.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            widget.otherUserName.isNotEmpty
+                                ? widget.otherUserName
+                                    .trim()
+                                    .split(' ')
+                                    .map((e) => e[0])
+                                    .take(2)
+                                    .join()
+                                    .toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              color: TColors.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.otherUserName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                          Text(
+                            widget.sessionTitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colorScheme.onSurface.withValues(
+                                alpha: 0.45,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                const SizedBox(height: 4),
+                // Voice call option
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: TColors.primary.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Iconsax.call, color: TColors.primary, size: 18),
+                  ),
+                  title: const Text(
+                    'Voice call',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    'Audio only',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurface.withValues(alpha: 0.45),
+                    ),
+                  ),
+                  onTap: () {
+                    Get.back();
+                    HapticFeedback.lightImpact();
+                    _startCall(withVideo: false);
+                  },
+                ),
+                // Video call option
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: TColors.primary.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Iconsax.video,
+                      color: TColors.primary,
+                      size: 18,
+                    ),
+                  ),
+                  title: const Text(
+                    'Video call',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    'Camera + audio',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurface.withValues(alpha: 0.45),
+                    ),
+                  ),
+                  onTap: () {
+                    Get.back();
+                    HapticFeedback.lightImpact();
+                    _startCall(withVideo: true);
+                  },
+                ),
+                const SizedBox(height: 4),
+              ],
+            ),
+          ),
+    );
+  }
+
+  // ── Auth / messages ───────────────────────────────────────────────────────────
+
   Future<void> _fetchCurrentUser() async {
     try {
       final user = await Amplify.Auth.getCurrentUser();
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _currentUserId = user.userId);
     } catch (_) {
-      if (mounted) {
-        setState(() => _currentUserId = null);
-      }
+      if (mounted) setState(() => _currentUserId = null);
     }
   }
 
   Future<void> _fetchMessagesFromAppSync() async {
-    if (mounted) {
-      setState(() => _loadingMessages = true);
-    }
+    if (mounted) setState(() => _loadingMessages = true);
     try {
       const queryDoc = r"""
         query ListMessagesBySession($sessionId: String!, $limit: Int) {
@@ -746,15 +909,12 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       );
       _messages.assignAll(parsed);
-      // Prefetch durations in background so labels show before first play
       _prefetchVoiceDurations(parsed);
     } catch (e) {
       print('❌ ChatScreen._fetchMessagesFromAppSync: $e');
       _loadFromDataStore();
     } finally {
-      if (mounted) {
-        setState(() => _loadingMessages = false);
-      }
+      if (mounted) setState(() => _loadingMessages = false);
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
   }
@@ -823,9 +983,7 @@ class _ChatScreenState extends State<ChatScreen>
             ((decoded['data'] as Map<String, dynamic>?) ??
                     decoded)['getChatMessage']
                 as Map<String, dynamic>?;
-        if (obj == null || obj['_deleted'] == true) {
-          return;
-        }
+        if (obj == null || obj['_deleted'] == true) return;
         final v = obj['_version'];
         if (v != null) version = (v as num).toInt();
       }
@@ -915,13 +1073,13 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  // ── Audio ─────────────────────────────────────────────────────────────────────
+
   Future<void> _initAudio() async {
     _recorder = FlutterSoundRecorder();
     _player = FlutterSoundPlayer();
     await _recorder!.openRecorder();
     await _player!.openPlayer();
-    // Fire onProgress events every 100 ms so the waveform and duration
-    // label update smoothly and duration is available almost immediately
     await _player!.setSubscriptionDuration(const Duration(milliseconds: 100));
     await _player!.setVolume(1.0);
 
@@ -949,17 +1107,13 @@ class _ChatScreenState extends State<ChatScreen>
       print('⚠️ _initAudio: audio session config error: $e');
     }
 
-    if (mounted) {
-      setState(() => _audioReady = true);
-    }
+    if (mounted) setState(() => _audioReady = true);
     print('✅ ChatScreen: audio ready');
   }
 
   Future<void> _sendTextMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _currentUserId == null) {
-      return;
-    }
+    if (text.isEmpty || _currentUserId == null) return;
     _textController.clear();
     await controller.sendMessage(widget.sessionId, text);
     _scrollToBottom();
@@ -968,21 +1122,15 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _toggleRecording() async {
     if (!_isRecording) {
       final status = await Permission.microphone.request();
-      if (!status.isGranted) {
-        return;
-      }
+      if (!status.isGranted) return;
       final dir = await getTemporaryDirectory();
       final path =
           '${dir.path}/${widget.sessionId}_${DateTime.now().millisecondsSinceEpoch}.aac';
       await _recorder!.startRecorder(toFile: path, codec: Codec.aacADTS);
-      setState(() {
-        _isRecording = true;
-      });
+      setState(() => _isRecording = true);
     } else {
       final path = await _recorder!.stopRecorder();
-      setState(() {
-        _isRecording = false;
-      });
+      setState(() => _isRecording = false);
       if (path != null && _currentUserId != null) {
         await controller.sendVoiceMessage(widget.sessionId, File(path));
       } else {
@@ -991,10 +1139,6 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  // Silently downloads all voice messages and reads their duration so the
-  // label shows the correct length before the user taps play.
-  // Runs concurrently with a cap of 3 simultaneous downloads to avoid
-  // saturating the network on long chat histories.
   Future<void> _prefetchVoiceDurations(List<ChatMessage> messages) async {
     final voiceMessages =
         messages
@@ -1005,19 +1149,13 @@ class _ChatScreenState extends State<ChatScreen>
                   !_audioDurations.containsKey(m.id),
             )
             .toList();
-
     if (voiceMessages.isEmpty) return;
-
-    // Process in batches of 3
     for (int i = 0; i < voiceMessages.length; i += 3) {
       final batch = voiceMessages.skip(i).take(3).toList();
       await Future.wait(batch.map((m) => _fetchDurationFor(m)));
     }
   }
 
-  // Downloads the file (or uses cache) and reads duration by opening a silent
-  // probe player, waiting for the first onProgress event, then stopping.
-  // This avoids FlutterSoundHelper.duration() which requires FFmpeg (LITE flavor).
   Future<void> _fetchDurationFor(ChatMessage message) async {
     try {
       final localPath = await _fetchAndCacheAudio(message);
@@ -1055,9 +1193,7 @@ class _ChatScreenState extends State<ChatScreen>
       await probe.closePlayer();
 
       if (secs > 0 && mounted) {
-        setState(() {
-          _audioDurations[message.id] = secs;
-        });
+        setState(() => _audioDurations[message.id] = secs);
         print(
           '✅ prefetch duration for ${message.id}: ${secs.toStringAsFixed(1)}s',
         );
@@ -1067,13 +1203,9 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  // Extracts the S3 storage key from a full pre-signed URL.
-  // e.g. "https://bucket.s3.region.amazonaws.com/chat/sessionId/file.aac?X-Amz-..."
-  // → "chat/sessionId/file.aac"
   String? _s3KeyFromUrl(String url) {
     try {
       final uri = Uri.parse(url);
-      // Path starts with '/' — strip leading slash
       final rawPath =
           uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
       if (rawPath.isEmpty) return null;
@@ -1083,11 +1215,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  // Gets a fresh pre-signed URL from Amplify Storage for the given S3 key,
-  // then downloads the file to a local temp path.
-  // On second play the cached file is returned instantly (no re-download).
   Future<String?> _fetchAndCacheAudio(ChatMessage message) async {
-    // Already cached locally — return immediately
     if (_localAudioCache.containsKey(message.id)) {
       return _localAudioCache[message.id];
     }
@@ -1100,14 +1228,12 @@ class _ChatScreenState extends State<ChatScreen>
       final filePath = '${dir.path}/voice_${message.id}.aac';
       final file = File(filePath);
 
-      // If the file already exists on disk (e.g. app restart) skip download
       if (await file.exists()) {
         _localAudioCache[message.id] = filePath;
         print('✅ _fetchAndCacheAudio: using cached file for ${message.id}');
         return filePath;
       }
 
-      // Re-fetch a fresh pre-signed URL — the stored URL may have expired (403)
       final s3Key = _s3KeyFromUrl(storedUrl);
       if (s3Key == null) {
         print('❌ _fetchAndCacheAudio: could not parse S3 key from $storedUrl');
@@ -1121,7 +1247,6 @@ class _ChatScreenState extends State<ChatScreen>
           ).result;
       final freshUrl = urlResult.url.toString();
 
-      // Download using Dart HttpClient
       final client = HttpClient();
       final request = await client.getUrl(Uri.parse(freshUrl));
       final response = await request.close();
@@ -1144,32 +1269,19 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _playVoice(ChatMessage message) async {
-    if (!_audioReady || message.audioUrl == null) {
-      return;
-    }
+    if (!_audioReady || message.audioUrl == null) return;
 
-    // Tap the currently playing message → stop it
     if (_currentlyPlayingId == message.id) {
       await _player!.stopPlayer();
-      if (mounted) {
-        setState(() {
-          _currentlyPlayingId = null;
-        });
-      }
+      if (mounted) setState(() => _currentlyPlayingId = null);
       return;
     }
 
-    // Stop whatever was playing
-    if (_player!.isPlaying) {
-      await _player!.stopPlayer();
-    }
+    if (_player!.isPlaying) await _player!.stopPlayer();
 
-    // Cancel previous subscription before starting new player session
     _playerSubscription?.cancel();
     _playerSubscription = null;
 
-    // Refresh the S3 URL and download to a local file.
-    // Pre-signed S3 URLs expire — re-fetching avoids 403 errors on older messages.
     final localPath = await _fetchAndCacheAudio(message);
     if (localPath == null) {
       if (mounted) {
@@ -1182,12 +1294,7 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
-    // Set playing state BEFORE startPlayer so the waveform animates immediately
-    if (mounted) {
-      setState(() {
-        _currentlyPlayingId = message.id;
-      });
-    }
+    if (mounted) setState(() => _currentlyPlayingId = message.id);
 
     await _player!.startPlayer(
       fromURI: localPath,
@@ -1202,9 +1309,6 @@ class _ChatScreenState extends State<ChatScreen>
       },
     );
 
-    // Drive playhead progress and capture real duration.
-    // setSubscriptionDuration(100ms) in _initAudio ensures this fires within
-    // 100ms of playback starting, so '--:--' is visible for at most one tick.
     _playerSubscription = _player!.onProgress!.listen((event) {
       final durationMs = event.duration.inMilliseconds;
       final positionMs = event.position.inMilliseconds;
@@ -1219,9 +1323,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) {
-        return;
-      }
+      if (!_scrollController.hasClients) return;
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 300),
@@ -1234,6 +1336,8 @@ class _ChatScreenState extends State<ChatScreen>
     if (a == null || b == null) return false;
     return a.day != b.day || a.month != b.month || a.year != b.year;
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -1321,21 +1425,27 @@ class _ChatScreenState extends State<ChatScreen>
             onPressed: _fetchMessagesFromAppSync,
             tooltip: 'Refresh',
           ),
+          // ── WIRED: voice call (direct tap) ───────────────────────────────
           IconButton(
             icon: Icon(
               Iconsax.call,
               size: 18,
               color: colorScheme.onSurface.withValues(alpha: 0.6),
             ),
-            onPressed: () {},
+            tooltip: 'Voice call',
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _startCall(withVideo: false);
+            },
           ),
+          // ── WIRED: more menu (voice + video options) ─────────────────────
           IconButton(
             icon: Icon(
               Iconsax.more,
               size: 18,
               color: colorScheme.onSurface.withValues(alpha: 0.6),
             ),
-            onPressed: () {},
+            onPressed: _showCallOptions,
           ),
         ],
       ),
@@ -1401,8 +1511,6 @@ class _ChatScreenState extends State<ChatScreen>
                         itemBuilder: (_, index) {
                           final message = messages[index];
                           final isMe = message.senderId == _currentUserId;
-                          // FIX: isPlaying derived from _currentlyPlayingId which is
-                          // set BEFORE startPlayer, so bubble shows active immediately
                           final isPlaying = _currentlyPlayingId == message.id;
 
                           final showDate =
@@ -1465,9 +1573,6 @@ class _ChatScreenState extends State<ChatScreen>
                                     ),
                                     child:
                                         (message.isVoice ?? false)
-                                            // FIX: pass _waveAnimValue from the parent ticker
-                                            // so animation is driven externally — no per-bubble
-                                            // AnimationController needed
                                             ? VoiceBubble(
                                               message: message,
                                               isMe: isMe,

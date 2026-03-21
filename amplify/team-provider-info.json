@@ -126,7 +126,8 @@
       "UnauthRoleName": "amplify-p2ptutoringapp-ptutoring-58e3c-unauthRole",
       "StackName": "amplify-p2ptutoringapp-ptutoring-58e3c",
       "StackId": "arn:aws:cloudformation:eu-west-3:575960430498:stack/amplify-p2ptutoringapp-ptutoring-58e3c/1e8b1210-159f-11f1-b001-06b1c15126d7",
-      "AmplifyAppId": "ds64rvn4oni3e"
+      "AmplifyAppId": "ds64rvn4oni3e",
+      "APIGatewayAuthURL": "https://s3.amazonaws.com/amplify-p2ptutoringapp-ptutoring-58e3c-deployment/amplify-cfn-templates/api/APIGatewayAuthStack.json"
     },
     "categories": {
       "auth": {
@@ -139,7 +140,8 @@
         }
       },
       "api": {
-        "p2ptutoringapp": {}
+        "p2ptutoringapp": {},
+        "agoraTokenApi": {}
       },
       "storage": {
         "assets": {}

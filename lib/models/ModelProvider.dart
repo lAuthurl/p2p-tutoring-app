@@ -22,6 +22,7 @@
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 import 'Booking.dart';
 import 'BookingItem.dart';
+import 'CallSession.dart';
 import 'ChatMessage.dart';
 import 'Review.dart';
 import 'SessionAttribute.dart';
@@ -34,6 +35,8 @@ import 'UserSessionPayment.dart';
 
 export 'Booking.dart';
 export 'BookingItem.dart';
+export 'CallSession.dart';
+export 'CallStatus.dart';
 export 'ChatMessage.dart';
 export 'Review.dart';
 export 'SessionAttribute.dart';
@@ -46,9 +49,9 @@ export 'UserSessionPayment.dart';
 
 class ModelProvider implements amplify_core.ModelProviderInterface {
   @override
-  String version = "e49f710eab7b4a293feac562f80ee23c";
+  String version = "d8ba0751d081e105f8986a82665dd675";
   @override
-  List<amplify_core.ModelSchema> modelSchemas = [Booking.schema, BookingItem.schema, ChatMessage.schema, Review.schema, SessionAttribute.schema, Subject.schema, Tutor.schema, TutoringSession.schema, User.schema, UserFavorite.schema, UserSessionPayment.schema];
+  List<amplify_core.ModelSchema> modelSchemas = [Booking.schema, BookingItem.schema, CallSession.schema, ChatMessage.schema, Review.schema, SessionAttribute.schema, Subject.schema, Tutor.schema, TutoringSession.schema, User.schema, UserFavorite.schema, UserSessionPayment.schema];
   @override
   List<amplify_core.ModelSchema> customTypeSchemas = [];
   static final ModelProvider _instance = ModelProvider();
@@ -61,6 +64,8 @@ class ModelProvider implements amplify_core.ModelProviderInterface {
         return Booking.classType;
       case "BookingItem":
         return BookingItem.classType;
+      case "CallSession":
+        return CallSession.classType;
       case "ChatMessage":
         return ChatMessage.classType;
       case "Review":

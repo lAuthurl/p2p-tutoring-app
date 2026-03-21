@@ -65,7 +65,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
 
     _initializeAttributes(widget.session);
 
-    // Reviews and access check run concurrently
     _fetchReviews();
     _initAccess();
   }
@@ -82,32 +81,24 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
     _recheckPayment();
   }
 
-  /// Called when returning from checkout or review screen.
-  /// Invalidates the payment cache so a fresh check runs.
   Future<void> _recheckPayment() async {
     if (_isFreeSession || _currentUserId == null || _isOwner) return;
-    // Bust the cache so the fetcher re-runs
-    SessionAccessCache.instance.invalidatePayment(widget.session.id);
     setState(() => _checkingPayment = true);
     await _checkPaymentStatus();
   }
 
   Future<void> _initAccess() async {
-    // 1. Get current user id
     try {
       final user = await Amplify.Auth.getCurrentUser();
       if (!mounted) return;
       setState(() => _currentUserId = user.userId);
     } catch (_) {
-      if (mounted) {
-        setState(() => _checkingPayment = false);
-      }
+      if (mounted) setState(() => _checkingPayment = false);
       return;
     }
 
     final userId = _currentUserId!;
 
-    // 2. Tutor ownership — cached 60 min
     final isOwner = await SessionAccessCache.instance.getIsTutor(
       userId: userId,
       sessionId: widget.session.id,
@@ -143,21 +134,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
     }
 
     if (_isOwner || _currentUserId == null) {
-      if (mounted) {
-        setState(() => _checkingPayment = false);
-      }
+      if (mounted) setState(() => _checkingPayment = false);
       return;
     }
 
-    final userId = _currentUserId!;
-    final sessionId = widget.session.id;
-
-    // Payment status — cached 10 min, busted after checkout
-    final paid = await SessionAccessCache.instance.getHasPaid(
-      userId: userId,
-      sessionId: sessionId,
-      fetcher: () => _fetchPaymentFromApi(userId, sessionId),
-    );
+    final paid = await _fetchPaymentFromApi(_currentUserId!, widget.session.id);
 
     if (mounted) {
       setState(() {
@@ -167,7 +148,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
     }
   }
 
-  /// Raw GraphQL payment check — only called on cache miss.
   Future<bool> _fetchPaymentFromApi(String userId, String sessionId) async {
     try {
       const queryDoc = r"""
@@ -248,7 +228,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
   Future<void> _fetchReviews() async {
     setState(() => _loadingReviews = true);
     try {
-      // Reviews — cached 5 min, busted after new review submitted
       final reviews = await SessionAccessCache.instance.getReviews<Review>(
         sessionId: widget.session.id,
         fetcher: () => _tutoringController.fetchReviews(widget.session.id),
@@ -283,9 +262,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
         backgroundColor: Colors.redAccent,
         colorText: Colors.white,
       );
-      if (mounted) {
-        setState(() => _loadingReviews = false);
-      }
+      if (mounted) setState(() => _loadingReviews = false);
     }
   }
 
@@ -334,7 +311,6 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
   Future<void> _openReviewScreen() async {
     if (_isOwner) {
       await Get.to(() => SessionReviewScreen(session: widget.session));
-      // Bust reviews cache so the list refreshes on return
       SessionAccessCache.instance.invalidateReviews(widget.session.id);
       _fetchReviews();
       return;
@@ -368,6 +344,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
     _fetchReviews();
   }
 
+  // ── Whether to show the book button ────────────────────────────────────────
+  bool get _showBookButton {
+    if (_isOwner) return false;
+    if (_isFreeSession) return false;
+    if (_hasPaid) return false;
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
@@ -382,7 +366,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
       body: Stack(
         children: [
           SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 96),
+            // Only add bottom padding when book button is visible
+            padding: EdgeInsets.only(bottom: _showBookButton ? 96 : 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -609,66 +594,67 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
             ),
           ),
 
-          // ── Bottom CTA ─────────────────────────────────────────────────────
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: colorScheme.shadow.withValues(alpha: 0.09),
-                    blurRadius: 24,
-                    offset: const Offset(0, -6),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: TSizes.defaultSpace,
-                    vertical: 12,
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () => _bookSession(session),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: TColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+          // ── Bottom CTA — hidden if owner, free, or already paid ────────────
+          if (_showBookButton)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.shadow.withValues(alpha: 0.09),
+                      blurRadius: 24,
+                      offset: const Offset(0, -6),
                     ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Iconsax.calendar_add, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          'Book Session',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
+                  ],
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TSizes.defaultSpace,
+                      vertical: 12,
+                    ),
+                    child: ElevatedButton(
+                      onPressed: () => _bookSession(session),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: TColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                      ],
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Iconsax.calendar_add, size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            'Book Session',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 }
 
-// ── Supporting widgets (unchanged) ───────────────────────────────────────────
+// ── Supporting widgets ────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.title});
@@ -752,6 +738,7 @@ class _ActionRow extends StatelessWidget {
                                   sessionId: '${session.id}_$currentUserId',
                                   sessionTitle: session.title,
                                   otherUserName: session.tutor?.name ?? 'Tutor',
+                                  otherUserId: session.tutor?.id ?? '',
                                 ),
                               );
                             }

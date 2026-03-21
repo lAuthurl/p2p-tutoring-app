@@ -22,16 +22,16 @@
 import 'ModelProvider.dart';
 import 'package:amplify_core/amplify_core.dart' as amplify_core;
 
-/** This is an auto generated class representing the UserSessionPayment type in your schema. */
-class UserSessionPayment extends amplify_core.Model {
-  static const classType = const _UserSessionPaymentModelType();
+/** This is an auto generated class representing the CallSession type in your schema. */
+class CallSession extends amplify_core.Model {
+  static const classType = const _CallSessionModelType();
   final String id;
-  final String? _userId;
   final String? _sessionId;
-  final bool? _hasPaid;
-  final amplify_core.TemporalDateTime? _paidAt;
-  final double? _amountPaid;
-  final String? _reference;
+  final String? _callerId;
+  final String? _calleeId;
+  final CallStatus? _status;
+  final bool? _isVideo;
+  final String? _agoraChannel;
   final amplify_core.TemporalDateTime? _createdAt;
   final amplify_core.TemporalDateTime? _updatedAt;
 
@@ -44,25 +44,8 @@ class UserSessionPayment extends amplify_core.Model {
   @override
   String getId() => id;
 
-  UserSessionPaymentModelIdentifier get modelIdentifier {
-    return UserSessionPaymentModelIdentifier(id: id);
-  }
-
-  String get userId {
-    try {
-      return _userId!;
-    } catch (e) {
-      throw amplify_core.AmplifyCodeGenModelException(
-        amplify_core
-            .AmplifyExceptionMessages
-            .codeGenRequiredFieldForceCastExceptionMessage,
-        recoverySuggestion:
-            amplify_core
-                .AmplifyExceptionMessages
-                .codeGenRequiredFieldForceCastRecoverySuggestion,
-        underlyingException: e.toString(),
-      );
-    }
+  CallSessionModelIdentifier get modelIdentifier {
+    return CallSessionModelIdentifier(id: id);
   }
 
   String get sessionId {
@@ -82,9 +65,9 @@ class UserSessionPayment extends amplify_core.Model {
     }
   }
 
-  bool get hasPaid {
+  String get callerId {
     try {
-      return _hasPaid!;
+      return _callerId!;
     } catch (e) {
       throw amplify_core.AmplifyCodeGenModelException(
         amplify_core
@@ -99,16 +82,72 @@ class UserSessionPayment extends amplify_core.Model {
     }
   }
 
-  amplify_core.TemporalDateTime? get paidAt {
-    return _paidAt;
+  String get calleeId {
+    try {
+      return _calleeId!;
+    } catch (e) {
+      throw amplify_core.AmplifyCodeGenModelException(
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
+    }
   }
 
-  double? get amountPaid {
-    return _amountPaid;
+  CallStatus get status {
+    try {
+      return _status!;
+    } catch (e) {
+      throw amplify_core.AmplifyCodeGenModelException(
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
+    }
   }
 
-  String? get reference {
-    return _reference;
+  bool get isVideo {
+    try {
+      return _isVideo!;
+    } catch (e) {
+      throw amplify_core.AmplifyCodeGenModelException(
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
+    }
+  }
+
+  String get agoraChannel {
+    try {
+      return _agoraChannel!;
+    } catch (e) {
+      throw amplify_core.AmplifyCodeGenModelException(
+        amplify_core
+            .AmplifyExceptionMessages
+            .codeGenRequiredFieldForceCastExceptionMessage,
+        recoverySuggestion:
+            amplify_core
+                .AmplifyExceptionMessages
+                .codeGenRequiredFieldForceCastRecoverySuggestion,
+        underlyingException: e.toString(),
+      );
+    }
   }
 
   amplify_core.TemporalDateTime? get createdAt {
@@ -119,44 +158,44 @@ class UserSessionPayment extends amplify_core.Model {
     return _updatedAt;
   }
 
-  const UserSessionPayment._internal({
+  const CallSession._internal({
     required this.id,
-    required userId,
     required sessionId,
-    required hasPaid,
-    paidAt,
-    amountPaid,
-    reference,
+    required callerId,
+    required calleeId,
+    required status,
+    required isVideo,
+    required agoraChannel,
     createdAt,
     updatedAt,
-  }) : _userId = userId,
-       _sessionId = sessionId,
-       _hasPaid = hasPaid,
-       _paidAt = paidAt,
-       _amountPaid = amountPaid,
-       _reference = reference,
+  }) : _sessionId = sessionId,
+       _callerId = callerId,
+       _calleeId = calleeId,
+       _status = status,
+       _isVideo = isVideo,
+       _agoraChannel = agoraChannel,
        _createdAt = createdAt,
        _updatedAt = updatedAt;
 
-  factory UserSessionPayment({
+  factory CallSession({
     String? id,
-    required String userId,
     required String sessionId,
-    required bool hasPaid,
-    amplify_core.TemporalDateTime? paidAt,
-    double? amountPaid,
-    String? reference,
+    required String callerId,
+    required String calleeId,
+    required CallStatus status,
+    required bool isVideo,
+    required String agoraChannel,
     amplify_core.TemporalDateTime? createdAt,
     amplify_core.TemporalDateTime? updatedAt,
   }) {
-    return UserSessionPayment._internal(
+    return CallSession._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
-      userId: userId,
       sessionId: sessionId,
-      hasPaid: hasPaid,
-      paidAt: paidAt,
-      amountPaid: amountPaid,
-      reference: reference,
+      callerId: callerId,
+      calleeId: calleeId,
+      status: status,
+      isVideo: isVideo,
+      agoraChannel: agoraChannel,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );
@@ -169,14 +208,14 @@ class UserSessionPayment extends amplify_core.Model {
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
-    return other is UserSessionPayment &&
+    return other is CallSession &&
         id == other.id &&
-        _userId == other._userId &&
         _sessionId == other._sessionId &&
-        _hasPaid == other._hasPaid &&
-        _paidAt == other._paidAt &&
-        _amountPaid == other._amountPaid &&
-        _reference == other._reference &&
+        _callerId == other._callerId &&
+        _calleeId == other._calleeId &&
+        _status == other._status &&
+        _isVideo == other._isVideo &&
+        _agoraChannel == other._agoraChannel &&
         _createdAt == other._createdAt &&
         _updatedAt == other._updatedAt;
   }
@@ -188,22 +227,20 @@ class UserSessionPayment extends amplify_core.Model {
   String toString() {
     var buffer = new StringBuffer();
 
-    buffer.write("UserSessionPayment {");
+    buffer.write("CallSession {");
     buffer.write("id=" + "$id" + ", ");
-    buffer.write("userId=" + "$_userId" + ", ");
     buffer.write("sessionId=" + "$_sessionId" + ", ");
+    buffer.write("callerId=" + "$_callerId" + ", ");
+    buffer.write("calleeId=" + "$_calleeId" + ", ");
     buffer.write(
-      "hasPaid=" + (_hasPaid != null ? _hasPaid.toString() : "null") + ", ",
-    );
-    buffer.write(
-      "paidAt=" + (_paidAt != null ? _paidAt.format() : "null") + ", ",
-    );
-    buffer.write(
-      "amountPaid=" +
-          (_amountPaid != null ? _amountPaid.toString() : "null") +
+      "status=" +
+          (_status != null ? amplify_core.enumToString(_status)! : "null") +
           ", ",
     );
-    buffer.write("reference=" + "$_reference" + ", ");
+    buffer.write(
+      "isVideo=" + (_isVideo != null ? _isVideo.toString() : "null") + ", ",
+    );
+    buffer.write("agoraChannel=" + "$_agoraChannel" + ", ");
     buffer.write(
       "createdAt=" + (_createdAt != null ? _createdAt.format() : "null") + ", ",
     );
@@ -215,63 +252,64 @@ class UserSessionPayment extends amplify_core.Model {
     return buffer.toString();
   }
 
-  UserSessionPayment copyWith({
-    String? userId,
+  CallSession copyWith({
     String? sessionId,
-    bool? hasPaid,
-    amplify_core.TemporalDateTime? paidAt,
-    double? amountPaid,
-    String? reference,
+    String? callerId,
+    String? calleeId,
+    CallStatus? status,
+    bool? isVideo,
+    String? agoraChannel,
     amplify_core.TemporalDateTime? createdAt,
     amplify_core.TemporalDateTime? updatedAt,
   }) {
-    return UserSessionPayment._internal(
+    return CallSession._internal(
       id: id,
-      userId: userId ?? this.userId,
       sessionId: sessionId ?? this.sessionId,
-      hasPaid: hasPaid ?? this.hasPaid,
-      paidAt: paidAt ?? this.paidAt,
-      amountPaid: amountPaid ?? this.amountPaid,
-      reference: reference ?? this.reference,
+      callerId: callerId ?? this.callerId,
+      calleeId: calleeId ?? this.calleeId,
+      status: status ?? this.status,
+      isVideo: isVideo ?? this.isVideo,
+      agoraChannel: agoraChannel ?? this.agoraChannel,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
-  UserSessionPayment copyWithModelFieldValues({
-    ModelFieldValue<String>? userId,
+  CallSession copyWithModelFieldValues({
     ModelFieldValue<String>? sessionId,
-    ModelFieldValue<bool>? hasPaid,
-    ModelFieldValue<amplify_core.TemporalDateTime?>? paidAt,
-    ModelFieldValue<double?>? amountPaid,
-    ModelFieldValue<String?>? reference,
+    ModelFieldValue<String>? callerId,
+    ModelFieldValue<String>? calleeId,
+    ModelFieldValue<CallStatus>? status,
+    ModelFieldValue<bool>? isVideo,
+    ModelFieldValue<String>? agoraChannel,
     ModelFieldValue<amplify_core.TemporalDateTime?>? createdAt,
     ModelFieldValue<amplify_core.TemporalDateTime?>? updatedAt,
   }) {
-    return UserSessionPayment._internal(
+    return CallSession._internal(
       id: id,
-      userId: userId == null ? this.userId : userId.value,
       sessionId: sessionId == null ? this.sessionId : sessionId.value,
-      hasPaid: hasPaid == null ? this.hasPaid : hasPaid.value,
-      paidAt: paidAt == null ? this.paidAt : paidAt.value,
-      amountPaid: amountPaid == null ? this.amountPaid : amountPaid.value,
-      reference: reference == null ? this.reference : reference.value,
+      callerId: callerId == null ? this.callerId : callerId.value,
+      calleeId: calleeId == null ? this.calleeId : calleeId.value,
+      status: status == null ? this.status : status.value,
+      isVideo: isVideo == null ? this.isVideo : isVideo.value,
+      agoraChannel:
+          agoraChannel == null ? this.agoraChannel : agoraChannel.value,
       createdAt: createdAt == null ? this.createdAt : createdAt.value,
       updatedAt: updatedAt == null ? this.updatedAt : updatedAt.value,
     );
   }
 
-  UserSessionPayment.fromJson(Map<String, dynamic> json)
+  CallSession.fromJson(Map<String, dynamic> json)
     : id = json['id'],
-      _userId = json['userId'],
       _sessionId = json['sessionId'],
-      _hasPaid = json['hasPaid'],
-      _paidAt =
-          json['paidAt'] != null
-              ? amplify_core.TemporalDateTime.fromString(json['paidAt'])
-              : null,
-      _amountPaid = (json['amountPaid'] as num?)?.toDouble(),
-      _reference = json['reference'],
+      _callerId = json['callerId'],
+      _calleeId = json['calleeId'],
+      _status = amplify_core.enumFromString<CallStatus>(
+        json['status'],
+        CallStatus.values,
+      ),
+      _isVideo = json['isVideo'],
+      _agoraChannel = json['agoraChannel'],
       _createdAt =
           json['createdAt'] != null
               ? amplify_core.TemporalDateTime.fromString(json['createdAt'])
@@ -283,46 +321,46 @@ class UserSessionPayment extends amplify_core.Model {
 
   Map<String, dynamic> toJson() => {
     'id': id,
-    'userId': _userId,
     'sessionId': _sessionId,
-    'hasPaid': _hasPaid,
-    'paidAt': _paidAt?.format(),
-    'amountPaid': _amountPaid,
-    'reference': _reference,
+    'callerId': _callerId,
+    'calleeId': _calleeId,
+    'status': amplify_core.enumToString(_status),
+    'isVideo': _isVideo,
+    'agoraChannel': _agoraChannel,
     'createdAt': _createdAt?.format(),
     'updatedAt': _updatedAt?.format(),
   };
 
   Map<String, Object?> toMap() => {
     'id': id,
-    'userId': _userId,
     'sessionId': _sessionId,
-    'hasPaid': _hasPaid,
-    'paidAt': _paidAt,
-    'amountPaid': _amountPaid,
-    'reference': _reference,
+    'callerId': _callerId,
+    'calleeId': _calleeId,
+    'status': _status,
+    'isVideo': _isVideo,
+    'agoraChannel': _agoraChannel,
     'createdAt': _createdAt,
     'updatedAt': _updatedAt,
   };
 
-  static final amplify_core.QueryModelIdentifier<
-    UserSessionPaymentModelIdentifier
-  >
+  static final amplify_core.QueryModelIdentifier<CallSessionModelIdentifier>
   MODEL_IDENTIFIER =
-      amplify_core.QueryModelIdentifier<UserSessionPaymentModelIdentifier>();
+      amplify_core.QueryModelIdentifier<CallSessionModelIdentifier>();
   static final ID = amplify_core.QueryField(fieldName: "id");
-  static final USERID = amplify_core.QueryField(fieldName: "userId");
   static final SESSIONID = amplify_core.QueryField(fieldName: "sessionId");
-  static final HASPAID = amplify_core.QueryField(fieldName: "hasPaid");
-  static final PAIDAT = amplify_core.QueryField(fieldName: "paidAt");
-  static final AMOUNTPAID = amplify_core.QueryField(fieldName: "amountPaid");
-  static final REFERENCE = amplify_core.QueryField(fieldName: "reference");
+  static final CALLERID = amplify_core.QueryField(fieldName: "callerId");
+  static final CALLEEID = amplify_core.QueryField(fieldName: "calleeId");
+  static final STATUS = amplify_core.QueryField(fieldName: "status");
+  static final ISVIDEO = amplify_core.QueryField(fieldName: "isVideo");
+  static final AGORACHANNEL = amplify_core.QueryField(
+    fieldName: "agoraChannel",
+  );
   static final CREATEDAT = amplify_core.QueryField(fieldName: "createdAt");
   static final UPDATEDAT = amplify_core.QueryField(fieldName: "updatedAt");
   static var schema = amplify_core.Model.defineSchema(
     define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
-      modelSchemaDefinition.name = "UserSessionPayment";
-      modelSchemaDefinition.pluralName = "UserSessionPayments";
+      modelSchemaDefinition.name = "CallSession";
+      modelSchemaDefinition.pluralName = "CallSessions";
 
       modelSchemaDefinition.authRules = [
         amplify_core.AuthRule(
@@ -338,21 +376,30 @@ class UserSessionPayment extends amplify_core.Model {
           ],
         ),
         amplify_core.AuthRule(
-          authStrategy: amplify_core.AuthStrategy.PUBLIC,
-          operations: const [amplify_core.ModelOperation.READ],
+          authStrategy: amplify_core.AuthStrategy.PRIVATE,
+          operations: const [
+            amplify_core.ModelOperation.READ,
+            amplify_core.ModelOperation.UPDATE,
+          ],
         ),
+        amplify_core.AuthRule(
+          authStrategy: amplify_core.AuthStrategy.PUBLIC,
+          operations: const [
+          
+        ]),
       ];
 
       modelSchemaDefinition.indexes = [
-        amplify_core.ModelIndex(fields: const ["userId"], name: "byUser"),
         amplify_core.ModelIndex(fields: const ["sessionId"], name: "bySession"),
+        amplify_core.ModelIndex(fields: const ["callerId"], name: "byCaller"),
+        amplify_core.ModelIndex(fields: const ["calleeId"], name: "byCallee"),
       ];
 
       modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.id());
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.USERID,
+          key: CallSession.SESSIONID,
           isRequired: true,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.string,
@@ -362,7 +409,7 @@ class UserSessionPayment extends amplify_core.Model {
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.SESSIONID,
+          key: CallSession.CALLERID,
           isRequired: true,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.string,
@@ -372,7 +419,27 @@ class UserSessionPayment extends amplify_core.Model {
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.HASPAID,
+          key: CallSession.CALLEEID,
+          isRequired: true,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.string,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: CallSession.STATUS,
+          isRequired: true,
+          ofType: amplify_core.ModelFieldType(
+            amplify_core.ModelFieldTypeEnum.enumeration,
+          ),
+        ),
+      );
+
+      modelSchemaDefinition.addField(
+        amplify_core.ModelFieldDefinition.field(
+          key: CallSession.ISVIDEO,
           isRequired: true,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.bool,
@@ -382,28 +449,8 @@ class UserSessionPayment extends amplify_core.Model {
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.PAIDAT,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.dateTime,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.AMOUNTPAID,
-          isRequired: false,
-          ofType: amplify_core.ModelFieldType(
-            amplify_core.ModelFieldTypeEnum.double,
-          ),
-        ),
-      );
-
-      modelSchemaDefinition.addField(
-        amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.REFERENCE,
-          isRequired: false,
+          key: CallSession.AGORACHANNEL,
+          isRequired: true,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.string,
           ),
@@ -412,7 +459,7 @@ class UserSessionPayment extends amplify_core.Model {
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.CREATEDAT,
+          key: CallSession.CREATEDAT,
           isRequired: false,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.dateTime,
@@ -422,7 +469,7 @@ class UserSessionPayment extends amplify_core.Model {
 
       modelSchemaDefinition.addField(
         amplify_core.ModelFieldDefinition.field(
-          key: UserSessionPayment.UPDATEDAT,
+          key: CallSession.UPDATEDAT,
           isRequired: false,
           ofType: amplify_core.ModelFieldType(
             amplify_core.ModelFieldTypeEnum.dateTime,
@@ -433,31 +480,30 @@ class UserSessionPayment extends amplify_core.Model {
   );
 }
 
-class _UserSessionPaymentModelType
-    extends amplify_core.ModelType<UserSessionPayment> {
-  const _UserSessionPaymentModelType();
+class _CallSessionModelType extends amplify_core.ModelType<CallSession> {
+  const _CallSessionModelType();
 
   @override
-  UserSessionPayment fromJson(Map<String, dynamic> jsonData) {
-    return UserSessionPayment.fromJson(jsonData);
+  CallSession fromJson(Map<String, dynamic> jsonData) {
+    return CallSession.fromJson(jsonData);
   }
 
   @override
   String modelName() {
-    return 'UserSessionPayment';
+    return 'CallSession';
   }
 }
 
 /**
  * This is an auto generated class representing the model identifier
- * of [UserSessionPayment] in your schema.
+ * of [CallSession] in your schema.
  */
-class UserSessionPaymentModelIdentifier
-    implements amplify_core.ModelIdentifier<UserSessionPayment> {
+class CallSessionModelIdentifier
+    implements amplify_core.ModelIdentifier<CallSession> {
   final String id;
 
-  /** Create an instance of UserSessionPaymentModelIdentifier using [id] the primary key. */
-  const UserSessionPaymentModelIdentifier({required this.id});
+  /** Create an instance of CallSessionModelIdentifier using [id] the primary key. */
+  const CallSessionModelIdentifier({required this.id});
 
   @override
   Map<String, dynamic> serializeAsMap() => (<String, dynamic>{'id': id});
@@ -472,7 +518,7 @@ class UserSessionPaymentModelIdentifier
   String serializeAsString() => serializeAsMap().values.join('#');
 
   @override
-  String toString() => 'UserSessionPaymentModelIdentifier(id: $id)';
+  String toString() => 'CallSessionModelIdentifier(id: $id)';
 
   @override
   bool operator ==(Object other) {
@@ -480,7 +526,7 @@ class UserSessionPaymentModelIdentifier
       return true;
     }
 
-    return other is UserSessionPaymentModelIdentifier && id == other.id;
+    return other is CallSessionModelIdentifier && id == other.id;
   }
 
   @override

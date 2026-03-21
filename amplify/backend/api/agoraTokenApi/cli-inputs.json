@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "paths": {
+    "/agora-token": {
+      "name": "/agora-token",
+      "lambdaFunction": "S3Trigger716d2200",
+      "permissions": {
+        "setting": "private",
+        "auth": [
+          "create",
+          "read",
+          "update",
+          "delete"
+        ]
+      }
+    }
+  }
+}

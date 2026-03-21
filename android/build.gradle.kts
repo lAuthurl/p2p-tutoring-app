@@ -6,13 +6,9 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:8.3.0")
+        classpath("com.android.tools.build:gradle:8.3.2")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.10")
     }
-}
-
-plugins {
-    // optional if using plugins DSL
 }
 
 allprojects {
@@ -39,16 +35,4 @@ subprojects {
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
-}
-
-subprojects {
-    configurations.all {
-        resolutionStrategy.eachDependency {
-            if (requested.group == "com.android.tools" &&
-                requested.name == "desugar_jdk_libs") {
-                useVersion("2.1.5")
-                because("AGP requests non-published 2.1.6 — pin to latest available")
-            }
-        }
-    }
 }

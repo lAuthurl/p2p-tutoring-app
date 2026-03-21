@@ -6,16 +6,7 @@ import 'package:p2p_tutoring_app/utils/constants/image_strings.dart';
 
 import '../../../services/image_cache_sevice.dart';
 
-/// Displays a network image from an S3 key or URL with two-layer caching:
-///
-///   • URL resolution cache  — ImageCacheService (in-memory, 13-min TTL)
-///   • Pixel cache           — CachedNetworkImage (disk + memory)
-///
-/// This means:
-///   • S3 pre-signed URLs are refreshed at most once per 13 minutes per key
-///   • The decoded image pixels are cached on disk so re-renders are instant
-///   • No flicker on widget rebuilds — CachedNetworkImage reuses the disk hit
-class TNetworkImage extends StatelessWidget {
+class TNetworkImage extends StatefulWidget {
   const TNetworkImage({
     super.key,
     required this.imageKeyOrUrl,
@@ -39,36 +30,100 @@ class TNetworkImage extends StatelessWidget {
   final bool showShimmer;
   final BorderRadius? borderRadius;
 
+  @override
+  State<TNetworkImage> createState() => _TNetworkImageState();
+}
+
+class _TNetworkImageState extends State<TNetworkImage> {
+  String? _resolvedUrl;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve(widget.imageKeyOrUrl);
+  }
+
+  @override
+  void didUpdateWidget(TNetworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageKeyOrUrl != widget.imageKeyOrUrl) {
+      setState(() {
+        _resolvedUrl = null;
+        _loading = true;
+      });
+      _resolve(widget.imageKeyOrUrl);
+    }
+  }
+
+  Future<void> _resolve(String? key) async {
+    if (key == null || key.isEmpty) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    final url = await ImageCacheService.instance.resolve(key);
+    if (mounted) {
+      setState(() {
+        _resolvedUrl = url;
+        _loading = false;
+      });
+    }
+  }
+
   Widget _fallback() =>
-      fallbackWidget ??
+      widget.fallbackWidget ??
       Image.asset(
-        fallbackAsset ?? TImages.tutorPromo1,
-        fit: fit,
-        width: width,
-        height: height,
+        widget.fallbackAsset ?? TImages.courseOthers,
+        fit: widget.fit,
+        width: widget.width,
+        height: widget.height,
       );
 
   @override
   Widget build(BuildContext context) {
-    if (imageKeyOrUrl == null || imageKeyOrUrl!.isEmpty) {
+    if (widget.imageKeyOrUrl == null || widget.imageKeyOrUrl!.isEmpty) {
       return _fallback();
     }
 
-    Widget result = FutureBuilder<String?>(
-      // ValueKey ensures the future reruns only when the raw key actually changes,
-      // not on every parent rebuild
-      key: ValueKey(imageKeyOrUrl),
-      future: ImageCacheService.instance.resolve(imageKeyOrUrl),
-      builder: (context, snapshot) {
-        // ── Loading state ──────────────────────────────────────────────────
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          if (showShimmer) {
-            return _Shimmer(width: width, height: height);
+    Widget result;
+
+    if (_loading) {
+      if (widget.showShimmer) {
+        result = _Shimmer(width: widget.width, height: widget.height);
+      } else if (widget.showLoadingIndicator) {
+        result = SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: const Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      } else {
+        // Show fallback while loading so there's no blank gap
+        result = _fallback();
+      }
+    } else if (_resolvedUrl == null) {
+      result = _fallback();
+    } else {
+      result = CachedNetworkImage(
+        imageUrl: _resolvedUrl!,
+        fit: widget.fit,
+        width: widget.width,
+        height: widget.height,
+        fadeInDuration: const Duration(milliseconds: 200),
+        fadeOutDuration: const Duration(milliseconds: 100),
+        placeholder: (context, url) {
+          if (widget.showShimmer) {
+            return _Shimmer(width: widget.width, height: widget.height);
           }
-          if (showLoadingIndicator) {
+          if (widget.showLoadingIndicator) {
             return SizedBox(
-              width: width,
-              height: height,
+              width: widget.width,
+              height: widget.height,
               child: const Center(
                 child: SizedBox(
                   width: 24,
@@ -78,49 +133,14 @@ class TNetworkImage extends StatelessWidget {
               ),
             );
           }
-          // Transparent gap while resolving (avoids layout shifts)
-          return SizedBox(width: width, height: height);
-        }
-
-        // ── Error / null ───────────────────────────────────────────────────
-        if (!snapshot.hasData || snapshot.data == null) {
           return _fallback();
-        }
+        },
+        errorWidget: (context, url, error) => _fallback(),
+      );
+    }
 
-        // ── Resolved URL — hand off to CachedNetworkImage for pixel caching ─
-        return CachedNetworkImage(
-          imageUrl: snapshot.data!,
-          fit: fit,
-          width: width,
-          height: height,
-          fadeInDuration: const Duration(milliseconds: 200),
-          fadeOutDuration: const Duration(milliseconds: 100),
-          placeholder: (context, url) {
-            if (showShimmer) {
-              return _Shimmer(width: width, height: height);
-            }
-            if (showLoadingIndicator) {
-              return SizedBox(
-                width: width,
-                height: height,
-                child: const Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              );
-            }
-            return SizedBox(width: width, height: height);
-          },
-          errorWidget: (context, url, error) => _fallback(),
-        );
-      },
-    );
-
-    if (borderRadius != null) {
-      result = ClipRRect(borderRadius: borderRadius!, child: result);
+    if (widget.borderRadius != null) {
+      result = ClipRRect(borderRadius: widget.borderRadius!, child: result);
     }
 
     return result;
@@ -167,7 +187,7 @@ class _ShimmerState extends State<_Shimmer>
     return AnimatedBuilder(
       animation: _anim,
       builder:
-          (_, __) => Container(
+          (_, _) => Container(
             width: widget.width,
             height: widget.height,
             color: Colors.grey.withValues(alpha: _anim.value),

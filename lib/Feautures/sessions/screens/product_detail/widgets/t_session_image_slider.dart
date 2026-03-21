@@ -356,7 +356,7 @@ class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder>
     return AnimatedBuilder(
       animation: _anim,
       builder:
-          (_, __) => Container(
+          (_, _) => Container(
             width: double.infinity,
             height: double.infinity,
             color: Colors.grey.withValues(alpha: _anim.value),

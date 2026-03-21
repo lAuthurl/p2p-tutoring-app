@@ -41,14 +41,14 @@ class TSessionCardVertical extends StatelessWidget {
 
     Widget buildImage(String src) {
       if (src.isEmpty) {
-        return Image.asset(TImages.tutorPromo1, fit: BoxFit.cover);
+        return Image.asset(TImages.courseOthers, fit: BoxFit.cover);
       }
 
       // ✅ TNetworkImage handles both S3 keys and https URLs via resolveS3Url
       return TNetworkImage(
         imageKeyOrUrl: src,
         fit: BoxFit.cover,
-        fallbackAsset: TImages.tutorPromo1,
+        fallbackAsset: TImages.courseOthers,
       );
     }
 

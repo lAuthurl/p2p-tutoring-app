@@ -1,5 +1,7 @@
 // ignore_for_file: avoid_print
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -104,24 +106,19 @@ class UserController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
-  // ✅ STATIC: Resolve a fresh pre-signed S3 URL from a stored key or
-  // an old expired pre-signed URL. Call this at display time — never
-  // cache the result long-term since URLs expire after 15 minutes.
+  // STATIC: Resolve a fresh pre-signed S3 URL
   // ---------------------------------------------------------------------------
   static Future<String?> resolveS3Url(String? keyOrUrl) async {
     if (keyOrUrl == null || keyOrUrl.isEmpty) return null;
 
-    // Already a plain https URL with no signing params — return as-is
     if (keyOrUrl.startsWith('https://') && !keyOrUrl.contains('X-Amz-')) {
       return keyOrUrl;
     }
 
-    // If it's an old expired pre-signed URL, extract just the path key
     String key = keyOrUrl;
     if (keyOrUrl.startsWith('https://')) {
       try {
         final uri = Uri.parse(keyOrUrl);
-        // uri.path starts with '/' — strip the leading slash
         key = uri.path.substring(1);
       } catch (_) {
         return null;
@@ -141,7 +138,7 @@ class UserController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
-  // FETCH USER
+  // FETCH USER — AppSync direct, no DataStore
   // ---------------------------------------------------------------------------
   Future<void> fetchUserRecord({
     bool fetchLatestRecord = false,
@@ -155,12 +152,47 @@ class UserController extends GetxController {
       final authUser = await Amplify.Auth.getCurrentUser();
       if (authUser.userId.isEmpty) throw 'No signed-in user found';
 
-      final users = await Amplify.DataStore.query(
-        User.classType,
-        where: User.ID.eq(authUser.userId),
+      const query = '''
+        query GetUser(\$id: ID!) {
+          getUser(id: \$id) {
+            id username email phoneNumber profilePicture
+            deviceToken isEmailVerified isProfileActive
+            role verificationStatus skills about profileCompleted
+            createdAt updatedAt
+          }
+        }
+      ''';
+
+      final res =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: query,
+                  variables: {'id': authUser.userId},
+                ),
+              )
+              .response;
+
+      if (res.errors.isNotEmpty || res.data == null) {
+        debugPrint('❌ fetchUserRecord AppSync errors: ${res.errors}');
+        if (showErrorSnackBar) {
+          TLoaders.warningSnackBar(
+            title: 'Warning',
+            message: 'Unable to fetch your information.',
+          );
+        }
+        return;
+      }
+
+      final decoded = jsonDecode(res.data!) as Map<String, dynamic>;
+      final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+      final raw = root['getUser'] as Map<String, dynamic>?;
+
+      debugPrint(
+        '🌐 fetchUserRecord AppSync profilePicture: ${raw?['profilePicture']}',
       );
 
-      if (users.isEmpty) {
+      if (raw == null) {
         if (showErrorSnackBar) {
           TLoaders.warningSnackBar(
             title: 'Warning',
@@ -171,7 +203,23 @@ class UserController extends GetxController {
         return;
       }
 
-      currentUser.value = users.first;
+      final freshUser = User(
+        id: raw['id'] as String,
+        username: raw['username'] as String? ?? '',
+        email: raw['email'] as String? ?? '',
+        phoneNumber: raw['phoneNumber'] as String?,
+        profilePicture: raw['profilePicture'] as String?,
+        deviceToken: raw['deviceToken'] as String?,
+        isEmailVerified: raw['isEmailVerified'] as bool?,
+        isProfileActive: raw['isProfileActive'] as bool?,
+        role: raw['role'] as String?,
+        verificationStatus: raw['verificationStatus'] as String?,
+        skills: (raw['skills'] as List?)?.cast<String>(),
+        about: raw['about'] as String?,
+        profileCompleted: raw['profileCompleted'] as bool?,
+      );
+
+      currentUser.value = freshUser;
       assignDataToProfile();
     } catch (e) {
       if (showErrorSnackBar) {
@@ -202,7 +250,7 @@ class UserController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
-  // UPDATE PROFILE
+  // UPDATE PROFILE — AppSync direct mutation
   // ---------------------------------------------------------------------------
   Future<void> updateUserProfile() async {
     try {
@@ -235,7 +283,69 @@ class UserController extends GetxController {
       final updatedAbout = about.text.trim();
       final updatedName = fullName.text.trim();
 
-      // ── Save User record ────────────────────────────────────────
+      // ── Get current _version for conflict detection ──────────────
+      const getDoc = '''
+        query GetUser(\$id: ID!) {
+          getUser(id: \$id) {
+            id _version
+          }
+        }
+      ''';
+
+      final getRes =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: getDoc,
+                  variables: {'id': user.id},
+                ),
+              )
+              .response;
+
+      int version = 1;
+      if (getRes.errors.isEmpty && getRes.data != null) {
+        final decoded = jsonDecode(getRes.data!) as Map<String, dynamic>;
+        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+        final obj = root['getUser'] as Map<String, dynamic>?;
+        final v = obj?['_version'];
+        if (v != null) version = (v as num).toInt();
+      }
+
+      // ── Mutation ─────────────────────────────────────────────────
+      const mutDoc = '''
+        mutation UpdateUser(\$input: UpdateUserInput!) {
+          updateUser(input: \$input) {
+            id username email phoneNumber profilePicture
+            skills about role profileCompleted _version
+          }
+        }
+      ''';
+
+      final mutRes =
+          await Amplify.API
+              .mutate(
+                request: GraphQLRequest<String>(
+                  document: mutDoc,
+                  variables: {
+                    'input': {
+                      'id': user.id,
+                      'username': updatedName,
+                      'email': email.text.trim(),
+                      'phoneNumber': phoneNo.text.trim(),
+                      'skills': updatedSkills,
+                      'about': updatedAbout,
+                      '_version': version,
+                    },
+                  },
+                ),
+              )
+              .response;
+
+      if (mutRes.errors.isNotEmpty) {
+        throw mutRes.errors.first.message;
+      }
+
+      // ── Update local state ────────────────────────────────────────
       final updatedUser = user.copyWith(
         username: updatedName,
         email: email.text.trim(),
@@ -244,11 +354,10 @@ class UserController extends GetxController {
         about: updatedAbout,
       );
 
-      await Amplify.DataStore.save(updatedUser);
       currentUser.value = updatedUser;
       assignDataToProfile();
 
-      // ── Sync Tutor record + refresh home ─────────────────────────
+      // ── Sync Tutor record ─────────────────────────────────────────
       await _syncTutorRecord(
         userEmail: updatedUser.email,
         name: updatedName,
@@ -273,9 +382,6 @@ class UserController extends GetxController {
 
   // ---------------------------------------------------------------------------
   // SYNC TUTOR RECORD
-  // ✅ After saving the Tutor, propagates the update to HomeController
-  // allSessions and TutoringController caches so every session card and
-  // profile screen reflects the new name/image immediately.
   // ---------------------------------------------------------------------------
   Future<void> _syncTutorRecord({
     required String userEmail,
@@ -303,35 +409,25 @@ class UserController extends GetxController {
         name: name.isNotEmpty ? name : tutor.name,
         skills: skills.isNotEmpty ? skills : tutor.skills,
         about: about.isNotEmpty ? about : tutor.about,
-        // Only update image if one is set — avoids wiping the avatar
-        // when the user hasn't changed their picture.
         image: (image != null && image.isNotEmpty) ? image : tutor.image,
       );
 
       await Amplify.DataStore.save(updatedTutor);
 
-      // Warm TutoringController tutor cache
       if (Get.isRegistered<TutoringController>()) {
         TutoringController.instance.warmTutorCache(updatedTutor);
       }
 
-      // Patch all matching sessions in HomeController so home grid
-      // cards immediately show new name and avatar
       if (Get.isRegistered<HomeController>()) {
         HomeController.instance.refreshTutorInSessions(updatedTutor);
       }
 
-      // Warm the User cache in TutoringController so review
-      // cards also show the updated username/avatar
       if (currentUser.value != null && Get.isRegistered<TutoringController>()) {
         TutoringController.instance.warmUserCache(currentUser.value!);
       }
 
       if (kDebugMode) {
-        print(
-          '✅ _syncTutorRecord: Tutor ${tutor.id} updated and '
-          'propagated to home + tutoring caches',
-        );
+        print('✅ _syncTutorRecord: Tutor ${tutor.id} updated');
       }
     } catch (e) {
       if (kDebugMode) print('⚠️ _syncTutorRecord failed: $e');
@@ -339,9 +435,7 @@ class UserController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
-  // PROFILE IMAGE UPLOAD
-  // ✅ Stores the S3 key path (not the pre-signed URL) so the image
-  // never expires. TUserAvatar resolves a fresh URL at display time.
+  // PROFILE IMAGE UPLOAD — AppSync direct mutation
   // ---------------------------------------------------------------------------
   Future<void> uploadUserProfilePicture() async {
     try {
@@ -357,16 +451,73 @@ class UserController extends GetxController {
 
       imageUploading.value = true;
 
-      // ✅ Returns S3 key, not a pre-signed URL
       final s3Key = await _uploadImageToS3('Users/Images/Profile', image);
 
-      // Update User record with the S3 key
+      // ── Get current _version ──────────────────────────────────────
+      const getDoc = '''
+        query GetUser(\$id: ID!) {
+          getUser(id: \$id) {
+            id _version
+          }
+        }
+      ''';
+
+      final getRes =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: getDoc,
+                  variables: {'id': user.id},
+                ),
+              )
+              .response;
+
+      int version = 1;
+      if (getRes.errors.isEmpty && getRes.data != null) {
+        final decoded = jsonDecode(getRes.data!) as Map<String, dynamic>;
+        final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
+        final obj = root['getUser'] as Map<String, dynamic>?;
+        final v = obj?['_version'];
+        if (v != null) version = (v as num).toInt();
+      }
+
+      // ── Mutation ──────────────────────────────────────────────────
+      const mutDoc = '''
+        mutation UpdateUser(\$input: UpdateUserInput!) {
+          updateUser(input: \$input) {
+            id profilePicture _version
+          }
+        }
+      ''';
+
+      final mutRes =
+          await Amplify.API
+              .mutate(
+                request: GraphQLRequest<String>(
+                  document: mutDoc,
+                  variables: {
+                    'input': {
+                      'id': user.id,
+                      'profilePicture': s3Key,
+                      '_version': version,
+                    },
+                  },
+                ),
+              )
+              .response;
+
+      if (mutRes.errors.isNotEmpty) {
+        throw mutRes.errors.first.message;
+      }
+
+      debugPrint('✅ uploadUserProfilePicture: saved s3Key=$s3Key');
+
+      // ── Update local state ────────────────────────────────────────
       final updatedUser = user.copyWith(profilePicture: s3Key);
-      await Amplify.DataStore.save(updatedUser);
       currentUser.value = updatedUser;
       profileImageUrl.value = s3Key;
 
-      // Sync key to Tutor record + propagate to home grid
+      // ── Sync to Tutor record ──────────────────────────────────────
       await _syncTutorRecord(
         userEmail: updatedUser.email,
         name: updatedUser.username,
@@ -386,9 +537,6 @@ class UserController extends GetxController {
     }
   }
 
-  // ✅ Returns the S3 key path — NOT a pre-signed URL.
-  // Pre-signed URLs expire after 15 min (X-Amz-Expires=900).
-  // Store the key and call resolveS3Url() at display time instead.
   Future<String> _uploadImageToS3(String folder, XFile image) async {
     final filename = '${DateTime.now().millisecondsSinceEpoch}_${image.name}';
     final storagePath = StoragePath.fromString('$folder/$filename');
@@ -398,7 +546,6 @@ class UserController extends GetxController {
       path: storagePath,
     ).result;
 
-    // Return the key, not the URL
     return '$folder/$filename';
   }
 

@@ -1,5 +1,19 @@
 {
   "api": {
+    "agoraTokenApi": {
+      "dependsOn": [
+        {
+          "attributes": [
+            "Name",
+            "Arn"
+          ],
+          "category": "function",
+          "resourceName": "S3Trigger716d2200"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "API Gateway"
+    },
     "p2ptutoringapp": {
       "dependsOn": [
         {

@@ -7,7 +7,7 @@ plugins {
 android {
     namespace = "com.example.p2p_tutoring_application"
     compileSdk = 36
-    ndkVersion = "29.0.14206865"
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "com.example.p2p_tutoring_application"
@@ -32,6 +32,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    tasks.withType<JavaCompile>().configureEach {
+        options.compilerArgs.addAll(listOf("-Xlint:-options"))
+    }
 }
 
 flutter {
@@ -39,8 +43,6 @@ flutter {
 }
 
 dependencies {
-    // Use a stable desugar version
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.6")
-
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.10")
 }
