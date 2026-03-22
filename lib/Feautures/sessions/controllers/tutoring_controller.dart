@@ -34,6 +34,9 @@ class TutoringController extends GetxController {
     }
   }
 
+  // Exposed publicly so InboxScreen can identify "the other person" in a thread
+  String? get currentAuthUserId => _currentAuthUserId;
+
   Future<String?> get currentUserTutorId async {
     const maxAttempts = 5;
     const delays = [0, 500, 1000, 2000, 3000];
@@ -67,7 +70,7 @@ class TutoringController extends GetxController {
     return null;
   }
 
-  // ---------------- Reactive State ----------------
+  // ── Reactive state ────────────────────────────────────────────────────────
   final sessions = <TutoringSession>[].obs;
   final featuredSessions = <TutoringSession>[].obs;
   final popularSessions = <TutoringSession>[].obs;
@@ -88,10 +91,13 @@ class TutoringController extends GetxController {
   int unreadCount(String chatId) => unreadCounts[chatId] ?? 0;
   int get totalUnread => unreadCounts.values.fold(0, (sum, n) => sum + n);
 
-  // ---------------- Caches ----------------
+  // ── Caches ────────────────────────────────────────────────────────────────
   final _tutorCache = <String, Tutor>{};
   final _userCache = <String, User>{};
   String? _currentAuthUserId;
+
+  // ── Background observer for new tutee threads ─────────────────────────────
+  StreamSubscription? _globalMessageObserver;
 
   Future<String?> _getOrCacheCurrentUserId() async {
     if (_currentAuthUserId != null) return _currentAuthUserId;
@@ -111,7 +117,7 @@ class TutoringController extends GetxController {
 
   Worker? _userWorker;
 
-  // ---------------- Lifecycle ----------------
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
   @override
   void onInit() {
     super.onInit();
@@ -122,6 +128,7 @@ class TutoringController extends GetxController {
   @override
   void onClose() {
     _userWorker?.dispose();
+    _globalMessageObserver?.cancel();
     super.onClose();
   }
 
@@ -140,6 +147,10 @@ class TutoringController extends GetxController {
     await fetchTutorSessions();
     await Future.delayed(const Duration(milliseconds: 800));
     await fetchAllStudentThreads();
+    // Load threads where the current user is the tutee
+    await fetchCurrentUserThreads();
+    // Start watching ALL messages so new tutee threads are caught in real time
+    _startGlobalMessageObserver();
   }
 
   Future<bool> _canSync() async {
@@ -149,6 +160,50 @@ class TutoringController extends GetxController {
     } catch (_) {
       return false;
     }
+  }
+
+  // ============================================================
+  // GLOBAL MESSAGE OBSERVER
+  //
+  // Watches ALL ChatMessage records in DataStore. When a record arrives
+  // whose sessionId is a composite chatId (sessionId_tuteeUserId) that
+  // belongs to one of this tutor's sessions but hasn't been subscribed to
+  // yet, we call observeChat() on it immediately.
+  //
+  // This is the key fix for the tutor inbox: fetchAllStudentThreads() only
+  // catches threads that have already synced at startup. If the tutee sends
+  // a message AFTER the tutor opened the app, or DataStore hasn't finished
+  // syncing at load time, those threads would be silently missed.
+  // The global observer catches them as they arrive from AppSync.
+  // ============================================================
+  void _startGlobalMessageObserver() {
+    _globalMessageObserver?.cancel();
+
+    _globalMessageObserver = Amplify.DataStore.observeQuery(
+      ChatMessage.classType,
+    ).listen((snapshot) {
+      if (activeSessions.isEmpty) return;
+      final tutorSessionIds = activeSessions.map((s) => s.id).toSet();
+
+      for (final msg in snapshot.items) {
+        final chatId = msg.sessionId;
+
+        // Only composite chatIds are tutee threads (sessionId_userId).
+        // Plain sessionIds are tutor-broadcast threads, already observed.
+        if (!chatId.contains('_')) continue;
+
+        // Only care about threads belonging to this tutor's sessions.
+        if (!tutorSessionIds.any((sid) => chatId.startsWith(sid))) {
+          continue;
+        }
+
+        // Already subscribed — skip.
+        if (_observedChatIds.contains(chatId)) continue;
+
+        print('🔔 _globalMessageObserver: new tutee thread detected — $chatId');
+        observeChat(chatId);
+      }
+    }, onError: (e) => print('❌ _globalMessageObserver error: $e'));
   }
 
   // ============================================================
@@ -219,11 +274,6 @@ class TutoringController extends GetxController {
         }
         if ((userId == null || userId.isEmpty) && sourceJson != null) {
           userId = _extractFieldForId(sourceJson, review.id, 'userId');
-          if (userId != null) {
-            print(
-              '🔑 _hydrateReviews: extracted userId=$userId from JSON for review ${review.id}',
-            );
-          }
         }
         if (userId != null && userId.isNotEmpty) {
           final user = await _resolveUserById(userId);
@@ -265,7 +315,6 @@ class TutoringController extends GetxController {
       if (start == -1 || end == -1) return null;
       final block = jsonStr.substring(start, end + 1);
       return RegExp(
-        // ignore: prefer_interpolation_to_compose_strings
         '"' + RegExp.escape(fieldName) + r'"\s*:\s*"([^"]+)"',
       ).firstMatch(block)?.group(1);
     } catch (e) {
@@ -434,23 +483,108 @@ class TutoringController extends GetxController {
     }
   }
 
+  // ── FIXED: fetchAllStudentThreads ────────────────────────────────────────
+  //
+  // Root cause of the empty tutor inbox:
+  //   1. Tutee messages are saved with sessionId = "{sessionId}_{tuteeUserId}".
+  //   2. The old code called observeChat(session.id) which subscribes to the
+  //      plain sessionId — it never matched the composite chatId.
+  //   3. Even after fixing that, the old code never seeded sessionMessages,
+  //      so the Obx in InboxScreen saw an empty map even when messages existed.
+  //
+  // Fix: query ALL ChatMessage records from DataStore, group by chatId,
+  // seed sessionMessages immediately so the inbox renders without waiting
+  // for the observeQuery subscription tick, then start observeChat on each.
   Future<void> fetchAllStudentThreads() async {
     if (!await _canSync()) return;
     if (activeSessions.isEmpty) return;
+
     try {
       final allMessages = await Amplify.DataStore.query(ChatMessage.classType);
-      final sessionIds = activeSessions.map((s) => s.id).toSet();
-      final chatIds =
-          allMessages
-              .where((m) => sessionIds.any((id) => m.sessionId.startsWith(id)))
-              .map((m) => m.sessionId)
-              .toSet();
-      print('💬 fetchAllStudentThreads: found ${chatIds.length} chat threads');
-      for (final chatId in chatIds) {
+      final tutorSessionIds = activeSessions.map((s) => s.id).toSet();
+
+      // Group all matching messages by chatId
+      final grouped = <String, List<ChatMessage>>{};
+      for (final msg in allMessages) {
+        final chatId = msg.sessionId;
+        if (!tutorSessionIds.any((sid) => chatId.startsWith(sid))) continue;
+        grouped.putIfAbsent(chatId, () => []).add(msg);
+      }
+
+      print(
+        '💬 fetchAllStudentThreads: ${grouped.length} threads across '
+        '${tutorSessionIds.length} tutor sessions',
+      );
+
+      for (final entry in grouped.entries) {
+        final chatId = entry.key;
+        final msgs =
+            entry.value..sort(
+              (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now())
+                  .compareTo(b.createdAt?.getDateTimeInUtc() ?? DateTime.now()),
+            );
+
+        // Seed the reactive map so the inbox renders immediately without
+        // waiting for the observeQuery subscription to fire its first event.
+        if (!sessionMessages.containsKey(chatId) ||
+            (sessionMessages[chatId]?.isEmpty ?? true)) {
+          sessionMessages[chatId] = msgs;
+        }
+
         observeChat(chatId);
       }
+
+      sessionMessages.refresh();
     } catch (e) {
       print('❌ fetchAllStudentThreads error: $e');
+    }
+  }
+
+  // ── NEW: fetchCurrentUserThreads ─────────────────────────────────────────
+  // Loads threads where the current user is the TUTEE. Seeds sessionMessages
+  // and starts observeChat so the tutee's inbox also works correctly.
+  // A tutee's thread has chatId = "{sessionId}_{tuteeUserId}" so we match
+  // on senderId == myId OR chatId ending with "_myId".
+  Future<void> fetchCurrentUserThreads() async {
+    if (!await _canSync()) return;
+
+    try {
+      final myId = await _getOrCacheCurrentUserId();
+      if (myId == null) return;
+
+      final allMessages = await Amplify.DataStore.query(ChatMessage.classType);
+
+      final grouped = <String, List<ChatMessage>>{};
+      for (final msg in allMessages) {
+        if (msg.senderId != myId && !msg.sessionId.endsWith('_$myId')) {
+          continue;
+        }
+        grouped.putIfAbsent(msg.sessionId, () => []).add(msg);
+      }
+
+      print(
+        '💬 fetchCurrentUserThreads: ${grouped.length} threads for user $myId',
+      );
+
+      for (final entry in grouped.entries) {
+        final chatId = entry.key;
+        final msgs =
+            entry.value..sort(
+              (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now())
+                  .compareTo(b.createdAt?.getDateTimeInUtc() ?? DateTime.now()),
+            );
+
+        if (!sessionMessages.containsKey(chatId) ||
+            (sessionMessages[chatId]?.isEmpty ?? true)) {
+          sessionMessages[chatId] = msgs;
+        }
+
+        observeChat(chatId);
+      }
+
+      sessionMessages.refresh();
+    } catch (e) {
+      print('❌ fetchCurrentUserThreads error: $e');
     }
   }
 
@@ -459,7 +593,7 @@ class TutoringController extends GetxController {
     try {
       final tutorId = await currentUserTutorId;
       if (tutorId == null) {
-        print('ℹ️ fetchTutorSessions: no tutor record for this user — skip');
+        print('ℹ️ fetchTutorSessions: no tutor record — skip');
         return;
       }
 
@@ -474,11 +608,15 @@ class TutoringController extends GetxController {
         }
       """;
 
-      final request = GraphQLRequest<String>(
-        document: queryDoc,
-        variables: {'tutorId': tutorId, 'limit': 100},
-      );
-      final response = await Amplify.API.query(request: request).response;
+      final response =
+          await Amplify.API
+              .query(
+                request: GraphQLRequest<String>(
+                  document: queryDoc,
+                  variables: {'tutorId': tutorId, 'limit': 100},
+                ),
+              )
+              .response;
 
       if (response.errors.isNotEmpty || response.data == null) {
         await _fetchTutorSessionsFallback(tutorId);
@@ -512,10 +650,13 @@ class TutoringController extends GetxController {
       }
 
       activeSessions.assignAll(hydrated);
-      for (final session in activeSessions) {
-        observeChat(session.id);
-      }
-      print("✅ fetchTutorSessions: loaded ${activeSessions.length} sessions");
+
+      // Immediately scan for existing student threads now that we have
+      // the tutor session IDs loaded.
+      await fetchAllStudentThreads();
+      _startGlobalMessageObserver();
+
+      print('✅ fetchTutorSessions: loaded ${activeSessions.length} sessions');
     } catch (e) {
       print('❌ fetchTutorSessions error: $e');
     }
@@ -533,16 +674,16 @@ class TutoringController extends GetxController {
           (s) => resolvedTutor != null ? s.copyWith(tutor: resolvedTutor) : s,
         ),
       );
-      for (final session in activeSessions) {
-        observeChat(session.id);
-      }
+      await fetchAllStudentThreads();
+      _startGlobalMessageObserver();
     } catch (e) {
       print('❌ _fetchTutorSessionsFallback error: $e');
       activeSessions.clear();
     }
   }
 
-  // ---------------- Session Utilities ----------------
+  // ── Session utilities ─────────────────────────────────────────────────────
+
   double _computeAdjustedPrice(
     TutoringSession session,
     Map<String, String>? attrs,
@@ -715,17 +856,17 @@ class TutoringController extends GetxController {
     required double rating,
     required String comment,
   }) async {
-    if (!await _canSync()) throw Exception("User not signed in");
+    if (!await _canSync()) throw Exception('User not signed in');
     final authUser = await Amplify.Auth.getCurrentUser();
     final userId = authUser.userId;
     final tutorId = session.tutor?.id ?? '';
-    if (tutorId.isEmpty) throw Exception("Session has no tutor assigned");
+    if (tutorId.isEmpty) throw Exception('Session has no tutor assigned');
 
     final userList = await Amplify.DataStore.query(
       User.classType,
       where: User.ID.eq(userId),
     );
-    if (userList.isEmpty) throw Exception("Current user not found");
+    if (userList.isEmpty) throw Exception('Current user not found');
     final currentUser = userList.first;
     _userCache[currentUser.id] = currentUser;
 
@@ -733,7 +874,7 @@ class TutoringController extends GetxController {
       Tutor.classType,
       where: Tutor.ID.eq(tutorId),
     );
-    if (tutorList.isEmpty) throw Exception("Tutor not found");
+    if (tutorList.isEmpty) throw Exception('Tutor not found');
     final currentTutor = tutorList.first;
     _tutorCache[currentTutor.id] = currentTutor;
 
@@ -755,19 +896,24 @@ class TutoringController extends GetxController {
       }
     """;
 
-    final request = GraphQLRequest<String>(
-      document: mutationDoc,
-      variables: {
-        'id': reviewId,
-        'sessionId': session.id,
-        'tutorId': tutorId,
-        'userId': userId,
-        'rating': rating,
-        'comment': comment,
-        'createdAt': now.format(),
-      },
-    );
-    final response = await Amplify.API.mutate(request: request).response;
+    final response =
+        await Amplify.API
+            .mutate(
+              request: GraphQLRequest<String>(
+                document: mutationDoc,
+                variables: {
+                  'id': reviewId,
+                  'sessionId': session.id,
+                  'tutorId': tutorId,
+                  'userId': userId,
+                  'rating': rating,
+                  'comment': comment,
+                  'createdAt': now.format(),
+                },
+              ),
+            )
+            .response;
+
     if (response.errors.isNotEmpty) {
       throw Exception(
         'GraphQL mutation failed: ${response.errors.first.message}',
@@ -799,7 +945,6 @@ class TutoringController extends GetxController {
           }
         }
       """;
-
       const filterQuery = """
         query ListReviewsBySessionFilter(\$sessionId: ID!, \$limit: Int) {
           listReviews(filter: {sessionId: {eq: \$sessionId}}, limit: \$limit) {
@@ -824,14 +969,7 @@ class TutoringController extends GetxController {
       if (gsiResponse.errors.isEmpty && gsiResponse.data != null) {
         sourceJson = gsiResponse.data!;
         ids = _parseIds(sourceJson);
-        print(
-          '🔍 fetchReviews (GSI): ${ids.length} reviews for session $sessionId',
-        );
       } else {
-        print(
-          '⚠️ fetchReviews: GSI query failed, falling back to filter query. '
-          'Run "amplify push" to enable the GSI. Errors: ${gsiResponse.errors}',
-        );
         final filterResponse =
             await Amplify.API
                 .query(
@@ -841,18 +979,13 @@ class TutoringController extends GetxController {
                   ),
                 )
                 .response;
-
         if (filterResponse.errors.isEmpty && filterResponse.data != null) {
           sourceJson = filterResponse.data!;
           ids = _parseIds(sourceJson);
-          print(
-            '🔍 fetchReviews (filter fallback): ${ids.length} reviews for session $sessionId',
-          );
         }
       }
 
       List<Review> raw = [];
-
       if (sourceJson != null && ids.isNotEmpty) {
         _parseReviewFkIds(sourceJson);
         for (final id in ids) {
@@ -867,8 +1000,7 @@ class TutoringController extends GetxController {
             if (minimal != null) raw.add(minimal);
           }
         }
-      } else if (sourceJson == null) {
-        print('⚠️ fetchReviews: falling back to local DataStore only');
+      } else {
         final local = await Amplify.DataStore.query(
           Review.classType,
           where: Review.SESSIONID.eq(sessionId),
@@ -893,7 +1025,6 @@ class TutoringController extends GetxController {
           }
         }
       """;
-
       const filterQuery = """
         query ListReviewsByTutorFilter(\$tutorId: ID!, \$limit: Int) {
           listReviews(filter: {tutorId: {eq: \$tutorId}}, limit: \$limit) {
@@ -918,14 +1049,7 @@ class TutoringController extends GetxController {
       if (gsiResponse.errors.isEmpty && gsiResponse.data != null) {
         sourceJson = gsiResponse.data!;
         ids = _parseIds(sourceJson);
-        print(
-          '🔍 fetchReviewsByTutor (GSI): ${ids.length} reviews for tutor $tutorId',
-        );
       } else {
-        print(
-          '⚠️ fetchReviewsByTutor: GSI query failed, falling back to filter. '
-          'Run "amplify push" to enable the GSI. Errors: ${gsiResponse.errors}',
-        );
         final filterResponse =
             await Amplify.API
                 .query(
@@ -935,18 +1059,13 @@ class TutoringController extends GetxController {
                   ),
                 )
                 .response;
-
         if (filterResponse.errors.isEmpty && filterResponse.data != null) {
           sourceJson = filterResponse.data!;
           ids = _parseIds(sourceJson);
-          print(
-            '🔍 fetchReviewsByTutor (filter fallback): ${ids.length} reviews',
-          );
         }
       }
 
       List<Review> raw = [];
-
       if (sourceJson != null && ids.isNotEmpty) {
         _parseReviewFkIds(sourceJson);
         for (final id in ids) {
@@ -962,8 +1081,7 @@ class TutoringController extends GetxController {
             if (minimal != null) raw.add(minimal);
           }
         }
-      } else if (sourceJson == null) {
-        print('⚠️ fetchReviewsByTutor: falling back to local DataStore only');
+      } else {
         final all = await Amplify.DataStore.query(Review.classType);
         raw = all.where((r) => r.tutor?.id == tutorId).toList();
       }
@@ -992,7 +1110,7 @@ class TutoringController extends GetxController {
   }
 
   // ============================================================
-  // CHAT
+  // CHAT — SEND
   // ============================================================
 
   List<String> get chatSessions => sessionMessages.keys.toList();
@@ -1042,6 +1160,12 @@ class TutoringController extends GetxController {
     return 'User';
   }
 
+  // DataStore.save() is used for all message writes because the ChatMessage
+  // @auth rule requires OWNER for CREATE. DataStore automatically attaches
+  // the Cognito owner claim before syncing to AppSync, so the write is
+  // always accepted. The DataStore observeQuery subscription on the
+  // recipient's device fires when the record syncs — delivering the message
+  // in real time without any polling.
   Future<void> sendMessage(String sessionId, String text) async {
     if (!await _canSync()) return;
 
@@ -1058,13 +1182,25 @@ class TutoringController extends GetxController {
       createdAt: TemporalDateTime.now(),
     );
 
-    await Amplify.DataStore.save(message);
+    // Optimistic local insert so the sender sees the message immediately
+    _onNewMessage(message);
+
+    try {
+      await Amplify.DataStore.save(message);
+      print('✅ sendMessage: saved — id=${message.id}');
+      // Ensure this chatId is observed so new replies are delivered
+      observeChat(sessionId);
+    } catch (e) {
+      print('❌ sendMessage error: $e');
+      _removeOptimisticMessage(sessionId, message.id);
+      Get.snackbar(
+        'Send Failed',
+        'Message could not be delivered. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
-  // ✅ FIXED: broad catch added so PluginError ("Storage plugin has not been
-  // added to Amplify") doesn't propagate as an unhandled exception and crash
-  // the app. Once AmplifyStorageS3() is registered in AmplifyInitializer and
-  // amplify_storage_s3 is in pubspec.yaml this path will never be hit.
   Future<void> sendVoiceMessage(String sessionId, File audioFile) async {
     if (!await _canSync()) return;
 
@@ -1097,8 +1233,10 @@ class TutoringController extends GetxController {
         createdAt: TemporalDateTime.now(),
       );
 
-      await Amplify.DataStore.save(message);
       _onNewMessage(message);
+      await Amplify.DataStore.save(message);
+      print('✅ sendVoiceMessage: saved — id=${message.id}');
+      observeChat(sessionId);
     } on StorageException catch (e) {
       print('❌ S3 Upload failed: ${e.message}');
       Get.snackbar(
@@ -1110,7 +1248,6 @@ class TutoringController extends GetxController {
         duration: const Duration(seconds: 3),
       );
     } catch (e) {
-      // Catches PluginError and any other unexpected storage errors.
       print('❌ sendVoiceMessage error: $e');
       Get.snackbar(
         'Voice Message Error',
@@ -1123,9 +1260,85 @@ class TutoringController extends GetxController {
     }
   }
 
+  // Public wrapper so CheckoutController can inject system messages into
+  // the reactive list without accessing private _onNewMessage directly.
+  void injectLocalMessage(ChatMessage message) {
+    _onNewMessage(message);
+    // Ensure this chatId is observed so the recipient receives replies
+    observeChat(message.sessionId);
+  }
+
+  void _removeOptimisticMessage(String sessionId, String messageId) {
+    final current = List<ChatMessage>.from(sessionMessages[sessionId] ?? []);
+    current.removeWhere((m) => m.id == messageId);
+    sessionMessages[sessionId] = current;
+    sessionMessages.refresh();
+  }
+
+  // ============================================================
+  // CHAT — FETCH (DataStore is source of truth)
+  // ============================================================
+
+  Future<List<ChatMessage>> fetchMessagesFromAppSync(String chatId) async {
+    if (!await _canSync()) return sessionMessages[chatId] ?? [];
+
+    try {
+      // Ensure subscribed before loading
+      observeChat(chatId);
+
+      final local = await Amplify.DataStore.query(
+        ChatMessage.classType,
+        where: ChatMessage.SESSIONID.eq(chatId),
+      );
+
+      local.sort(
+        (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now()).compareTo(
+          b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
+        ),
+      );
+
+      print(
+        '📦 fetchMessagesFromAppSync: ${local.length} messages '
+        'from DataStore for $chatId',
+      );
+
+      // Merge DataStore records with any in-flight optimistic messages
+      final existing = sessionMessages[chatId] ?? [];
+      final localIds = local.map((m) => m.id).toSet();
+
+      final seen = <String>{};
+      final merged = <ChatMessage>[];
+
+      for (final m in local) {
+        if (seen.add(m.id)) merged.add(m);
+      }
+      // Keep optimistic messages not yet persisted to DataStore
+      for (final m in existing) {
+        if (!localIds.contains(m.id) && seen.add(m.id)) merged.add(m);
+      }
+
+      merged.sort(
+        (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now()).compareTo(
+          b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
+        ),
+      );
+
+      sessionMessages[chatId] = merged;
+      sessionMessages.refresh();
+
+      return merged;
+    } catch (e) {
+      print('❌ fetchMessagesFromAppSync error: $e');
+      return sessionMessages[chatId] ?? [];
+    }
+  }
+
+  // ============================================================
+  // CHAT — OBSERVE
+  // ============================================================
+
   void observeChat(String chatId) {
     if (_observedChatIds.contains(chatId)) return;
-
     _observedChatIds.add(chatId);
 
     if (!_chatBaselineTime.containsKey(chatId)) {
@@ -1150,19 +1363,18 @@ class TutoringController extends GetxController {
         ),
       );
 
+      // First snapshot — set baseline time so we don't count old messages
+      // as unread.
       if (!_chatBaselineTime.containsKey(chatId)) {
         final newestTime =
             msgs.isNotEmpty
                 ? msgs.last.createdAt?.getDateTimeInUtc() ?? DateTime.now()
                 : DateTime.now();
-
         _chatBaselineTime[chatId] = newestTime;
-
         _storage.write(
           '$_kLastReadPrefix$chatId',
           newestTime.millisecondsSinceEpoch,
         );
-
         sessionMessages[chatId] = msgs;
         sessionMessages.refresh();
         return;
@@ -1174,16 +1386,12 @@ class TutoringController extends GetxController {
       final myId = await _getOrCacheCurrentUserId();
 
       int newCount = 0;
-
       for (final msg in msgs) {
         if (existingIds.contains(msg.id)) continue;
-
         final msgTime = msg.createdAt?.getDateTimeInUtc();
         if (msgTime == null || !msgTime.isAfter(baseline)) continue;
-
         if (currentOpenChatId == chatId) continue;
         if (myId != null && msg.senderId == myId) continue;
-
         newCount++;
       }
 
@@ -1193,18 +1401,23 @@ class TutoringController extends GetxController {
 
       sessionMessages[chatId] = msgs;
       sessionMessages.refresh();
-    });
+    }, onError: (e) => print('❌ observeChat($chatId) error: $e'));
   }
 
   void _onNewMessage(ChatMessage msg) {
     final chatId = msg.sessionId;
     if (chatId == null) return;
 
-    sessionMessages.update(
-      chatId,
-      (list) => list..add(msg),
-      ifAbsent: () => [msg],
-    );
+    final current = List<ChatMessage>.from(sessionMessages[chatId] ?? []);
+    if (!current.any((m) => m.id == msg.id)) {
+      current.add(msg);
+      current.sort(
+        (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now()).compareTo(
+          b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
+        ),
+      );
+      sessionMessages[chatId] = current;
+    }
 
     final isOwnMessage =
         _currentAuthUserId != null && msg.senderId == _currentAuthUserId;
@@ -1219,108 +1432,13 @@ class TutoringController extends GetxController {
   void markSessionRead(String chatId) {
     unreadCounts[chatId] = 0;
     currentOpenChatId = chatId;
-
     final now = DateTime.now().toUtc();
     _chatBaselineTime[chatId] = now;
-
     _storage.write('$_kLastReadPrefix$chatId', now.millisecondsSinceEpoch);
-
     sessionMessages.refresh();
   }
 
   void clearCurrentOpenSession() => currentOpenChatId = null;
-
-  // ============================================================
-  // APPSYNC MESSAGE FETCH
-  // ============================================================
-
-  Future<List<ChatMessage>> fetchMessagesFromAppSync(String chatId) async {
-    if (!await _canSync()) return sessionMessages[chatId] ?? [];
-
-    try {
-      const queryDoc = r"""
-      query ListMessagesBySession($sessionId: String!, $limit: Int) {
-        listChatMessagesBySession(sessionId: $sessionId, limit: $limit) {
-          items {
-            id
-            sessionId
-            senderId
-            senderName
-            text
-            audioUrl
-            isVoice
-            createdAt
-            _version
-            _deleted
-          }
-        }
-      }
-    """;
-
-      final response =
-          await Amplify.API
-              .query(
-                request: GraphQLRequest<String>(
-                  document: queryDoc,
-                  variables: {'sessionId': chatId, 'limit': 500},
-                ),
-              )
-              .response;
-
-      if (response.errors.isNotEmpty || response.data == null) {
-        return sessionMessages[chatId] ?? [];
-      }
-
-      final decoded = jsonDecode(response.data!) as Map<String, dynamic>;
-      final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
-      final listObj =
-          root['listChatMessagesBySession'] as Map<String, dynamic>?;
-
-      final items = listObj?['items'] as List<dynamic>? ?? [];
-
-      final messages = <ChatMessage>[];
-
-      for (final raw in items) {
-        final item = raw as Map<String, dynamic>;
-        if (item['_deleted'] == true) continue;
-
-        final id = item['id'] as String?;
-        if (id == null) continue;
-
-        final createdAtStr = item['createdAt'] as String?;
-
-        messages.add(
-          ChatMessage(
-            id: id,
-            sessionId: item['sessionId'] as String? ?? chatId,
-            senderId: item['senderId'] as String? ?? '',
-            senderName: item['senderName'] as String?,
-            text: item['text'] as String?,
-            audioUrl: item['audioUrl'] as String?,
-            isVoice: item['isVoice'] as bool? ?? false,
-            createdAt:
-                createdAtStr != null
-                    ? TemporalDateTime.fromString(createdAtStr)
-                    : null,
-          ),
-        );
-      }
-
-      messages.sort(
-        (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now()).compareTo(
-          b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
-        ),
-      );
-
-      sessionMessages[chatId] = messages;
-      sessionMessages.refresh();
-
-      return messages;
-    } catch (e) {
-      print('❌ fetchMessagesFromAppSync: $e');
-      return sessionMessages[chatId] ?? [];
-    }
-  }
 
   // ============================================================
   // DELETE MESSAGE
@@ -1329,22 +1447,30 @@ class TutoringController extends GetxController {
   Future<void> deleteMessage(String chatId, ChatMessage message) async {
     if (!await _canSync()) return;
 
+    // Optimistic removal from UI
     final current = List<ChatMessage>.from(sessionMessages[chatId] ?? []);
     current.removeWhere((m) => m.id == message.id);
-
     sessionMessages[chatId] = current;
     sessionMessages.refresh();
 
     try {
-      const getDoc = r"""
-      query GetChatMessage($id: ID!) {
-        getChatMessage(id: $id) {
-          id
-          _version
-          _deleted
-        }
+      // DataStore.delete handles owner auth automatically
+      final local = await Amplify.DataStore.query(
+        ChatMessage.classType,
+        where: ChatMessage.ID.eq(message.id),
+      );
+      if (local.isNotEmpty) {
+        await Amplify.DataStore.delete(local.first);
+        print('✅ deleteMessage: deleted via DataStore — id=${message.id}');
+        return;
       }
-    """;
+
+      // Fallback: direct AppSync delete for messages not in local DataStore
+      const getDoc = r"""
+        query GetChatMessage($id: ID!) {
+          getChatMessage(id: $id) { id _version _deleted }
+        }
+      """;
 
       final getResponse =
           await Amplify.API
@@ -1357,26 +1483,20 @@ class TutoringController extends GetxController {
               .response;
 
       int version = 1;
-
       if (getResponse.errors.isEmpty && getResponse.data != null) {
         final decoded = jsonDecode(getResponse.data!) as Map<String, dynamic>;
         final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
         final obj = root['getChatMessage'] as Map<String, dynamic>?;
-
         if (obj == null || obj['_deleted'] == true) return;
-
         final v = obj['_version'];
         if (v != null) version = (v as num).toInt();
       }
 
       const mutationDoc = r"""
-      mutation DeleteChatMessage($input: DeleteChatMessageInput!) {
-        deleteChatMessage(input: $input) {
-          id
-          _version
+        mutation DeleteChatMessage($input: DeleteChatMessageInput!) {
+          deleteChatMessage(input: $input) { id _version }
         }
-      }
-    """;
+      """;
 
       await Amplify.API
           .mutate(
@@ -1516,6 +1636,10 @@ class TutoringController extends GetxController {
   // ============================================================
 
   void clearSessionState() {
+    // Cancel global observer first to prevent it firing during cleanup
+    _globalMessageObserver?.cancel();
+    _globalMessageObserver = null;
+
     sessions.clear();
     featuredSessions.clear();
     popularSessions.clear();
@@ -1530,10 +1654,9 @@ class TutoringController extends GetxController {
     _reviewUserIdMap.clear();
     _reviewTutorIdMap.clear();
     currentOpenChatId = null;
-    print('✅ TutoringController: session state cleared on logout');
+    print('✅ TutoringController: state cleared on logout');
   }
 
-  /// @deprecated Use clearSessionState() instead.
   void clearAuthCache() {
     _currentAuthUserId = null;
     unreadCounts.clear();

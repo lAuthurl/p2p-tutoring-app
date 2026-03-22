@@ -32,7 +32,14 @@ class CheckoutController extends GetxController {
   static const Color _successGreen = Color(0xFF00C48C);
 
   Future<void> processPaystackPayment(BuildContext context) async {
-    final cardCtrl = Get.put(PaystackCardController());
+    // Use lazyPut with fenix:true — fenix only exists on lazyPut, not Get.put.
+    // This prevents "TextEditingController used after dispose" when the user
+    // navigates away from the card screen and comes back.
+    Get.lazyPut<PaystackCardController>(
+      () => PaystackCardController(),
+      fenix: true,
+    );
+    final cardCtrl = Get.find<PaystackCardController>();
 
     if (!cardCtrl.hasCard) {
       await Get.to(() => const PaystackCardEntryScreen());
@@ -163,7 +170,7 @@ class CheckoutController extends GetxController {
   }
 
   // =========================================================================
-  // QR CODE HELPERS
+  // QR HELPERS
   // =========================================================================
 
   bool _isPhysicalSession(Map<String, dynamic> attrs) {
@@ -189,7 +196,7 @@ class CheckoutController extends GetxController {
     required Map<String, dynamic> attrs,
     required double amountPaid,
   }) {
-    final payload = {
+    return jsonEncode({
       'type': 'TUTORLINK_BOOKING',
       'sessionId': sessionId,
       'ref': bookingRef,
@@ -199,50 +206,32 @@ class CheckoutController extends GetxController {
       'attrs': attrs,
       'paid': amountPaid,
       'ts': DateTime.now().toUtc().toIso8601String(),
-    };
-    return jsonEncode(payload);
+    });
   }
 
-  // =========================================================================
-  // FIX: QR rendered at full canvas size so it fills the image correctly.
-  //
-  // Root cause of the tiny top-left QR:
-  //   • The old code multiplied canvas dimensions by pixelRatio (3×) making
-  //     a 2700×2700 logical canvas, then drew a 600×600 QR at offset (150,150).
-  //     Result: QR occupied ~5% of the image area, top-left corner only.
-  //
-  // Fix:
-  //   • Draw at logical size (cardSize × cardSize) with small padding.
-  //   • Pass pixelRatio only to toImage() so the final PNG is high-resolution
-  //     without affecting where anything is drawn on the canvas.
-  // =========================================================================
+  // Renders a 2700×2700 px QR PNG by drawing at 900×900 logical px then
+  // scaling 3× to fill the physical pixel buffer.
+  // The QR occupies (900 - 2×40) = 820 logical px, centred with padding.
   Future<File?> _renderQrToFile({
     required String qrData,
     required String ref,
   }) async {
     try {
-      // All drawing is done in scaled coordinates.
-      // scale = 3 means the output PNG is 3× the logical size — sharp on any screen.
       const double scale = 3.0;
-      const double logicalSize = 900.0; // logical canvas size
-      const double logicalPad = 40.0; // padding around QR
+      const double logicalSize = 900.0;
+      const double logicalPad = 40.0;
       const double logicalQr = logicalSize - logicalPad * 2;
       const double cornerRadius = 36.0;
-
-      // Physical pixel dimensions of the output image
-      final int physicalSize = (logicalSize * scale).toInt(); // 2700
+      final int physicalSize = (logicalSize * scale).toInt();
 
       final recorder = ui.PictureRecorder();
-      // Culling rect must match the PHYSICAL size because we scale the canvas
       final canvas = Canvas(
         recorder,
         Rect.fromLTWH(0, 0, logicalSize * scale, logicalSize * scale),
       );
 
-      // Scale ALL drawing operations so they fill the physical canvas
       canvas.scale(scale, scale);
 
-      // ── White background ───────────────────────────────────────────────
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(0, 0, logicalSize, logicalSize),
@@ -251,7 +240,6 @@ class CheckoutController extends GetxController {
         Paint()..color = Colors.white,
       );
 
-      // ── QR code centred with padding ───────────────────────────────────
       final qrPainter = QrPainter(
         data: qrData,
         version: QrVersions.auto,
@@ -271,7 +259,6 @@ class CheckoutController extends GetxController {
       qrPainter.paint(canvas, Size(logicalQr, logicalQr));
       canvas.restore();
 
-      // toImage dimensions must match the physical canvas size exactly
       final picture = recorder.endRecording();
       final img = await picture.toImage(physicalSize, physicalSize);
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
@@ -282,6 +269,7 @@ class CheckoutController extends GetxController {
         '${dir.path}/booking_qr_${ref.replaceAll('_', '')}.png',
       );
       await file.writeAsBytes(byteData.buffer.asUint8List());
+      safePrint('✅ _renderQrToFile: wrote ${file.path}');
       return file;
     } catch (e, st) {
       safePrint('⚠️ _renderQrToFile error: $e\n$st');
@@ -292,46 +280,44 @@ class CheckoutController extends GetxController {
   // =========================================================================
   // QR SEND
   // =========================================================================
+
   Future<void> _sendQrCode({
     required String sessionId,
     required String studentUserId,
     required String qrData,
     required String sessionTitle,
     required String ref,
+    required String studentName,
   }) async {
     try {
       final qrFile = await _renderQrToFile(qrData: qrData, ref: ref);
 
-      if (qrFile == null) {
-        safePrint('⚠️ _sendQrCode: QR render failed, skipping');
-        return;
-      }
-
-      if (Get.context != null) {
+      if (qrFile != null && Get.context != null) {
         await _showQrDownloadSheet(
           context: Get.context!,
           qrFile: qrFile,
           sessionTitle: sessionTitle,
           ref: ref,
         );
+      } else {
+        safePrint('⚠️ _sendQrCode: QR render failed or no context');
       }
 
+      // Send a text notice into the student's chat thread
       final studentChatId = '${sessionId}_$studentUserId';
-      const qrNotice =
-          '📍 Physical Session QR Code\n\n'
-          'A verification QR code has been generated for this booking. '
-          'Show it at the start of your session for instant verification.\n\n'
-          '🔒 Ref: ';
-
-      if (Get.isRegistered<TutoringController>()) {
-        await TutoringController.instance.sendMessage(
-          studentChatId,
-          '$qrNotice$ref',
-        );
-      }
+      await _sendMessageViaDataStore(
+        chatId: studentChatId,
+        userId: studentUserId,
+        senderName: studentName,
+        text:
+            '📍 Physical Session QR Code\n\n'
+            'A verification QR code has been generated for this booking. '
+            'Show it at the start of your session for instant verification.\n\n'
+            '🔒 Ref: $ref',
+      );
 
       safePrint(
-        '✅ QR code notice sent to student $studentUserId for session $sessionId',
+        '✅ QR notice sent to student $studentUserId for session $sessionId',
       );
     } catch (e) {
       safePrint('⚠️ _sendQrCode error: $e');
@@ -358,7 +344,7 @@ class CheckoutController extends GetxController {
   }
 
   // =========================================================================
-  // AUTO CHAT MESSAGE
+  // BOOKING CONFIRMATION MESSAGE
   // =========================================================================
 
   Future<void> _sendBookingConfirmationMessage({
@@ -404,21 +390,17 @@ class CheckoutController extends GetxController {
         '🔖 Reference: $ref',
       ].join('\n');
 
-      if (Get.isRegistered<TutoringController>()) {
-        await TutoringController.instance.sendMessage(chatId, messageText);
-      } else {
-        await _sendMessageDirectly(
-          chatId: chatId,
-          userId: userId,
-          senderName: studentName,
-          text: messageText,
-        );
-      }
+      await _sendMessageViaDataStore(
+        chatId: chatId,
+        userId: userId,
+        senderName: studentName,
+        text: messageText,
+      );
 
       safePrint('✅ CheckoutController: booking confirmation sent to $chatId');
 
       if (_isPhysicalSession(attrs)) {
-        safePrint('📍 Physical session — generating QR for student');
+        safePrint('📍 Physical session — generating QR');
 
         final qrData = _buildQrPayload(
           sessionId: sessionId,
@@ -436,6 +418,7 @@ class CheckoutController extends GetxController {
           qrData: qrData,
           sessionTitle: sessionTitle,
           ref: ref,
+          studentName: studentName,
         );
       }
     } catch (e) {
@@ -443,44 +426,40 @@ class CheckoutController extends GetxController {
     }
   }
 
-  Future<void> _sendMessageDirectly({
+  // ── Core message sender — uses DataStore.save() so the Cognito owner
+  // claim is attached automatically. This is required because the ChatMessage
+  // @auth rule uses OWNER strategy for CREATE; direct API.mutate() calls
+  // without an owner field are rejected by AppSync.
+  // DataStore then syncs the record to AppSync and the recipient's
+  // observeQuery subscription fires, delivering the message in real time.
+  Future<void> _sendMessageViaDataStore({
     required String chatId,
     required String userId,
     required String senderName,
     required String text,
   }) async {
     try {
-      const mutationDoc = r"""
-        mutation CreateChatMessage($input: CreateChatMessageInput!) {
-          createChatMessage(input: $input) {
-            id sessionId senderId senderName text isVoice createdAt _version
-          }
-        }
-      """;
+      final message = ChatMessage(
+        sessionId: chatId,
+        senderId: userId,
+        senderName: senderName,
+        text: text,
+        isVoice: false,
+        createdAt: TemporalDateTime.now(),
+      );
 
-      final now = DateTime.now().toUtc().toIso8601String();
+      await Amplify.DataStore.save(message);
+      safePrint(
+        '✅ _sendMessageViaDataStore: saved id=${message.id} to $chatId',
+      );
 
-      await Amplify.API
-          .mutate(
-            request: GraphQLRequest<String>(
-              document: mutationDoc,
-              variables: {
-                'input': {
-                  'sessionId': chatId,
-                  'senderId': userId,
-                  'senderName': senderName,
-                  'text': text,
-                  'isVoice': false,
-                  'createdAt': now,
-                },
-              },
-            ),
-          )
-          .response;
-
-      safePrint('✅ CheckoutController: fallback message sent to $chatId');
+      // Inject into the reactive list so any open chat screen sees it
+      // immediately without waiting for the DataStore observeQuery tick.
+      if (Get.isRegistered<TutoringController>()) {
+        TutoringController.instance.injectLocalMessage(message);
+      }
     } catch (e) {
-      safePrint('⚠️ CheckoutController._sendMessageDirectly: $e');
+      safePrint('⚠️ _sendMessageViaDataStore: $e');
     }
   }
 
@@ -540,16 +519,12 @@ class CheckoutController extends GetxController {
               .response;
 
       if (response.errors.isNotEmpty) {
-        safePrint(
-          '⚠️ CheckoutController._updateBookingItemPaid: ${response.errors}',
-        );
+        safePrint('⚠️ _updateBookingItemPaid: ${response.errors}');
       } else {
-        safePrint(
-          '✅ CheckoutController: BookingItem ${item.id} marked as paid',
-        );
+        safePrint('✅ BookingItem ${item.id} marked as paid');
       }
     } catch (e) {
-      safePrint('❌ CheckoutController._updateBookingItemPaid: $e');
+      safePrint('❌ _updateBookingItemPaid: $e');
     }
   }
 
@@ -631,9 +606,7 @@ class CheckoutController extends GetxController {
             )
             .response;
 
-        safePrint(
-          '✅ CheckoutController: UserSessionPayment $existingId updated',
-        );
+        safePrint('✅ UserSessionPayment $existingId updated');
       } else {
         const createDoc = r"""
           mutation CreateUserSessionPayment($input: CreateUserSessionPaymentInput!) {
@@ -661,10 +634,10 @@ class CheckoutController extends GetxController {
             )
             .response;
 
-        safePrint('✅ CheckoutController: UserSessionPayment created');
+        safePrint('✅ UserSessionPayment created');
       }
     } catch (e) {
-      safePrint('❌ CheckoutController._upsertUserSessionPayment: $e');
+      safePrint('❌ _upsertUserSessionPayment: $e');
     }
   }
 
@@ -899,7 +872,6 @@ class _QrDownloadSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Drag handle ──────────────────────────────────────────
           const SizedBox(height: 12),
           Container(
             width: 40,
@@ -910,8 +882,6 @@ class _QrDownloadSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-
-          // ── Icon + title ─────────────────────────────────────────
           Container(
             width: 64,
             height: 64,
@@ -937,7 +907,6 @@ class _QrDownloadSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-
           Text(
             'Your QR Code is Ready',
             style: tt.titleLarge?.copyWith(
@@ -947,7 +916,7 @@ class _QrDownloadSheet extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Show this at your session for instant\nverification.',
+            'Show this at your session for instant verification.',
             style: tt.bodyMedium?.copyWith(
               color: cs.onSurface.withValues(alpha: 0.55),
               height: 1.5,
@@ -955,8 +924,6 @@ class _QrDownloadSheet extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-
-          // ── QR preview ───────────────────────────────────────────
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Image.file(
@@ -976,8 +943,6 @@ class _QrDownloadSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 28),
-
-          // ── Action buttons ───────────────────────────────────────
           Row(
             children: [
               Expanded(
@@ -1048,16 +1013,12 @@ class _QrDownloadSheet extends StatelessWidget {
   Future<void> _saveToGallery(BuildContext context) async {
     try {
       final hasAccess = await Gal.hasAccess(toAlbum: true);
-      if (!hasAccess) {
-        await Gal.requestAccess(toAlbum: true);
-      }
+      if (!hasAccess) await Gal.requestAccess(toAlbum: true);
 
       await Gal.putImage(qrFile.path, album: 'TutorLink');
 
       if (context.mounted) {
-        // FIX: dismiss the sheet first, then show the snackbar
         Navigator.of(context).pop();
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Row(

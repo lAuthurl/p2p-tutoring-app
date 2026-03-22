@@ -1,7 +1,6 @@
-// ignore_for_file: public_member_api_docs, avoid_print, unnecessary_null_comparison
+// ignore_for_file: public_member_api_docs, use_build_context_synchronously, avoid_print
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -40,14 +39,18 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   Future<void> _load() async {
+    if (mounted) setState(() => _loading = true);
+
+    // Load tutor-side sessions and all student threads under them.
+    // fetchTutorSessions() internally calls fetchAllStudentThreads() and
+    // _startGlobalMessageObserver() so new tutee messages are caught live.
     await controller.fetchTutorSessions();
-    await controller.fetchAllStudentThreads();
-    for (final session in controller.activeSessions) {
-      controller.observeChat(session.id);
-    }
-    if (mounted) {
-      setState(() => _loading = false);
-    }
+
+    // Also load threads where the current user is the TUTEE so the same
+    // inbox screen works correctly from the student's perspective.
+    await controller.fetchCurrentUserThreads();
+
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -71,11 +74,12 @@ class _InboxScreenState extends State<InboxScreen> {
         actions: [
           IconButton(
             icon: Icon(
-              Iconsax.setting_2,
+              Iconsax.refresh,
               size: 20,
               color: colorScheme.onSurface.withValues(alpha: 0.6),
             ),
-            onPressed: () {},
+            onPressed: _load,
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -89,21 +93,22 @@ class _InboxScreenState extends State<InboxScreen> {
               )
               : Obx(() {
                 final sessionMap = controller.sessionMessages;
-                final baseSessions = controller.activeSessions;
-                final baseIds = baseSessions.map((s) => s.id).toSet();
-                controller.unreadCounts.entries; // reactive touch
+                // Reactive touch so Obx re-fires on unread count changes
+                controller.unreadCounts.entries;
 
+                // Show every thread this user participates in, regardless
+                // of role (tutor or tutee). Both paths seed sessionMessages
+                // via fetchAllStudentThreads / fetchCurrentUserThreads.
                 final chatIds =
                     sessionMap.keys
                         .where(
-                          (chatId) =>
-                              baseIds.any((id) => chatId.startsWith(id)),
+                          (chatId) => sessionMap[chatId]?.isNotEmpty ?? false,
                         )
-                        .where((chatId) => sessionMap[chatId]!.isNotEmpty)
                         .toList();
 
                 if (chatIds.isEmpty) return _EmptyInbox();
 
+                // Sort newest-message-first
                 chatIds.sort((a, b) {
                   final aTime =
                       sessionMap[a]?.last.createdAt?.getDateTimeInUtc();
@@ -115,187 +120,215 @@ class _InboxScreenState extends State<InboxScreen> {
                   return bTime.compareTo(aTime);
                 });
 
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: TSizes.defaultSpace,
-                    vertical: 12,
-                  ),
-                  itemCount: chatIds.length,
-                  itemBuilder: (context, index) {
-                    final chatId = chatIds[index];
-                    final messages = sessionMap[chatId] ?? [];
-                    final lastMessage = messages.last;
-                    final lastTime = lastMessage.createdAt?.getDateTimeInUtc();
-                    final unreadCount = controller.unreadCounts[chatId] ?? 0;
-                    final hasUnread = unreadCount > 0;
-                    final lastText =
-                        (lastMessage.isVoice == true)
-                            ? '🎤 Voice message'
-                            : (lastMessage.text ?? '');
-                    final studentName = lastMessage.senderName ?? 'Student';
-                    // ── senderId is now passed as otherUserId ──────────────
-                    final otherUserId = lastMessage.senderId ?? ''; // Null safe
-                    final baseSession = baseSessions.firstWhereOrNull(
-                      (s) => chatId.startsWith(s.id),
-                    );
-                    final sessionTitle = baseSession?.title ?? chatId;
-                    final initials =
-                        studentName.isNotEmpty
-                            ? studentName
-                                .trim()
-                                .split(' ')
-                                .map((e) => e[0])
-                                .take(2)
-                                .join()
-                                .toUpperCase()
-                            : '?';
+                return RefreshIndicator(
+                  color: TColors.primary,
+                  onRefresh: _load,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TSizes.defaultSpace,
+                      vertical: 12,
+                    ),
+                    itemCount: chatIds.length,
+                    itemBuilder: (context, index) {
+                      final chatId = chatIds[index];
+                      final messages = sessionMap[chatId] ?? [];
+                      final lastMessage = messages.last;
+                      final lastTime =
+                          lastMessage.createdAt?.getDateTimeInUtc();
+                      final unreadCount = controller.unreadCounts[chatId] ?? 0;
+                      final hasUnread = unreadCount > 0;
+                      final lastText =
+                          (lastMessage.isVoice == true)
+                              ? '🎤 Voice message'
+                              : (lastMessage.text ?? '');
 
-                    return GestureDetector(
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        controller.markSessionRead(chatId);
-                        Get.to(
-                          () => ChatScreen(
-                            sessionId: chatId,
-                            sessionTitle: sessionTitle,
-                            otherUserName: studentName,
-                            otherUserId: otherUserId, // ← ADDED
+                      // Show the OTHER person's name, not our own.
+                      final myId = controller.currentAuthUserId;
+                      final otherMessage = messages.lastWhere(
+                        (m) => m.senderId != myId,
+                        orElse: () => messages.last,
+                      );
+                      final displayName =
+                          otherMessage.senderName ??
+                          lastMessage.senderName ??
+                          'User';
+                      final otherUserId = otherMessage.senderId ?? '';
+
+                      // Resolve a human-readable session title
+                      final baseSession =
+                          controller.activeSessions.firstWhereOrNull(
+                            (s) => chatId.startsWith(s.id),
+                          ) ??
+                          controller.sessions.firstWhereOrNull(
+                            (s) => chatId.startsWith(s.id),
+                          );
+                      final sessionTitle =
+                          baseSession?.title ?? _tidyChatId(chatId);
+
+                      final initials =
+                          displayName.isNotEmpty
+                              ? displayName
+                                  .trim()
+                                  .split(' ')
+                                  .map((e) => e[0])
+                                  .take(2)
+                                  .join()
+                                  .toUpperCase()
+                              : '?';
+
+                      return GestureDetector(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          controller.markSessionRead(chatId);
+                          Get.to(
+                            () => ChatScreen(
+                              sessionId: chatId,
+                              sessionTitle: sessionTitle,
+                              otherUserName: displayName,
+                              otherUserId: otherUserId,
+                            ),
+                          );
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color:
+                                  hasUnread
+                                      ? TColors.primary.withValues(alpha: 0.2)
+                                      : colorScheme.outline.withValues(
+                                        alpha: 0.1,
+                                      ),
+                              width: hasUnread ? 1 : 0.5,
+                            ),
                           ),
-                        );
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color:
-                                hasUnread
-                                    ? TColors.primary.withValues(alpha: 0.2)
-                                    : colorScheme.outline.withValues(
-                                      alpha: 0.1,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: TColors.primary.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    initials,
+                                    style: TextStyle(
+                                      color: TColors.primary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
                                     ),
-                            width: hasUnread ? 1 : 0.5,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: TColors.primary.withValues(alpha: 0.12),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  initials,
-                                  style: TextStyle(
-                                    color: TColors.primary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 15,
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          sessionTitle,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight:
-                                                hasUnread
-                                                    ? FontWeight.w700
-                                                    : FontWeight.w600,
-                                            color: colorScheme.onSurface,
-                                            letterSpacing: -0.2,
-                                          ),
-                                        ),
-                                      ),
-                                      if (lastTime != null)
-                                        Text(
-                                          _formatTime(lastTime),
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color:
-                                                hasUnread
-                                                    ? TColors.primary
-                                                    : colorScheme.onSurface
-                                                        .withValues(
-                                                          alpha: 0.35,
-                                                        ),
-                                            fontWeight:
-                                                hasUnread
-                                                    ? FontWeight.w600
-                                                    : FontWeight.w400,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          '$studentName · $lastText',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color:
-                                                hasUnread
-                                                    ? colorScheme.onSurface
-                                                        .withValues(alpha: 0.7)
-                                                    : colorScheme.onSurface
-                                                        .withValues(alpha: 0.4),
-                                            fontWeight:
-                                                hasUnread
-                                                    ? FontWeight.w500
-                                                    : FontWeight.w400,
-                                          ),
-                                        ),
-                                      ),
-                                      if (hasUnread)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 7,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: TColors.primary,
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                          ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
                                           child: Text(
-                                            unreadCount.toString(),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w700,
+                                            sessionTitle,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight:
+                                                  hasUnread
+                                                      ? FontWeight.w700
+                                                      : FontWeight.w600,
+                                              color: colorScheme.onSurface,
+                                              letterSpacing: -0.2,
                                             ),
                                           ),
                                         ),
-                                    ],
-                                  ),
-                                ],
+                                        if (lastTime != null)
+                                          Text(
+                                            _formatTime(lastTime),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color:
+                                                  hasUnread
+                                                      ? TColors.primary
+                                                      : colorScheme.onSurface
+                                                          .withValues(
+                                                            alpha: 0.35,
+                                                          ),
+                                              fontWeight:
+                                                  hasUnread
+                                                      ? FontWeight.w600
+                                                      : FontWeight.w400,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '$displayName · $lastText',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color:
+                                                  hasUnread
+                                                      ? colorScheme.onSurface
+                                                          .withValues(
+                                                            alpha: 0.7,
+                                                          )
+                                                      : colorScheme.onSurface
+                                                          .withValues(
+                                                            alpha: 0.4,
+                                                          ),
+                                              fontWeight:
+                                                  hasUnread
+                                                      ? FontWeight.w500
+                                                      : FontWeight.w400,
+                                            ),
+                                          ),
+                                        ),
+                                        if (hasUnread)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 7,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: TColors.primary,
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              unreadCount.toString(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 );
               }),
     );
@@ -309,6 +342,13 @@ class _InboxScreenState extends State<InboxScreen> {
       return '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
     }
     return '${time.day}/${time.month}';
+  }
+
+  // Trim raw chatId to something readable when no session title is found.
+  // e.g. "abc123xyz_userId" → "abc123xy…"
+  String _tidyChatId(String chatId) {
+    final base = chatId.split('_').first;
+    return base.length > 8 ? '${base.substring(0, 8)}…' : base;
   }
 }
 
@@ -353,7 +393,7 @@ class _EmptyInbox extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Student messages will appear here',
+            'Messages will appear here',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurface.withValues(alpha: 0.4),
             ),
@@ -368,7 +408,6 @@ class _EmptyInbox extends StatelessWidget {
 // VOICE BUBBLE
 // ═════════════════════════════════════════════════════════════════════════════
 
-// ── Waveform painter ──────────────────────────────────────────────────────────
 class _WaveformPainter extends CustomPainter {
   _WaveformPainter({
     required this.barHeights,
@@ -443,7 +482,6 @@ class _WaveformPainter extends CustomPainter {
       old.isPlaying != isPlaying;
 }
 
-// ── VoiceBubble ───────────────────────────────────────────────────────────────
 class VoiceBubble extends StatelessWidget {
   const VoiceBubble({
     super.key,
@@ -478,9 +516,7 @@ class VoiceBubble extends StatelessWidget {
   String _timeLabel(double prog) {
     final total = realDurationSecs ?? 0.0;
     String fmt(int s) => '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
-    if (total <= 0) {
-      return isPlaying ? '...' : '--:--';
-    }
+    if (total <= 0) return isPlaying ? '...' : '--:--';
     return isPlaying
         ? '${fmt((total * prog).floor())} / ${fmt(total.floor())}'
         : fmt(total.floor());
@@ -489,7 +525,6 @@ class VoiceBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bars = _barsFor(message.id);
-
     final playedColor = isMe ? Colors.white : TColors.primary;
     final unplayedColor =
         isMe
@@ -580,14 +615,14 @@ class ChatScreen extends StatefulWidget {
   final String sessionId;
   final String sessionTitle;
   final String otherUserName;
-  final String otherUserId; // ← NEW: needed to initiate the call
+  final String otherUserId;
 
   const ChatScreen({
     super.key,
     required this.sessionId,
     required this.sessionTitle,
     required this.otherUserName,
-    required this.otherUserId, // ← NEW
+    required this.otherUserId,
   });
 
   @override
@@ -629,18 +664,23 @@ class _ChatScreenState extends State<ChatScreen>
     )..repeat();
     _waveformCtrl.addListener(() {
       if (_currentlyPlayingId != null && mounted) {
-        setState(() {
-          _waveAnimValue = _waveformCtrl.value;
-        });
+        setState(() => _waveAnimValue = _waveformCtrl.value);
       }
     });
 
     _initAudio();
     _fetchCurrentUser();
-    _fetchMessagesFromAppSync();
+
+    // Ensure this chatId is observed BEFORE loading messages.
+    // Critical for tutor opening a new student thread: if observeChat has
+    // never been called for this composite chatId, incoming messages from
+    // the student won't appear in real time.
     controller.observeChat(widget.sessionId);
+
+    _loadMessages();
     _textController.addListener(() => setState(() {}));
 
+    // Keep the local _messages list in sync with the controller reactive map
     _messagesWorker = ever(controller.sessionMessages, (_) {
       final updated = controller.sessionMessages[widget.sessionId];
       if (updated != null && mounted) {
@@ -672,10 +712,8 @@ class _ChatScreenState extends State<ChatScreen>
     super.dispose();
   }
 
-  // ── Call helpers ─────────────────────────────────────────────────────────────
+  // ── Call helpers ──────────────────────────────────────────────────────────
 
-  /// Initiates a voice or video call to [widget.otherUserId].
-  /// Ensures [CallController] is registered before use.
   Future<void> _startCall({required bool withVideo}) async {
     if (widget.otherUserId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -686,11 +724,7 @@ class _ChatScreenState extends State<ChatScreen>
       );
       return;
     }
-
-    if (!Get.isRegistered<CallController>()) {
-      Get.put(CallController());
-    }
-
+    if (!Get.isRegistered<CallController>()) Get.put(CallController());
     await Get.find<CallController>().startCall(
       sessionId: widget.sessionId,
       calleeId: widget.otherUserId,
@@ -698,7 +732,6 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  /// Shows a bottom sheet with voice + video call options.
   void _showCallOptions() {
     final colorScheme = Theme.of(context).colorScheme;
     showModalBottomSheet(
@@ -721,7 +754,6 @@ class _ChatScreenState extends State<ChatScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Handle bar
                 Container(
                   width: 36,
                   height: 4,
@@ -731,7 +763,6 @@ class _ChatScreenState extends State<ChatScreen>
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Header: who we're calling
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Row(
@@ -789,7 +820,6 @@ class _ChatScreenState extends State<ChatScreen>
                 ),
                 const Divider(height: 1),
                 const SizedBox(height: 4),
-                // Voice call option
                 ListTile(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -820,7 +850,6 @@ class _ChatScreenState extends State<ChatScreen>
                     _startCall(withVideo: false);
                   },
                 ),
-                // Video call option
                 ListTile(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -862,7 +891,7 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  // ── Auth / messages ───────────────────────────────────────────────────────────
+  // ── Auth ──────────────────────────────────────────────────────────────────
 
   Future<void> _fetchCurrentUser() async {
     try {
@@ -874,167 +903,36 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  Future<void> _fetchMessagesFromAppSync() async {
+  // Loads messages from DataStore (source of truth) and merges with any
+  // in-flight optimistic messages already in the reactive map.
+  Future<void> _loadMessages() async {
     if (mounted) setState(() => _loadingMessages = true);
     try {
-      const queryDoc = r"""
-        query ListMessagesBySession($sessionId: String!, $limit: Int) {
-          listChatMessagesBySession(sessionId: $sessionId, limit: $limit) {
-            items {
-              id sessionId senderId senderName text audioUrl isVoice createdAt _version _deleted
-            }
-          }
-        }
-      """;
-
-      final response =
-          await Amplify.API
-              .query(
-                request: GraphQLRequest<String>(
-                  document: queryDoc,
-                  variables: {'sessionId': widget.sessionId, 'limit': 500},
-                ),
-              )
-              .response;
-
-      if (response.errors.isNotEmpty || response.data == null) {
-        _loadFromDataStore();
-        return;
-      }
-
-      final parsed = _parseMessages(response.data!);
-      parsed.sort(
-        (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now()).compareTo(
-          b.createdAt?.getDateTimeInUtc() ?? DateTime.now(),
-        ),
+      final merged = await controller.fetchMessagesFromAppSync(
+        widget.sessionId,
       );
-      _messages.assignAll(parsed);
-      _prefetchVoiceDurations(parsed);
+      if (mounted) {
+        final seen = <String>{};
+        final deduped =
+            merged.where((m) => seen.add(m.id)).toList()..sort(
+              (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now())
+                  .compareTo(b.createdAt?.getDateTimeInUtc() ?? DateTime.now()),
+            );
+        _messages.assignAll(deduped);
+        _prefetchVoiceDurations(deduped);
+      }
     } catch (e) {
-      print('❌ ChatScreen._fetchMessagesFromAppSync: $e');
-      _loadFromDataStore();
+      final fallback = controller.sessionMessages[widget.sessionId] ?? [];
+      if (mounted) _messages.assignAll(fallback);
     } finally {
       if (mounted) setState(() => _loadingMessages = false);
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
   }
 
-  void _loadFromDataStore() {
-    final ds = controller.sessionMessages[widget.sessionId] ?? [];
-    _messages.assignAll(ds);
-  }
-
-  List<ChatMessage> _parseMessages(String responseData) {
-    final result = <ChatMessage>[];
-    try {
-      final decoded = jsonDecode(responseData) as Map<String, dynamic>;
-      final root = (decoded['data'] as Map<String, dynamic>?) ?? decoded;
-      final items =
-          (root['listChatMessagesBySession'] as Map<String, dynamic>?)?['items']
-              as List<dynamic>? ??
-          [];
-      for (final raw in items) {
-        final item = raw as Map<String, dynamic>;
-        if (item['_deleted'] == true) continue;
-        final id = item['id'] as String?;
-        if (id == null) continue;
-        final createdAtStr = item['createdAt'] as String?;
-        result.add(
-          ChatMessage(
-            id: id,
-            sessionId: item['sessionId'] as String? ?? widget.sessionId,
-            senderId: item['senderId'] as String? ?? '',
-            senderName: item['senderName'] as String?,
-            text: item['text'] as String?,
-            audioUrl: item['audioUrl'] as String?,
-            isVoice: item['isVoice'] as bool? ?? false,
-            createdAt:
-                createdAtStr != null
-                    ? TemporalDateTime.fromString(createdAtStr)
-                    : null,
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ ChatScreen._parseMessages: $e');
-    }
-    return result;
-  }
-
   Future<void> _deleteMessage(ChatMessage message) async {
     _messages.removeWhere((m) => m.id == message.id);
-    try {
-      const getDoc =
-          r"""query GetChatMessage($id: ID!) { getChatMessage(id: $id) { id _version _deleted } }""";
-      final getResponse =
-          await Amplify.API
-              .query(
-                request: GraphQLRequest<String>(
-                  document: getDoc,
-                  variables: {'id': message.id},
-                ),
-              )
-              .response;
-
-      int version = 1;
-      if (getResponse.errors.isEmpty && getResponse.data != null) {
-        final decoded = jsonDecode(getResponse.data!) as Map<String, dynamic>;
-        final obj =
-            ((decoded['data'] as Map<String, dynamic>?) ??
-                    decoded)['getChatMessage']
-                as Map<String, dynamic>?;
-        if (obj == null || obj['_deleted'] == true) return;
-        final v = obj['_version'];
-        if (v != null) version = (v as num).toInt();
-      }
-
-      const mutationDoc =
-          r"""mutation DeleteChatMessage($input: DeleteChatMessageInput!) { deleteChatMessage(input: $input) { id _version } }""";
-      final response =
-          await Amplify.API
-              .mutate(
-                request: GraphQLRequest<String>(
-                  document: mutationDoc,
-                  variables: {
-                    'input': {'id': message.id, '_version': version},
-                  },
-                ),
-              )
-              .response;
-
-      if (response.errors.isNotEmpty) {
-        final isConflict = response.errors.any(
-          (e) =>
-              e.extensions?['errorType']?.toString().contains('Conflict') ==
-              true,
-        );
-        if (isConflict) {
-          await _fetchMessagesFromAppSync();
-          final fresh = _messages.firstWhereOrNull((m) => m.id == message.id);
-          if (fresh != null) await _deleteMessage(fresh);
-          return;
-        }
-        _messages.add(message);
-        _messages.sort(
-          (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now())
-              .compareTo(b.createdAt?.getDateTimeInUtc() ?? DateTime.now()),
-        );
-      } else {
-        final chatMessages = controller.sessionMessages[widget.sessionId] ?? [];
-        controller.sessionMessages[widget.sessionId] =
-            chatMessages.where((m) => m.id != message.id).toList();
-        controller.sessionMessages.refresh();
-      }
-    } catch (e) {
-      print('❌ ChatScreen._deleteMessage: $e');
-      if (!_messages.any((m) => m.id == message.id)) {
-        _messages.add(message);
-        _messages.sort(
-          (a, b) => (a.createdAt?.getDateTimeInUtc() ?? DateTime.now())
-              .compareTo(b.createdAt?.getDateTimeInUtc() ?? DateTime.now()),
-        );
-      }
-    }
+    await controller.deleteMessage(widget.sessionId, message);
   }
 
   void _showDeleteDialog(ChatMessage message) {
@@ -1073,7 +971,7 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  // ── Audio ─────────────────────────────────────────────────────────────────────
+  // ── Audio ─────────────────────────────────────────────────────────────────
 
   Future<void> _initAudio() async {
     _recorder = FlutterSoundRecorder();
@@ -1108,7 +1006,6 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (mounted) setState(() => _audioReady = true);
-    print('✅ ChatScreen: audio ready');
   }
 
   Future<void> _sendTextMessage() async {
@@ -1125,7 +1022,8 @@ class _ChatScreenState extends State<ChatScreen>
       if (!status.isGranted) return;
       final dir = await getTemporaryDirectory();
       final path =
-          '${dir.path}/${widget.sessionId}_${DateTime.now().millisecondsSinceEpoch}.aac';
+          '${dir.path}/${widget.sessionId}_'
+          '${DateTime.now().millisecondsSinceEpoch}.aac';
       await _recorder!.startRecorder(toFile: path, codec: Codec.aacADTS);
       setState(() => _isRecording = true);
     } else {
@@ -1133,8 +1031,6 @@ class _ChatScreenState extends State<ChatScreen>
       setState(() => _isRecording = false);
       if (path != null && _currentUserId != null) {
         await controller.sendVoiceMessage(widget.sessionId, File(path));
-      } else {
-        print('⚠️ _toggleRecording: path or userId null, skipping voice send');
       }
     }
   }
@@ -1194,9 +1090,6 @@ class _ChatScreenState extends State<ChatScreen>
 
       if (secs > 0 && mounted) {
         setState(() => _audioDurations[message.id] = secs);
-        print(
-          '✅ prefetch duration for ${message.id}: ${secs.toStringAsFixed(1)}s',
-        );
       }
     } catch (e) {
       print('⚠️ _fetchDurationFor ${message.id}: $e');
@@ -1219,7 +1112,6 @@ class _ChatScreenState extends State<ChatScreen>
     if (_localAudioCache.containsKey(message.id)) {
       return _localAudioCache[message.id];
     }
-
     final storedUrl = message.audioUrl;
     if (storedUrl == null) return null;
 
@@ -1230,17 +1122,12 @@ class _ChatScreenState extends State<ChatScreen>
 
       if (await file.exists()) {
         _localAudioCache[message.id] = filePath;
-        print('✅ _fetchAndCacheAudio: using cached file for ${message.id}');
         return filePath;
       }
 
       final s3Key = _s3KeyFromUrl(storedUrl);
-      if (s3Key == null) {
-        print('❌ _fetchAndCacheAudio: could not parse S3 key from $storedUrl');
-        return null;
-      }
+      if (s3Key == null) return null;
 
-      print('🔄 _fetchAndCacheAudio: refreshing URL for key $s3Key');
       final urlResult =
           await Amplify.Storage.getUrl(
             path: StoragePath.fromString(s3Key),
@@ -1254,14 +1141,9 @@ class _ChatScreenState extends State<ChatScreen>
       if (response.statusCode == 200) {
         await response.pipe(file.openWrite());
         _localAudioCache[message.id] = filePath;
-        print('✅ _fetchAndCacheAudio: downloaded ${message.id} to $filePath');
         return filePath;
-      } else {
-        print(
-          '❌ _fetchAndCacheAudio: HTTP ${response.statusCode} for ${message.id}',
-        );
-        return null;
       }
+      return null;
     } catch (e) {
       print('❌ _fetchAndCacheAudio error: $e');
       return null;
@@ -1278,7 +1160,6 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (_player!.isPlaying) await _player!.stopPlayer();
-
     _playerSubscription?.cancel();
     _playerSubscription = null;
 
@@ -1337,7 +1218,7 @@ class _ChatScreenState extends State<ChatScreen>
     return a.day != b.day || a.month != b.month || a.year != b.year;
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -1422,10 +1303,9 @@ class _ChatScreenState extends State<ChatScreen>
               size: 18,
               color: colorScheme.onSurface.withValues(alpha: 0.6),
             ),
-            onPressed: _fetchMessagesFromAppSync,
+            onPressed: _loadMessages,
             tooltip: 'Refresh',
           ),
-          // ── WIRED: voice call (direct tap) ───────────────────────────────
           IconButton(
             icon: Icon(
               Iconsax.call,
@@ -1438,7 +1318,6 @@ class _ChatScreenState extends State<ChatScreen>
               _startCall(withVideo: false);
             },
           ),
-          // ── WIRED: more menu (voice + video options) ─────────────────────
           IconButton(
             icon: Icon(
               Iconsax.more,
@@ -1610,7 +1489,6 @@ class _ChatScreenState extends State<ChatScreen>
                     }),
           ),
 
-          // Recording indicator
           if (_isRecording)
             Container(
               color: Colors.red.withValues(alpha: 0.06),
@@ -1639,7 +1517,6 @@ class _ChatScreenState extends State<ChatScreen>
               ),
             ),
 
-          // Input bar
           Container(
             decoration: BoxDecoration(
               color: colorScheme.surface,

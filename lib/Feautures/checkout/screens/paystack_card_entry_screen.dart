@@ -11,7 +11,20 @@ class PaystackCardEntryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ctrl = Get.put(PaystackCardController());
+    // ── FIX: Get.put() does not support fenix. The correct pattern for a
+    // screen-scoped controller that may be navigated to multiple times is
+    // Get.lazyPut with fenix: true.
+    //
+    // fenix: true — if the controller was previously disposed (e.g. user
+    // navigated away and GetX removed it), GetX recreates it fresh from the
+    // builder the next time the screen is opened, giving us brand-new
+    // TextEditingControllers every visit instead of the disposed ones.
+    Get.lazyPut<PaystackCardController>(
+      () => PaystackCardController(),
+      fenix: true,
+    );
+    final ctrl = Get.find<PaystackCardController>();
+
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
 
@@ -230,7 +243,9 @@ class PaystackCardEntryScreen extends StatelessWidget {
                                 Get.back();
                                 Get.snackbar(
                                   '✅ Card Saved',
-                                  '${ctrl.savedCard.value.cardType} ${ctrl.savedCard.value.maskedNumber} is ready for checkout',
+                                  '${ctrl.savedCard.value.cardType} '
+                                      '${ctrl.savedCard.value.maskedNumber} '
+                                      'is ready for checkout',
                                   snackPosition: SnackPosition.BOTTOM,
                                   duration: const Duration(seconds: 3),
                                 );
