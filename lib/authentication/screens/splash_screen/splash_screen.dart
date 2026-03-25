@@ -146,7 +146,7 @@ class SplashScreen extends StatelessWidget {
                       const SizedBox(height: 24),
 
                       Text(
-                        'TutorLink',
+                        'TutorMe',
                         style: TextStyle(
                           color: isLight ? Colors.black : Colors.white,
                           fontSize: 28,

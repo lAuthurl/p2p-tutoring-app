@@ -971,7 +971,7 @@ class _QrDownloadSheet extends StatelessWidget {
                       ShareParams(
                         files: [XFile(qrFile.path)],
                         text:
-                            'My TutorLink session QR — $sessionTitle (Ref: $ref)',
+                            'My TutorMe session QR — $sessionTitle (Ref: $ref)',
                       ),
                     );
                   },
