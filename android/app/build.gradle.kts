@@ -10,7 +10,7 @@ android {
     ndkVersion = "27.0.12077973"
 
     defaultConfig {
-        applicationId = "com.example.p2p_tutoring_application"
+        applicationId = "com.example.tutorme"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = 1

@@ -1,7 +1,7 @@
-name: p2p_tutoring_app
-description: "A new Flutter project."
+name: TutorMe
+description: "A peer tutoring application"
 publish_to: "none"
-version: 0.1.0
+version: 1.0.0+1
 
 environment:
   sdk: ^3.7.2
@@ -58,12 +58,18 @@ dependencies:
   agora_rtc_engine: ^6.5.3
   wakelock_plus: ^1.5.1
   uuid: ^4.5.3
+  flutter_launcher_icons: ^0.14.4
   # Removed google_fonts to use bundled Poppins fonts via assets
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo/t-store-splash-logo-black.png"
 
 flutter:
   uses-material-design: true
